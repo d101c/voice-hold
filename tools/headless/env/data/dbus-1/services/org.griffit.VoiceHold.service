@@ -1,3 +1,0 @@
-[D-BUS Service]
-Name=org.griffit.VoiceHold
-Exec=/home/sun/DEVELOPEMENT/voice-hold/engine/.venv/bin/voice-hold-engine serve

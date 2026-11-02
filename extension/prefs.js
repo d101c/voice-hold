@@ -3,6 +3,7 @@ import Gdk from 'gi://Gdk';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Gtk from 'gi://Gtk';
+import Pango from 'gi://Pango';
 
 import {ExtensionPreferences, gettext as _} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 
@@ -40,11 +41,7 @@ export default class VoiceHoldPreferences extends ExtensionPreferences {
         statusRow.add_suffix(refresh);
         group.add(statusRow);
 
-        const cmdRow = new Adw.ActionRow({
-            title: _('Install command'),
-            subtitle: INSTALL_CMD,
-            subtitle_selectable: true,
-        });
+        const cmdRow = new Adw.ActionRow({title: _('Install command')});
         const copy = new Gtk.Button({icon_name: 'edit-copy-symbolic', valign: Gtk.Align.CENTER, tooltip_text: _('Copy')});
         copy.add_css_class('flat');
         copy.connect('clicked', () => {
@@ -54,6 +51,19 @@ export default class VoiceHoldPreferences extends ExtensionPreferences {
         });
         cmdRow.add_suffix(copy);
         group.add(cmdRow);
+        const cmdLabel = new Gtk.Label({
+            label: INSTALL_CMD,
+            selectable: true,
+            wrap: true,
+            wrap_mode: Pango.WrapMode.WORD_CHAR,
+            xalign: 0,
+            margin_top: 6,
+            margin_start: 12,
+            margin_end: 12,
+        });
+        cmdLabel.add_css_class('monospace');
+        cmdLabel.add_css_class('dim-label');
+        group.add(cmdLabel);
 
         const check = () => {
             statusRow.set_subtitle(_('Checking…'));

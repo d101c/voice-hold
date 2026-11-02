@@ -4,6 +4,7 @@
 #   down:name   press and keep
 #   up:name     release
 #   p:ms        pause
+import os
 import sys
 import time
 
@@ -32,6 +33,11 @@ def key(code, pressed):
 for tok in sys.argv[1].split():
     if tok.startswith('p:'):
         time.sleep(int(tok[2:]) / 1000)
+    elif tok == 'go':
+        # Start the frame grabber (snap@test) from inside the same virtual
+        # keyboard session: closing a session makes GTK redraw a stale preedit.
+        open(os.path.join(os.environ['SNAP_DIR'], 'go'), 'w').close()
+        time.sleep(0.5)
     elif tok.startswith('down:'):
         key(CODES[tok[5:]], True)
     elif tok.startswith('up:'):

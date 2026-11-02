@@ -71,6 +71,8 @@ export class Dictation {
         this._stopSilence();
         this._engine.destroy();
         this._engine = null;
+        this._sink.destroy();
+        this._sink = null;
         this._hud.destroy();
         this._hud = null;
         this._settings = null;

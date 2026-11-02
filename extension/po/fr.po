@@ -1,0 +1,161 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: voice-hold 0.1\n"
+"Language: fr\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+
+msgid "Click in a text field first"
+msgstr "Cliquez d'abord dans un champ texte"
+
+msgid "Listening — press again or Esc to stop"
+msgstr "À l'écoute — appuyez encore ou Échap pour arrêter"
+
+msgid "Listening — release to stop"
+msgstr "À l'écoute — relâchez pour arrêter"
+
+msgid "Starting…"
+msgstr "Démarrage…"
+
+msgid "Loading the model…"
+msgstr "Chargement du modèle…"
+
+msgid "…"
+msgstr "…"
+
+msgid "Microphone unavailable"
+msgstr "Micro indisponible"
+
+msgid "Engine not installed — see the extension settings"
+msgstr "Moteur non installé — voir les réglages de l'extension"
+
+msgid "Engine failed to start — see the extension settings"
+msgstr "Le moteur n'a pas démarré — voir les réglages de l'extension"
+
+msgid "Models missing — run: voice-hold-engine setup"
+msgstr "Modèles manquants — lancez : voice-hold-engine setup"
+
+msgid "Engine did not answer"
+msgstr "Le moteur ne répond pas"
+
+msgid "D-Bus unavailable"
+msgstr "D-Bus indisponible"
+
+msgid "Voice Hold"
+msgstr "Voice Hold"
+
+msgid "Enabled"
+msgstr "Activé"
+
+msgid "Preferences"
+msgstr "Réglages"
+
+msgid "Engine"
+msgstr "Moteur"
+
+msgid "Speech recognition runs on this computer, offline, in a separate helper program."
+msgstr "La reconnaissance vocale tourne sur cet ordinateur, hors-ligne, dans un programme séparé."
+
+msgid "Status"
+msgstr "État"
+
+msgid "Checking…"
+msgstr "Vérification…"
+
+msgid "Check again"
+msgstr "Vérifier à nouveau"
+
+msgid "Install command"
+msgstr "Commande d'installation"
+
+msgid "Copy"
+msgstr "Copier"
+
+msgid "Copied"
+msgstr "Copié"
+
+msgid "Engine %s found, models missing — run: voice-hold-engine setup"
+msgstr "Moteur %s trouvé, modèles manquants — lancez : voice-hold-engine setup"
+
+msgid "Ready — engine %s, models installed"
+msgstr "Prêt — moteur %s, modèles installés"
+
+msgid "Not installed — run the command below, then check again"
+msgstr "Non installé — lancez la commande ci-dessous, puis vérifiez à nouveau"
+
+msgid "Installed but failed to start: %s"
+msgstr "Installé mais n'a pas démarré : %s"
+
+msgid "Gesture"
+msgstr "Geste"
+
+msgid "Hold the shortcut and speak; release to stop. A quick tap keeps listening hands-free."
+msgstr "Maintenez le raccourci et parlez ; relâchez pour arrêter. Un appui bref garde l'écoute mains libres."
+
+msgid "Shortcut"
+msgstr "Raccourci"
+
+msgid "Not set"
+msgstr "Non défini"
+
+msgid "Set shortcut"
+msgstr "Définir le raccourci"
+
+msgid "Press the new shortcut, with a modifier (Super, Ctrl, Alt).\nEscape cancels, Backspace clears."
+msgstr "Appuyez sur le nouveau raccourci, avec un modificateur (Super, Ctrl, Alt).\nÉchap annule, Retour arrière efface."
+
+msgid "Mode"
+msgstr "Mode"
+
+msgid "Auto: hold or tap. Hold: release always stops. Toggle: the shortcut starts and stops."
+msgstr "Auto : maintien ou appui. Maintien : relâcher arrête toujours. Bascule : le raccourci démarre et arrête."
+
+msgid "Hold or tap"
+msgstr "Maintien ou appui"
+
+msgid "Hold only"
+msgstr "Maintien seul"
+
+msgid "Toggle only"
+msgstr "Bascule seule"
+
+msgid "Tap threshold (ms)"
+msgstr "Seuil d'appui (ms)"
+
+msgid "Releasing the modifier sooner than this counts as a tap."
+msgstr "Relâcher le modificateur avant ce délai compte comme un appui bref."
+
+msgid "Stop after silence (s)"
+msgstr "Arrêt après silence (s)"
+
+msgid "Hands-free mode only. 0 = never."
+msgstr "Mode mains libres seulement. 0 = jamais."
+
+msgid "Optional: polish with a local LLM"
+msgstr "Option : polir avec un LLM local"
+
+msgid "Off by default. When on, each finished block is sent to Ollama on this computer to fix punctuation and casing. Falls back to the raw text if Ollama does not answer within 2.5 s."
+msgstr "Éteint par défaut. Si activé, chaque bloc terminé est envoyé à Ollama sur cet ordinateur pour corriger ponctuation et majuscules. Le texte brut est gardé si Ollama ne répond pas en 2,5 s."
+
+msgid "Polish with Ollama"
+msgstr "Polir avec Ollama"
+
+msgid "Model"
+msgstr "Modèle"
+
+msgid "Ollama URL"
+msgstr "URL d'Ollama"
+
+msgid "Appearance"
+msgstr "Apparence"
+
+msgid "Show the pill while dictating"
+msgstr "Afficher la pastille pendant la dictée"
+
+msgid "Microphone level and live text next to the cursor."
+msgstr "Niveau du micro et texte en direct à côté du curseur."
+
+msgid "Top-bar indicator"
+msgstr "Indicateur dans la barre supérieure"

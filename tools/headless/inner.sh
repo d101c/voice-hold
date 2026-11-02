@@ -14,8 +14,18 @@ sleep 1
 WAYLAND_DISPLAY=wayland-t GDK_BACKEND=wayland python3 "$S/client.py" "$T/client.log" > "$T/client.err" 2>&1 &
 sleep 3
 echo "dconf=$(ls "$XDG_CONFIG_HOME/dconf" 2>/dev/null) bus=$DBUS_SESSION_BUS_ADDRESS" >&2
-[ "${SNAP:-0}" = 1 ] && { touch "$S/frames/go"; sleep 0.5; }
-python3 "$S/inject.py" "$1"
+# PREFS=1: open the preferences window instead (its errors go to prefs.err).
+if [ "${PREFS:-0}" = 1 ]; then
+    WAYLAND_DISPLAY=wayland-t GDK_BACKEND=wayland gnome-extensions prefs voice-hold@griffit.gmail.com > "$T/prefs.err" 2>&1 &
+    sleep 4
+fi
+# WARM="down:meta r p:12000 up:meta p:2000": a first dictation so the model
+# is loaded before the frames of the demo are grabbed. Everything runs in one
+# virtual keyboard session (the `go` token starts the grabber).
+SEQ="$1"
+[ "${SNAP:-0}" = 1 ] && SEQ="go $SEQ"
+[ -n "${WARM:-}" ] && SEQ="$WARM $SEQ"
+python3 "$S/inject.py" "$SEQ"
 [ "${SNAP:-0}" = 1 ] && { sleep 0.8; touch "$S/frames/stop"; sleep 0.5; }
 # Let the engine log its tail before the bus goes away.
 sleep 0.5

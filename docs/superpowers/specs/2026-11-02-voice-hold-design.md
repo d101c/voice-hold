@@ -130,9 +130,10 @@ partiel en vol).
 - **Indicateur** de barre supérieure (option, comme Accent Hold) : icône,
   interrupteur « Activé », « Réglages ».
 - **Réglages** (`prefs.js`, Adw) : raccourci, mode (auto / maintien seul /
-  bascule seule), arrêt automatique sur silence, langue forcée (auto / fr /
-  en…), LLM facultatif (interrupteur, modèle Ollama, URL), état du moteur,
-  indicateur.
+  bascule seule), seuil d'appui, arrêt automatique sur silence, LLM
+  facultatif (interrupteur, modèle Ollama, URL), pastille, indicateur, état
+  du moteur + commande d'installation. Pas de langue forcée : Parakeet v3
+  détecte la langue tout seul (mon choix).
 
 ### Moteur (`engine/`, paquet Python `voice-hold-engine`)
 

@@ -32,6 +32,11 @@ export class TextSink {
         this._blocks = 0;
     }
 
+    destroy() {
+        this.clearPartial();
+        this._im = null;
+    }
+
     // True when some application text field is focused through the IM.
     get available() {
         return !!(this._im && this._im.currentFocus);
@@ -72,7 +77,9 @@ export class TextSink {
         if (!this._preedit || !this._im)
             return;
         try {
-            this._im.set_preedit_text(null, 0, 0, this._clutter.PreeditResetMode.CLEAR);
+            // An empty string, not null: with null GTK keeps drawing the
+            // previous preedit until the next key.
+            this._im.set_preedit_text('', 0, 0, this._clutter.PreeditResetMode.CLEAR);
         } catch {}
         this._preedit = false;
     }
@@ -80,8 +87,8 @@ export class TextSink {
     commit(text) {
         if (!this.available)
             return;
-        this.clearPartial();
         const out = joinBlock(this.prevChar(), text, {firstOfSession: this._blocks === 0});
+        this.clearPartial();
         this._im.commit(out);
         this._blocks++;
     }

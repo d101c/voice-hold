@@ -7,3 +7,5 @@ engine/.venv/
 engine/dist/
 engine/*.egg-info/
 *.swp
+tools/headless/env/
+tools/headless/frames/
