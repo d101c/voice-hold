@@ -20,7 +20,9 @@ Object `/org/griffit/VoiceHold`, interface `org.griffit.VoiceHold`:
 
 | Member | Kind | Notes |
 |---|---|---|
-| `Start(a{sv})` | method | options: `silence-stop-s` (d), `polish` (b), `polish-model` (s), `polish-url` (s), `audio-file` (s, tests), `realtime` (b) |
+| `Start(a{sv})` | method | options: `source` (s, PipeWire node name, '' = default microphone), `silence-stop-s` (d), `polish` (b), `polish-model` (s), `polish-url` (s), `audio-file` (s, tests), `realtime` (b) |
+| `ListSources() → aa{sv}` | method | microphones known to PipeWire: `name`, `description`, `default` |
+| `Source(s)` | signal | human name of the microphone (or file) just opened |
 | `Stop()` | method | finishes: decodes what is left, then `Stopped("stop")` |
 | `Cancel()` | method | drops everything in flight, `Stopped("cancel")` |
 | `Status() → a{sv}` | method | `models_ready`, `missing`, `loaded`, `state`, `version`, `load_seconds` |

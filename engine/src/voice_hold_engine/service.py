@@ -101,6 +101,7 @@ class Engine:
             'silence_stop_s': float(_opt(options, 'silence-stop-s', 0.0)),
             'audio_file': str(_opt(options, 'audio-file', '')),
             'realtime': bool(_opt(options, 'realtime', True)),
+            'source': str(_opt(options, 'source', '')),
         }
         self._ensure_models()
         self._segmenter = Segmenter(self._vad)
@@ -117,8 +118,11 @@ class Engine:
             self._opts['audio_file'] = os.environ['VOICE_HOLD_AUDIO_FILE']
         if self._opts['audio_file']:
             source = FileSource(self._opts['audio_file'], on_chunk, realtime=self._opts['realtime'])
+            source_name = os.path.basename(self._opts['audio_file'])
         else:
-            source = MicSource(on_chunk)
+            source = MicSource(on_chunk, target=self._opts['source'])
+            from .sources import describe
+            source_name = describe(self._opts['source'])
         try:
             source.start()
         except Exception as e:
@@ -126,6 +130,7 @@ class Engine:
             self._set_state(IDLE)
             return
         self._source = source
+        self._emit('Source', source_name)
 
         if not self._recognizer.loaded:
             self._set_state(LOADING)
@@ -310,9 +315,22 @@ class VoiceHoldInterface(ServiceInterface):
     def Quit(self):
         self._engine.exit_event.set()
 
+    @method()
+    def ListSources(self) -> 'aa{sv}':
+        from .sources import list_sources
+        return [{
+            'name': Variant('s', s['name']),
+            'description': Variant('s', s['description']),
+            'default': Variant('b', s['default']),
+        } for s in list_sources()]
+
     @signal()
     def State(self, state: 's') -> 's':
         return state
+
+    @signal()
+    def Source(self, description: 's') -> 's':
+        return description
 
     @signal()
     def Level(self, level: 'd') -> 'd':

@@ -54,8 +54,11 @@ class SileroVad:
 
     WINDOW = 512  # samples per Silero frame at 16 kHz
 
-    def __init__(self, base=None, threshold=0.5, min_silence_s=0.4,
-                 min_speech_s=0.25, max_speech_s=12.0):
+    # Blocks are cut at pauses of min_silence_s; without a pause, at
+    # max_speech_s (a long block costs max_speech_s × RTF to decode, so keep
+    # it short enough to feel live).
+    def __init__(self, base=None, threshold=0.5, min_silence_s=0.3,
+                 min_speech_s=0.25, max_speech_s=8.0):
         import sherpa_onnx
         cfg = sherpa_onnx.VadModelConfig()
         cfg.silero_vad.model = models.vad_path(base)

@@ -41,6 +41,7 @@ export class Dictation {
         this._sink = new TextSink(Main.inputMethod, Clutter);
         this._engine = new EngineClient({
             State: s => this._onState(s),
+            Source: d => this._onSource(d),
             Level: v => this._hud.level(v),
             Speech: b => this._onSpeech(b),
             Partial: t => this._onPartial(t),
@@ -124,7 +125,7 @@ export class Dictation {
         }
         // Entering hands-free mode: say so, and arm the silence timer.
         if (this._machine.state === TOGGLE && this._session) {
-            this._hud.status(this._('Listening — press again or Esc to stop'), 'listening');
+            this._hud.status(this._listeningHint(), 'listening');
             this._armSilence();
         }
     }
@@ -139,6 +140,7 @@ export class Dictation {
             'polish': this._settings.get_boolean('polish'),
             'polish-model': this._settings.get_string('polish-model'),
             'polish-url': this._settings.get_string('polish-url'),
+            'source': this._settings.get_string('microphone'),
         };
         this._engine.start(options).then(err => {
             if (!err || !this._session)
@@ -214,15 +216,24 @@ export class Dictation {
 
     // -- engine events -----------------------------------------------------
 
+    _listeningHint() {
+        const how = this._machine.state === TOGGLE
+            ? this._('press again or Esc to stop')
+            : this._('release to stop');
+        return this._mic ? `${this._mic} — ${how}` : `${this._('Listening')} — ${how}`;
+    }
+
+    _onSource(description) {
+        this._mic = description;
+    }
+
     _onState(state) {
         if (!this._session)
             return;
         if (state === 'loading')
             this._hud.status(this._('Loading the model…'));
         else if (state === 'listening')
-            this._hud.status(this._machine.state === TOGGLE
-                ? this._('Listening — press again or Esc to stop')
-                : this._('Listening — release to stop'), 'listening');
+            this._hud.status(this._listeningHint(), 'listening');
         else if (state === 'decoding')
             this._hud.status(this._('…'), 'listening');
     }

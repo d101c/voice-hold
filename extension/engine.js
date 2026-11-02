@@ -17,7 +17,9 @@ const IFACE_XML = `
     <method name="Cancel"/>
     <method name="Status"><arg type="a{sv}" name="status" direction="out"/></method>
     <method name="Quit"/>
+    <method name="ListSources"><arg type="aa{sv}" name="sources" direction="out"/></method>
     <signal name="State"><arg type="s" name="state"/></signal>
+    <signal name="Source"><arg type="s" name="description"/></signal>
     <signal name="Level"><arg type="d" name="level"/></signal>
     <signal name="Speech"><arg type="b" name="speaking"/></signal>
     <signal name="Partial"><arg type="s" name="text"/></signal>
@@ -127,6 +129,31 @@ export class EngineClient {
                 });
         });
     }
+}
+
+// Microphones known to the engine: resolves to [{name, description, default}]
+// (empty on any error). Usable without an EngineClient (prefs, indicator).
+export function listSources(cancellable = null) {
+    return new Promise(resolve => {
+        try {
+            Gio.DBus.session.call(BUS_NAME, OBJECT_PATH, INTERFACE, 'ListSources', null,
+                new GLib.VariantType('(aa{sv})'), Gio.DBusCallFlags.NONE, 15000, cancellable,
+                (conn, res) => {
+                    try {
+                        const [list] = conn.call_finish(res).deepUnpack();
+                        resolve(list.map(d => ({
+                            name: d.name?.deepUnpack() ?? '',
+                            description: d.description?.deepUnpack() ?? '',
+                            default: d.default?.deepUnpack() ?? false,
+                        })));
+                    } catch {
+                        resolve([]);
+                    }
+                });
+        } catch {
+            resolve([]);
+        }
+    });
 }
 
 function classify(e) {

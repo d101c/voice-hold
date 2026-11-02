@@ -6,6 +6,7 @@ import Gtk from 'gi://Gtk';
 import Pango from 'gi://Pango';
 
 import {ExtensionPreferences, gettext as _} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
+import {listSources} from './engine.js';
 
 const BUS_NAME = 'org.griffit.VoiceHold';
 const OBJECT_PATH = '/org/griffit/VoiceHold';
@@ -22,6 +23,7 @@ export default class VoiceHoldPreferences extends ExtensionPreferences {
         window.add(page);
         this._buildEngineGroup(page, window);
         this._buildGestureGroup(page, settings);
+        this._buildMicrophoneGroup(page, settings);
         this._buildPolishGroup(page, settings);
         this._buildAppearanceGroup(page, settings);
     }
@@ -192,6 +194,56 @@ export default class VoiceHoldPreferences extends ExtensionPreferences {
             dialog.present();
         });
         return row;
+    }
+
+    // -- microphone -------------------------------------------------------
+
+    _buildMicrophoneGroup(page, settings) {
+        const group = new Adw.PreferencesGroup({
+            title: _('Microphone'),
+            description: _('Which input the engine records from. "System default" follows Settings → Sound → Input.'),
+        });
+        page.add(group);
+
+        const row = new Adw.ComboRow({title: _('Microphone'), subtitle: _('Checking…')});
+        const refresh = new Gtk.Button({icon_name: 'view-refresh-symbolic', valign: Gtk.Align.CENTER, tooltip_text: _('Check again')});
+        refresh.add_css_class('flat');
+        row.add_suffix(refresh);
+        group.add(row);
+
+        let names = [];
+        let syncing = false;
+        const fill = () => {
+            row.set_subtitle(_('Checking…'));
+            listSources().then(sources => {
+                const current = settings.get_string('microphone');
+                const def = sources.find(s => s.default);
+                const labels = [def ? _('System default (%s)').format(def.description) : _('System default')];
+                names = [''];
+                for (const s of sources) {
+                    labels.push(s.description);
+                    names.push(s.name);
+                }
+                if (current && !names.includes(current)) {
+                    labels.push(_('%s (not connected)').format(current));
+                    names.push(current);
+                }
+                syncing = true;
+                row.set_model(Gtk.StringList.new(labels));
+                row.set_selected(Math.max(0, names.indexOf(current)));
+                syncing = false;
+                row.set_subtitle(sources.length ? '' : _('Engine not reachable — the system default will be used'));
+            });
+        };
+        row.connect('notify::selected', () => {
+            if (syncing || row.get_selected() >= names.length)
+                return;
+            const name = names[row.get_selected()];
+            if (settings.get_string('microphone') !== name)
+                settings.set_string('microphone', name);
+        });
+        refresh.connect('clicked', fill);
+        fill();
     }
 
     // -- polish -----------------------------------------------------------

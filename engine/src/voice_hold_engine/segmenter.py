@@ -18,7 +18,7 @@ SAMPLE_RATE = 16000
 
 
 class Segmenter:
-    def __init__(self, vad, *, pre_roll_s=0.3, partial_window_s=8.0,
+    def __init__(self, vad, *, pre_roll_s=0.3, partial_window_s=6.0,
                  partial_min_new_s=0.7, sample_rate=SAMPLE_RATE):
         self._vad = vad
         self._rate = sample_rate

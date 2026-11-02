@@ -34,6 +34,11 @@
       <summary>Stop after silence</summary>
       <description>In hands-free mode, stop after this many seconds of silence. 0 = never.</description>
     </key>
+    <key name="microphone" type="s">
+      <default>''</default>
+      <summary>Microphone</summary>
+      <description>PipeWire node name of the microphone to record from. Empty = the system default input.</description>
+    </key>
     <key name="polish" type="b">
       <default>false</default>
       <summary>Polish with a local LLM</summary>

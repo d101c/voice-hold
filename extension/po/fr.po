@@ -10,11 +10,35 @@ msgstr ""
 msgid "Click in a text field first"
 msgstr "Cliquez d'abord dans un champ texte"
 
-msgid "Listening — press again or Esc to stop"
-msgstr "À l'écoute — appuyez encore ou Échap pour arrêter"
+msgid "press again or Esc to stop"
+msgstr "appuyez encore ou Échap pour arrêter"
 
-msgid "Listening — release to stop"
-msgstr "À l'écoute — relâchez pour arrêter"
+msgid "release to stop"
+msgstr "relâchez pour arrêter"
+
+msgid "Listening"
+msgstr "À l'écoute"
+
+msgid "Microphone"
+msgstr "Micro"
+
+msgid "Which input the engine records from. \"System default\" follows Settings → Sound → Input."
+msgstr "L'entrée que le moteur enregistre. « Défaut système » suit Réglages → Son → Entrée."
+
+msgid "System default (%s)"
+msgstr "Défaut système (%s)"
+
+msgid "System default"
+msgstr "Défaut système"
+
+msgid "%s (not connected)"
+msgstr "%s (non branché)"
+
+msgid "Engine not reachable — the system default will be used"
+msgstr "Moteur injoignable — le micro par défaut sera utilisé"
+
+msgid "Microphone (engine not reachable)"
+msgstr "Micro (moteur injoignable)"
 
 msgid "Starting…"
 msgstr "Démarrage…"

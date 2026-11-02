@@ -43,7 +43,8 @@ def test_wav_gives_partials_then_finals():
     # Real time: partials only make sense while audio is still coming in.
     events = _collect(str(SAMPLE), realtime=True)
     names = [e[0] for e in events]
-    assert names[0] == 'State' and events[0][1] == 'loading'
+    assert ('Source', 'cafe.wav') in events
+    assert ('State', 'loading') in events[:3]
     assert 'Level' in names
     finals = [e[1] for e in events if e[0] == 'Final']
     partials = [e[1] for e in events if e[0] == 'Partial']

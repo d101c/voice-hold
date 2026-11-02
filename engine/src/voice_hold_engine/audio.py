@@ -16,14 +16,18 @@ class MicSource:
     CMD = ['pw-record', '--rate', str(SAMPLE_RATE), '--channels', '1',
            '--format', 's16', '--latency', '20ms', '-']
 
-    def __init__(self, on_chunk):
+    def __init__(self, on_chunk, target=''):
         self._on_chunk = on_chunk
+        self._target = target          # PipeWire node name; '' = default source
         self._proc = None
         self._thread = None
 
     def start(self):
+        cmd = list(self.CMD)
+        if self._target:
+            cmd[1:1] = ['--target', self._target]
         try:
-            self._proc = subprocess.Popen(self.CMD, stdout=subprocess.PIPE,
+            self._proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
                                           stderr=subprocess.DEVNULL)
         except FileNotFoundError as e:
             raise RuntimeError('pw-record not found: PipeWire is required') from e
