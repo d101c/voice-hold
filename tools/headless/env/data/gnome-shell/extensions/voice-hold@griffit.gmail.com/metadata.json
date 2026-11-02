@@ -1,0 +1,10 @@
+{
+  "uuid": "voice-hold@griffit.gmail.com",
+  "name": "Voice Hold",
+  "description": "Dictate the macOS way: hold a shortcut (Super+R by default), speak, and the words appear in the text field under your cursor while you talk, block by block. Release to stop; a quick tap toggles hands-free dictation. A dark pill next to the cursor shows the microphone level and the live text.\n\nEverything runs on your computer, offline: French, English and 23 other European languages are recognised with punctuation, no account, no network, no cloud. An optional local LLM (Ollama) can polish the text; it is off by default.\n\nRequires the voice-hold-engine helper (Python, one command to install) and PipeWire. See the project page for the install line.",
+  "shell-version": ["45", "46", "47", "48", "49", "50"],
+  "settings-schema": "org.gnome.shell.extensions.voice-hold",
+  "gettext-domain": "voice-hold",
+  "url": "https://github.com/d101c/voice-hold",
+  "version-name": "0.1"
+}

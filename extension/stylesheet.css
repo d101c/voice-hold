@@ -1,0 +1,42 @@
+/* Same family as Accent Hold's .accent-popup: dark pill, 12px radius. */
+.voice-hud {
+    background-color: rgba(40,40,40,0.95);
+    border-radius: 12px;
+    padding: 8px 12px;
+    spacing: 10px;
+    color: #fff;
+}
+.voice-hud-icon {
+    icon-size: 16px;
+    color: #ddd;
+}
+.voice-hud-icon:listening {
+    color: #3584e4;
+}
+.voice-hud-icon:error {
+    color: #e01b24;
+}
+.voice-hud-bars {
+    spacing: 3px;
+    height: 20px;
+}
+.voice-hud-bar {
+    width: 4px;
+    border-radius: 2px;
+    background-color: #3584e4;
+}
+.voice-hud-bar:quiet {
+    background-color: rgba(255,255,255,0.25);
+}
+.voice-hud-text {
+    font-size: 14px;
+    color: #ddd;
+    max-width: 480px;
+}
+.voice-hud-text:live {
+    color: #fff;
+}
+.voice-hud-text:hint {
+    font-size: 12px;
+    color: #aaa;
+}
