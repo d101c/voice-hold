@@ -50,13 +50,13 @@ export class Dictation {
         });
         this._watchId = 0;
         this._silenceId = 0;
-        this._mask = modifierMask(settings.get_strv('trigger')[0] ?? '');
+        this._mask = modifierMask(settings.get_strv('dictation-shortcut')[0] ?? '');
         this._session = false;
 
         settings.connectObject(
             'changed::mode', () => this._reconfigure(),
             'changed::tap-ms', () => this._reconfigure(),
-            'changed::trigger', () => this._reconfigure(),
+            'changed::dictation-shortcut', () => this._reconfigure(),
             this);
         global.display.connectObject('notify::focus-window', () => this._run(this._machine.external('focus')), this);
         this._hookKeys();
@@ -89,7 +89,7 @@ export class Dictation {
         const o = this._machineOptions();
         this._machine.mode = o.mode;
         this._machine.tapMs = o.tapMs;
-        this._mask = modifierMask(this._settings.get_strv('trigger')[0] ?? '');
+        this._mask = modifierMask(this._settings.get_strv('dictation-shortcut')[0] ?? '');
     }
 
     // -- entry points ------------------------------------------------------

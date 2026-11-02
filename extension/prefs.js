@@ -149,11 +149,11 @@ export default class VoiceHoldPreferences extends ExtensionPreferences {
         const row = new Adw.ActionRow({title: _('Shortcut'), activatable: true});
         const label = new Gtk.ShortcutLabel({
             disabled_text: _('Not set'),
-            accelerator: settings.get_strv('trigger')[0] ?? '',
+            accelerator: settings.get_strv('dictation-shortcut')[0] ?? '',
             valign: Gtk.Align.CENTER,
         });
         row.add_suffix(label);
-        settings.connect('changed::trigger', () => label.set_accelerator(settings.get_strv('trigger')[0] ?? ''));
+        settings.connect('changed::dictation-shortcut', () => label.set_accelerator(settings.get_strv('dictation-shortcut')[0] ?? ''));
 
         row.connect('activated', () => {
             const dialog = new Adw.Window({
@@ -166,7 +166,7 @@ export default class VoiceHoldPreferences extends ExtensionPreferences {
             });
             const box = new Gtk.Box({orientation: Gtk.Orientation.VERTICAL, spacing: 12, margin_top: 24, margin_bottom: 24, margin_start: 24, margin_end: 24, valign: Gtk.Align.CENTER});
             box.append(new Gtk.Label({label: _('Press the new shortcut, with a modifier (Super, Ctrl, Alt).\nEscape cancels, Backspace clears.'), justify: Gtk.Justification.CENTER, wrap: true}));
-            const current = new Gtk.ShortcutLabel({accelerator: settings.get_strv('trigger')[0] ?? '', halign: Gtk.Align.CENTER});
+            const current = new Gtk.ShortcutLabel({accelerator: settings.get_strv('dictation-shortcut')[0] ?? '', halign: Gtk.Align.CENTER});
             box.append(current);
             dialog.set_content(box);
 
@@ -178,13 +178,13 @@ export default class VoiceHoldPreferences extends ExtensionPreferences {
                     return Gdk.EVENT_STOP;
                 }
                 if (keyval === Gdk.KEY_BackSpace) {
-                    settings.set_strv('trigger', []);
+                    settings.set_strv('dictation-shortcut', []);
                     dialog.close();
                     return Gdk.EVENT_STOP;
                 }
                 if (!mask || !Gtk.accelerator_valid(keyval, mask))
                     return Gdk.EVENT_STOP;
-                settings.set_strv('trigger', [Gtk.accelerator_name(keyval, mask)]);
+                settings.set_strv('dictation-shortcut', [Gtk.accelerator_name(keyval, mask)]);
                 dialog.close();
                 return Gdk.EVENT_STOP;
             });

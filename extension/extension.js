@@ -35,7 +35,7 @@ export default class VoiceHoldExtension extends Extension {
         };
         this._settings.connectObject(
             'changed::enabled', rebind,
-            'changed::trigger', rebind,
+            'changed::dictation-shortcut', rebind,
             'changed::show-indicator', toggleIndicator,
             this);
     }
@@ -75,7 +75,7 @@ export default class VoiceHoldExtension extends Extension {
         if (this._bound || !this._settings.get_boolean('enabled'))
             return;
         Main.wm.addKeybinding(
-            'trigger',
+            'dictation-shortcut',
             this._settings,
             Meta.KeyBindingFlags.NONE,
             Shell.ActionMode.NORMAL,
@@ -87,7 +87,7 @@ export default class VoiceHoldExtension extends Extension {
     _unbind() {
         if (!this._bound)
             return;
-        Main.wm.removeKeybinding('trigger');
+        Main.wm.removeKeybinding('dictation-shortcut');
         this._bound = false;
     }
 }
