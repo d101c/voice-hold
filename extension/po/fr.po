@@ -49,8 +49,8 @@ msgstr "Micro (moteur non démarré)"
 msgid "Starting…"
 msgstr "Démarrage…"
 
-msgid "Loading the model…"
-msgstr "Chargement du modèle…"
+msgid "Loading the model… speak, nothing is lost"
+msgstr "Chargement du modèle… parlez, rien n'est perdu"
 
 msgid "…"
 msgstr "…"

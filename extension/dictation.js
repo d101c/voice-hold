@@ -182,7 +182,7 @@ export class Dictation {
         this._session = session;
         this._sink.begin();
         if (this._settings.get_boolean('show-hud'))
-            this._hud.show(this._('Starting…'), 'listening');
+            this._hud.show(this._('Starting…'), 'loading');
         const options = {
             'silence-stop-s': 0,
             'polish': this._settings.get_boolean('polish'),
@@ -376,7 +376,7 @@ export class Dictation {
         if (!this._live)
             return;
         if (state === 'loading')
-            this._hud.status(this._('Loading the model…'));
+            this._hud.status(this._('Loading the model… speak, nothing is lost'), 'loading');
         else if (state === 'listening')
             this._hud.status(this._listeningHint(), 'listening');
         else if (state === 'decoding')

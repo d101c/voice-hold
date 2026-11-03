@@ -182,10 +182,27 @@ export class Hud {
     _setIconState(pseudo) {
         if (!this._icon)
             return;
-        for (const p of ['listening', 'error'])
+        for (const p of ['listening', 'loading', 'error'])
             this._icon.remove_style_pseudo_class(p);
         if (pseudo)
             this._icon.add_style_pseudo_class(pseudo);
+        // Grey and breathing until the engine says it listens; then solid blue.
+        this._icon.remove_all_transitions();
+        this._icon.opacity = 255;
+        if (pseudo === 'loading')
+            this._breathe();
+    }
+
+    _breathe() {
+        if (!this._icon || !this._icon.has_style_pseudo_class('loading'))
+            return;
+        const dim = this._icon.opacity > 150;
+        this._icon.ease({
+            opacity: dim ? 90 : 255,
+            duration: 600,
+            mode: Clutter.AnimationMode.EASE_IN_OUT_QUAD,
+            onComplete: () => this._breathe(),
+        });
     }
 
     _setText(text, pseudo) {
