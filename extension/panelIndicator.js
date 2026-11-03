@@ -9,16 +9,15 @@ import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import {listSources} from './engine.js';
 
 // Top-bar indicator: the microphone icon plus a menu with a toggle bound to
-// the `enabled` setting, a "Dictate" item and the preferences.
+// the `enabled` setting, the microphone choice and the preferences.
 export const VoiceHoldIndicator = GObject.registerClass(
 class VoiceHoldIndicator extends PanelMenu.Button {
-    _init(settings, iconPath, openPreferences, dictate, gettext) {
+    _init(settings, iconPath, openPreferences, gettext) {
         const _ = gettext || (s => s);
         super._init(0.0, _('Voice Hold'));
 
         this._settings = settings;
         this._openPreferences = openPreferences;
-        this._dictate = dictate;
 
         this.add_child(new St.Icon({
             gicon: Gio.icon_new_for_string(iconPath),
@@ -54,17 +53,24 @@ class VoiceHoldIndicator extends PanelMenu.Button {
         }, this);
     }
 
+    // Opening the menu must not spawn the engine (NO_AUTO_START): when it is
+    // not running the list only offers the system default.
     _fillMicrophones(_) {
-        listSources().then(sources => {
+        listSources(null, {autoStart: false}).then(found => {
             if (!this._micMenu || !this._settings)
                 return;
+            const sources = found ?? [];
             this._micMenu.menu.removeAll();
             const current = this._settings.get_string('microphone');
             const def = sources.find(s => s.default);
             const entries = [{name: '', description: def ? _('System default (%s)').format(def.description) : _('System default')}];
             for (const s of sources)
                 entries.push({name: s.name, description: s.description});
-            if (!sources.length)
+            if (current && !entries.some(e => e.name === current))
+                entries.push({name: current, description: current});
+            if (found === null)
+                this._micMenu.label.text = _('Microphone (engine not started)');
+            else if (!sources.length)
                 this._micMenu.label.text = _('Microphone (engine not reachable)');
             else
                 this._micMenu.label.text = _('Microphone');
@@ -83,14 +89,13 @@ class VoiceHoldIndicator extends PanelMenu.Button {
         this._settings.disconnectObject(this);
         this._settings = null;
         this._openPreferences = null;
-        this._dictate = null;
         this._toggle = null;
         super.destroy();
     }
 });
 
-export function addIndicator(uuid, settings, iconPath, openPreferences, dictate, gettext) {
-    const indicator = new VoiceHoldIndicator(settings, iconPath, openPreferences, dictate, gettext);
+export function addIndicator(uuid, settings, iconPath, openPreferences, gettext) {
+    const indicator = new VoiceHoldIndicator(settings, iconPath, openPreferences, gettext);
     Main.panel.addToStatusArea(uuid, indicator);
     return indicator;
 }

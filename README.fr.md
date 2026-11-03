@@ -1,14 +1,14 @@
 # Voice Hold
 
 **Maintenir une touche, parler, et les mots s'écrivent là où est le
-curseur.** La dictée « appuie et parle » de macOS, pour GNOME, entièrement
+curseur.** La dictée « appuie et parle », pour GNOME, entièrement
 hors-ligne.
 
 [English version](README.md)
 
-![Maintenir Super+R et parler](docs/demo-dictation.gif)
+![Maintenir Super+X et parler](docs/demo-dictation.gif)
 
-- **Maintenez `Super+R`** et parlez ; relâchez pour arrêter. **Tapez**-le
+- **Maintenez `Super+X`** et parlez ; relâchez pour arrêter. **Tapez**-le
   brièvement pour dicter mains libres (un second appui, `Échap` ou quelques
   secondes de silence arrêtent).
 - Le texte arrive **dans le champ sous le curseur**, bloc par bloc, pendant
@@ -20,7 +20,9 @@ hors-ligne.
   0.6B v3 (via sherpa-onnx). Ni compte, ni réseau, ni cloud. Ça marche dans
   l'avion.
 - Dites *nouvelle ligne* / *à la ligne* / *nouveau paragraphe* pour un saut
-  de ligne.
+  de ligne : seul, ou en fin de phrase (« à demain, nouvelle ligne »). Au
+  milieu d'une phrase, ça reste du texte (« il a une nouvelle ligne de
+  vêtements »).
 - En option : un LLM local (Ollama) peut polir chaque bloc. Éteint par
   défaut.
 - Rien ne tourne quand vous ne dictez pas ; le modèle quitte la mémoire après
@@ -38,9 +40,11 @@ pipx install git+https://github.com/d101c/voice-hold#subdirectory=engine
 voice-hold-engine setup
 ```
 
-`setup` télécharge les modèles (~650 Mo, une fois) et enregistre le moteur
-comme service D-Bus que GNOME Shell lance à la demande. `uv tool install`
-marche aussi. Nécessite Python ≥ 3.12 et PipeWire (tout GNOME récent).
+`setup` télécharge les modèles (~470 Mo, 650 Mo décompressés, une fois ;
+chaque fichier est vérifié contre une empreinte SHA-256 épinglée) et
+enregistre le moteur comme service D-Bus que GNOME Shell lance à la
+demande. `uv tool install` marche aussi. Nécessite Python ≥ 3.12 et PipeWire
+(tout GNOME récent).
 
 Puis l'extension depuis extensions.gnome.org (bientôt), ou depuis les
 sources :
@@ -51,7 +55,7 @@ git clone https://github.com/d101c/voice-hold && cd voice-hold
 ```
 
 Déconnectez-vous puis reconnectez-vous (Wayland), activez *Voice Hold*,
-cliquez dans un champ texte, maintenez `Super+R` et parlez.
+cliquez dans un champ texte, maintenez `Super+X` et parlez.
 
 ## Prérequis et limites
 
@@ -65,6 +69,20 @@ cliquez dans un champ texte, maintenez `Super+R` et parlez.
   occupe ~1,1 Go de RAM quand il est chargé et met ~5 s à se charger la
   première fois.
 
+## Désinstaller, mettre à jour
+
+```bash
+voice-hold-engine uninstall --models   # retire le fichier de service D-Bus et les modèles
+pipx uninstall voice-hold-engine       # ou : uv tool uninstall voice-hold-engine
+```
+
+Sans `--models`, les modèles restent (`~/.local/share/voice-hold/models`).
+Pour mettre le moteur à jour, `pipx reinstall voice-hold-engine` (ou `pipx
+install --force git+…`) suffit : le fichier de service pointe vers
+l'interpréteur de l'environnement pipx, dont le chemin ne change pas.
+`voice-hold-engine status --verify` contrôle les fichiers de modèle contre
+leurs empreintes.
+
 ## Réglages
 
 Raccourci, geste (maintien / appui / les deux), seuil d'appui, délai de
@@ -72,11 +90,34 @@ silence, polissage Ollama facultatif (modèle, URL), pastille et indicateur
 de barre supérieure. La page de réglages montre aussi l'état du moteur et la
 commande d'installation.
 
+## Sécurité
+
+Le moteur est un service D-Bus de session (`org.griffit.VoiceHold`), comme
+tout service utilisateur : chaque processus de votre session peut l'appeler
+et lire ses signaux, avec vos propres droits. Le moteur n'écrit rien sur le
+disque et rien ne quitte la machine, mais un autre processus local pourrait
+lancer une dictée ou lire le texte reconnu ; le bus de session n'offre pas
+de contrôle d'accès plus fin.
+
 ## Transparence
 
 Écrit avec un assistant de code IA (Claude), conçu, relu et testé à la main
 par l'auteur, qui le maintient.
 
-## Licence
+## Licences
 
-GPL-2.0-or-later.
+Voice Hold (extension et moteur) est sous **GPL-2.0-or-later** : le texte de
+la GPLv2 est dans [LICENSE](LICENSE) et [engine/LICENSE](engine/LICENSE),
+et toute version ultérieure est permise. Ce « ou ultérieure » compte : le
+moteur utilise sherpa-onnx, sous Apache-2.0, compatible avec la GPLv3 mais
+pas avec la GPLv2 seule ; l'ensemble est distribué aux conditions de la
+GPLv3.
+
+Composants du moteur : Parakeet TDT 0.6B v3 (NVIDIA, CC-BY-4.0, téléchargé
+par vous à `setup`, non redistribué ici), Silero VAD (MIT, idem),
+sherpa-onnx (Apache-2.0), onnxruntime (MIT), dbus-fast (MIT), numpy
+(BSD-3-Clause). Les modèles viennent de la release `asr-models` de
+sherpa-onnx et sont vérifiés contre des empreintes SHA-256 épinglées dans
+`engine/src/voice_hold_engine/models.py`. Le fichier
+`engine/tests/data/cafe.wav` est une phrase synthétisée avec Piper et
+enregistrée par nous : aucune voix réelle.

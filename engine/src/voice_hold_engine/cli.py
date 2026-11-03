@@ -1,4 +1,4 @@
-"""Command line: `voice-hold-engine [serve|setup|status|transcribe FILE|install-service|uninstall]`."""
+"""Command line: `voice-hold-engine [serve|setup|status [--verify]|transcribe FILE|install-service|uninstall [--models]]`."""
 import argparse
 import asyncio
 import os
@@ -16,16 +16,19 @@ def service_dir():
     return data / 'dbus-1' / 'services'
 
 
-def executable():
-    exe = shutil.which('voice-hold-engine') or sys.argv[0]
-    return str(Path(exe).resolve())
+def service_exec():
+    """The interpreter running `setup`, not whichever voice-hold-engine is
+    first in PATH: with pipx or uv that is the venv's python, and
+    `pipx reinstall` keeps the same path. Never resolve() it: a venv's
+    python is a symlink to the system interpreter, which cannot import us."""
+    return f'{sys.executable} -m voice_hold_engine serve'
 
 
 def install_service(log=print):
     d = service_dir()
     d.mkdir(parents=True, exist_ok=True)
     path = d / SERVICE_FILE
-    path.write_text(f'[D-BUS Service]\nName={BUS_NAME}\nExec={executable()} serve\n')
+    path.write_text(f'[D-BUS Service]\nName={BUS_NAME}\nExec={service_exec()}\n')
     log(f'D-Bus service installed: {path}')
     return path
 
@@ -40,7 +43,7 @@ def cmd_setup(args):
         return 1
     print('Models ready.')
     install_service()
-    print('Done. Enable the Voice Hold extension and hold Super+R in a text field.')
+    print('Done. Enable the Voice Hold extension and hold Super+X in a text field.')
     return 0
 
 
@@ -49,6 +52,10 @@ def cmd_status(args):
     miss = models.missing(base)
     print(f'voice-hold-engine {__version__}')
     print(f'models: {base} ({"ready" if not miss else "missing: " + ", ".join(miss)})')
+    if args.verify and not miss:
+        bad = models.verify(base)
+        print(f'checksums: {"all match" if not bad else "MISMATCH: " + ", ".join(bad)}')
+        miss = miss or bad
     svc = service_dir() / SERVICE_FILE
     print(f'D-Bus service file: {svc} ({"present" if svc.exists() else "absent"})')
     print(f'pw-record: {shutil.which("pw-record") or "NOT FOUND"}')
@@ -99,7 +106,9 @@ def main(argv=None):
     sub = p.add_subparsers(dest='cmd')
     sub.add_parser('serve', help='run the D-Bus service (default)').set_defaults(fn=cmd_serve)
     sub.add_parser('setup', help='download the models and install the D-Bus service').set_defaults(fn=cmd_setup)
-    sub.add_parser('status', help='check models and service').set_defaults(fn=cmd_status)
+    st = sub.add_parser('status', help='check models and service')
+    st.add_argument('--verify', action='store_true', help='also check the SHA-256 of every model file')
+    st.set_defaults(fn=cmd_status)
     sub.add_parser('install-service', help='(re)write the D-Bus service file').set_defaults(fn=lambda a: (install_service(), 0)[1])
     t = sub.add_parser('transcribe', help='transcribe a WAV file (debug)')
     t.add_argument('file')

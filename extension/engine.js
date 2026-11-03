@@ -8,6 +8,7 @@ import GLib from 'gi://GLib';
 export const BUS_NAME = 'org.griffit.VoiceHold';
 export const OBJECT_PATH = '/org/griffit/VoiceHold';
 export const INTERFACE = 'org.griffit.VoiceHold';
+export const BUSY_ERROR = 'org.griffit.VoiceHold.Error.Busy';
 
 const IFACE_XML = `
 <node>
@@ -31,12 +32,20 @@ const IFACE_XML = `
 
 const Proxy = Gio.DBusProxy.makeProxyWrapper(IFACE_XML);
 
+// Start/Cancel answer at once. Stop answers after the last block is decoded
+// (cold model load + decode + optional polish), so it gets a long leash; the
+// caller ends the session on its own if no `Stopped` follows the answer.
+const CALL_TIMEOUT_MS = 15000;
+const STOP_TIMEOUT_MS = 60000;
+
 export class EngineClient {
-    // handlers: {State, Level, Speech, Partial, Final, Stopped, Error}
+    // handlers: {Owner, State, Source, Level, Speech, Partial, Final, Stopped, Error}
+    // `Owner(hasOwner)` is called when the engine appears on or leaves the bus.
     constructor(handlers) {
         this._handlers = handlers;
         this._proxy = null;
         this._signalId = 0;
+        this._ownerId = 0;
         this._cancellable = new Gio.Cancellable();
         this._connect();
     }
@@ -45,7 +54,7 @@ export class EngineClient {
         try {
             this._proxy = new Proxy(Gio.DBus.session, BUS_NAME, OBJECT_PATH,
                 (proxy, error) => {
-                    if (error)
+                    if (error && !error.matches?.(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED))
                         logError(error, 'voice-hold: proxy');
                 }, this._cancellable,
                 Gio.DBusProxyFlags.DO_NOT_AUTO_START_AT_CONSTRUCTION);
@@ -54,6 +63,13 @@ export class EngineClient {
                 if (fn)
                     fn(...params.deepUnpack());
             });
+            // The engine process died (or exited at idle): the name loses its
+            // owner and no `Stopped` will ever come for a running session.
+            this._ownerId = this._proxy.connect('notify::g-name-owner', proxy => {
+                const fn = this._handlers.Owner;
+                if (fn)
+                    fn(!!proxy.g_name_owner);
+            });
         } catch (e) {
             logError(e, 'voice-hold: proxy');
         }
@@ -61,21 +77,26 @@ export class EngineClient {
 
     destroy() {
         this._cancellable.cancel();
-        if (this._proxy && this._signalId)
-            this._proxy.disconnect(this._signalId);
+        if (this._proxy) {
+            if (this._signalId)
+                this._proxy.disconnect(this._signalId);
+            if (this._ownerId)
+                this._proxy.disconnect(this._ownerId);
+        }
         this._signalId = 0;
+        this._ownerId = 0;
         this._proxy = null;
         this._handlers = {};
     }
 
     // Resolves to null on success, or an error code string.
-    _call(method, args = null) {
+    _call(method, args = null, timeout = CALL_TIMEOUT_MS) {
         return new Promise(resolve => {
             if (!this._proxy) {
                 resolve('no-proxy');
                 return;
             }
-            this._proxy.call(method, args, Gio.DBusCallFlags.NONE, 15000, this._cancellable,
+            this._proxy.call(method, args, Gio.DBusCallFlags.NONE, timeout, this._cancellable,
                 (proxy, res) => {
                     try {
                         proxy.call_finish(res);
@@ -101,43 +122,24 @@ export class EngineClient {
     }
 
     stop() {
-        return this._call('Stop');
+        return this._call('Stop', null, STOP_TIMEOUT_MS);
     }
 
     cancel() {
         return this._call('Cancel');
     }
-
-    // Resolves to {ok, status?, error?}.
-    status() {
-        return new Promise(resolve => {
-            if (!this._proxy) {
-                resolve({ok: false, error: 'no-proxy'});
-                return;
-            }
-            this._proxy.call('Status', null, Gio.DBusCallFlags.NONE, 15000, this._cancellable,
-                (proxy, res) => {
-                    try {
-                        const [dict] = proxy.call_finish(res).deepUnpack();
-                        const status = {};
-                        for (const [k, v] of Object.entries(dict))
-                            status[k] = v.deepUnpack();
-                        resolve({ok: true, status});
-                    } catch (e) {
-                        resolve({ok: false, error: classify(e)});
-                    }
-                });
-        });
-    }
 }
 
 // Microphones known to the engine: resolves to [{name, description, default}]
 // (empty on any error). Usable without an EngineClient (prefs, indicator).
-export function listSources(cancellable = null) {
+// With `autoStart: false` the engine is not spawned: the promise resolves to
+// null when it is not running.
+export function listSources(cancellable = null, {autoStart = true} = {}) {
     return new Promise(resolve => {
+        const flags = autoStart ? Gio.DBusCallFlags.NONE : Gio.DBusCallFlags.NO_AUTO_START;
         try {
             Gio.DBus.session.call(BUS_NAME, OBJECT_PATH, INTERFACE, 'ListSources', null,
-                new GLib.VariantType('(aa{sv})'), Gio.DBusCallFlags.NONE, 15000, cancellable,
+                new GLib.VariantType('(aa{sv})'), flags, CALL_TIMEOUT_MS, cancellable,
                 (conn, res) => {
                     try {
                         const [list] = conn.call_finish(res).deepUnpack();
@@ -146,8 +148,8 @@ export function listSources(cancellable = null) {
                             description: d.description?.deepUnpack() ?? '',
                             default: d.default?.deepUnpack() ?? false,
                         })));
-                    } catch {
-                        resolve([]);
+                    } catch (e) {
+                        resolve(!autoStart && classify(e, false) === 'not-installed' ? null : []);
                     }
                 });
         } catch {
@@ -156,7 +158,7 @@ export function listSources(cancellable = null) {
     });
 }
 
-function classify(e) {
+function classify(e, log = true) {
     const name = Gio.DBusError.is_remote_error(e) ? Gio.DBusError.get_remote_error(e) : '';
     if (name === 'org.freedesktop.DBus.Error.ServiceUnknown' ||
         name === 'org.freedesktop.DBus.Error.NameHasNoOwner')
@@ -165,12 +167,15 @@ function classify(e) {
         name === 'org.freedesktop.DBus.Error.Spawn.ChildExited' ||
         name === 'org.freedesktop.DBus.Error.Spawn.ChildSignaled')
         return 'spawn-failed';
+    if (name === BUSY_ERROR)
+        return 'busy';
     if (name === 'org.freedesktop.DBus.Error.NoReply' ||
         name === 'org.freedesktop.DBus.Error.Timeout' ||
         e.matches?.(Gio.IOErrorEnum, Gio.IOErrorEnum.TIMED_OUT))
         return 'timeout';
     if (e.matches?.(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED))
         return 'cancelled';
-    logError(e, 'voice-hold: engine call');
+    if (log)
+        logError(e, 'voice-hold: engine call');
     return `error: ${e.message}`;
 }

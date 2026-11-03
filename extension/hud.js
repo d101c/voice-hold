@@ -35,10 +35,6 @@ export class Hud {
         this._destroyBox();
     }
 
-    get visible() {
-        return this._box !== null;
-    }
-
     // -- building --------------------------------------------------------
 
     _build() {
@@ -95,8 +91,12 @@ export class Hud {
             const [px, py] = global.get_pointer();
             [x, y] = [px, py + 24];
         }
-        const monitor = Main.layoutManager.findMonitorForPoint?.(x, y) ??
-            Main.layoutManager.primaryMonitor;
+        // findMonitorForPoint() only exists from GNOME 46: look the monitor
+        // up by hand, and fall back to the primary one.
+        const lm = Main.layoutManager;
+        const monitor = (lm.monitors ?? []).find(m =>
+            x >= m.x && x < m.x + m.width && y >= m.y && y < m.y + m.height) ??
+            lm.primaryMonitor;
         const [, natWidth] = this._box.get_preferred_width(-1);
         const [, natHeight] = this._box.get_preferred_height(-1);
         if (monitor) {
@@ -113,6 +113,9 @@ export class Hud {
     show(status, pseudo = '') {
         this._cancelHide();
         this._build();
+        // A fade-out may still be running from the previous hide(): its
+        // onComplete would destroy the box we are about to use.
+        this._box.remove_all_transitions();
         this._setIconState(pseudo);
         this._setText(status, 'hint');
         this._place();
@@ -179,10 +182,27 @@ export class Hud {
     _setIconState(pseudo) {
         if (!this._icon)
             return;
-        for (const p of ['listening', 'error'])
+        for (const p of ['listening', 'loading', 'error'])
             this._icon.remove_style_pseudo_class(p);
         if (pseudo)
             this._icon.add_style_pseudo_class(pseudo);
+        // Grey and breathing until the engine says it listens; then solid blue.
+        this._icon.remove_all_transitions();
+        this._icon.opacity = 255;
+        if (pseudo === 'loading')
+            this._breathe();
+    }
+
+    _breathe() {
+        if (!this._icon || !this._icon.has_style_pseudo_class('loading'))
+            return;
+        const dim = this._icon.opacity > 150;
+        this._icon.ease({
+            opacity: dim ? 90 : 255,
+            duration: 600,
+            mode: Clutter.AnimationMode.EASE_IN_OUT_QUAD,
+            onComplete: () => this._breathe(),
+        });
     }
 
     _setText(text, pseudo) {

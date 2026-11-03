@@ -2,14 +2,21 @@
 
 Threads: audio arrives on a capture thread and is handed to the asyncio loop
 with call_soon_threadsafe; the VAD runs on the loop (cheap); decodes run one
-at a time on a single worker thread so results come back in order.
+at a time on a single worker thread so results come back in order; the
+optional LLM polish has its own worker so it never delays a decode; pw-dump
+runs on the default executor.
+
+A session is numbered (`_gen`): results of a cancelled session are dropped
+when they come back, and a `stop()` that was waiting for decodes does not
+finish a newer session.
 """
 import asyncio
+import gc
 import os
 import time
 from concurrent.futures import ThreadPoolExecutor
 
-from dbus_fast import Variant
+from dbus_fast import DBusError, Variant
 from dbus_fast.service import ServiceInterface, method, signal
 
 from . import INTERFACE, __version__, models, text as textmod
@@ -20,6 +27,15 @@ IDLE = 'idle'
 LOADING = 'loading'
 LISTENING = 'listening'
 DECODING = 'decoding'
+
+BUSY_ERROR = 'org.griffit.VoiceHold.Error.Busy'
+
+# `Level` is emitted at most this often (the meter does not need more).
+LEVEL_PERIOD_S = 0.1
+
+
+class Busy(Exception):
+    """Start() while a session is active or still finishing."""
 
 
 def _opt(options, key, default):
@@ -36,6 +52,7 @@ class Engine:
         self._idle_unload_s = idle_unload_s if idle_unload_s is not None else \
             float(os.environ.get('VOICE_HOLD_IDLE_S', '300'))
         self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix='decode')
+        self._polish_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix='polish')
         self._recognizer = None
         self._vad = None
         self.state = IDLE
@@ -43,20 +60,29 @@ class Engine:
         self._source = None
         self._segmenter = None
         self._opts = {}
-        self._pending = set()                 # decode futures of this session
+        self._pending = set()                 # futures of this session (decode, load, polish)
+        self._inflight = 0                    # jobs on a worker, whatever their session
         self._partial_inflight = False
         self._last_speech = 0.0
         self._last_level = 0.0
+        self._level_emitted = 0.0
         self._stopping = False
+        self._starting = False
         self._speaking = False
         self._idle_handle = None
         self.exit_event = asyncio.Event()
+        self.quit_requested = False           # Quit(): exit even if busy
 
     # -- lifecycle ----------------------------------------------------------
 
     @property
     def active(self):
         return self._source is not None
+
+    @property
+    def busy(self):
+        """A session is running, starting, or a worker still has a job."""
+        return self.active or self._starting or self._inflight > 0
 
     def _set_state(self, state):
         if state != self.state:
@@ -85,12 +111,19 @@ class Engine:
 
     async def start(self, options=None):
         options = options or {}
-        if self.active:
-            return
+        if self.active or self._starting:
+            raise Busy()
+        self._starting = True
+        try:
+            await self._start(options)
+        finally:
+            self._starting = False
+
+    async def _start(self, options):
         self._cancel_idle()
         miss = models.missing()
         if miss:
-            self._emit('Error', 'models-missing')
+            self._fail('models-missing')
             return
         self._gen += 1
         gen = self._gen
@@ -104,36 +137,48 @@ class Engine:
             'source': str(_opt(options, 'source', '')),
         }
         self._ensure_models()
-        self._segmenter = Segmenter(self._vad)
+        # The live window must cover a whole segment: the VAD cuts a segment
+        # at max_speech_s, so a shorter window would drop the first words of
+        # the preedit before the final restores them (M4).
+        window = getattr(self._vad, 'max_speech_s', 8.0) + 1.0
+        self._segmenter = Segmenter(self._vad, partial_window_s=window)
         self._pending = set()
         self._partial_inflight = False
         self._stopping = False
         self._last_speech = time.monotonic()
         self._last_level = 0.0
+        self._level_emitted = 0.0
         self._speaking = False
 
-        on_chunk = lambda chunk, g=gen: self._loop.call_soon_threadsafe(self._on_chunk, g, chunk)
+        def on_chunk(chunk, g=gen):
+            try:
+                self._loop.call_soon_threadsafe(self._on_chunk, g, chunk)
+            except RuntimeError:
+                pass                          # loop closed: shutting down
         # Test harnesses replace the microphone with a WAV file.
         if not self._opts['audio_file'] and os.environ.get('VOICE_HOLD_AUDIO_FILE'):
             self._opts['audio_file'] = os.environ['VOICE_HOLD_AUDIO_FILE']
         if self._opts['audio_file']:
             source = FileSource(self._opts['audio_file'], on_chunk, realtime=self._opts['realtime'])
-            source_name = os.path.basename(self._opts['audio_file'])
         else:
             source = MicSource(on_chunk, target=self._opts['source'])
-            from .sources import describe
-            source_name = describe(self._opts['source'])
         try:
             source.start()
         except Exception as e:
-            self._emit('Error', f'audio: {e}')
-            self._set_state(IDLE)
+            self._fail(f'audio: {e}')
             return
         self._source = source
-        self._emit('Source', source_name)
+        if self._opts['audio_file']:
+            self._emit('Source', os.path.basename(self._opts['audio_file']))
+        else:
+            # pw-dump can take a while: off the loop, reported when known.
+            from .sources import describe
+            fut = self._loop.run_in_executor(None, describe, self._opts['source'])
+            fut.add_done_callback(lambda f, g=gen: self._on_described(g, f))
 
         if not self._recognizer.loaded:
             self._set_state(LOADING)
+            self._inflight += 1
             fut = self._loop.run_in_executor(self._executor, self._recognizer.load)
             self._pending.add(fut)
             # Future callbacks already run on the loop thread, in registration
@@ -143,8 +188,17 @@ class Engine:
         else:
             self._set_state(LISTENING)
 
+    def _on_described(self, gen, fut):
+        if gen != self._gen or not self.active:
+            return
+        try:
+            self._emit('Source', fut.result())
+        except Exception:
+            pass
+
     def _on_loaded(self, gen, fut):
         self._pending.discard(fut)
+        self._inflight -= 1
         if gen != self._gen:
             return
         try:
@@ -156,31 +210,50 @@ class Engine:
         if self.active and not self._stopping:
             self._set_state(LISTENING)
 
+    # A start that went nowhere: the client gets Error then Stopped('error')
+    # so it never waits for a session that does not exist.
+    def _fail(self, message):
+        self._emit('Error', message)
+        self._set_state(IDLE)
+        self._emit('Stopped', 'error')
+        self._schedule_idle()
+
     async def stop(self, reason='stop'):
         if not self.active or self._stopping:
             return
         self._stopping = True
+        gen = self._gen
         self._source.stop()
         if self._segmenter is not None:
             for ev in self._segmenter.flush():
-                self._handle_event(self._gen, ev)
+                self._handle_event(gen, ev)
         if self._pending:
             self._set_state(DECODING)
+        # A decode may queue a polish job when it completes: loop until the
+        # session has nothing left in flight. gather() of futures that are
+        # already done returns without yielding (Python 3.12+), while their
+        # own done-callbacks (_on_decoded, which emits Final and drops them
+        # from _pending) are only queued: sleep(0) lets those run first.
+        while self._pending and gen == self._gen:
             await asyncio.gather(*list(self._pending), return_exceptions=True)
+            await asyncio.sleep(0)
+        if gen != self._gen:
+            return                            # cancelled meanwhile; maybe restarted
         self._finish(reason)
 
     def cancel(self):
         if not self.active:
             return
         self._gen += 1                       # drop every result still in flight
-        self._source.stop()
         self._finish('cancel')
 
     def _finish(self, reason):
+        if self._source is not None:
+            self._source.stop()
+            self._source = None
         if self._speaking:
             self._speaking = False
             self._emit('Speech', False)
-        self._source = None
         self._segmenter = None
         self._stopping = False
         self._pending = set()
@@ -195,15 +268,22 @@ class Engine:
         if gen != self._gen or not self.active or self._stopping:
             return
         if chunk is None:
-            self._loop.create_task(self.stop('end-of-audio'))
+            failure = getattr(self._source, 'failure', None)
+            if failure:
+                self._emit('Error', f'audio: {failure}')
+                self._loop.create_task(self.stop('error'))
+            else:
+                self._loop.create_task(self.stop('end-of-audio'))
             return
         level = rms(chunk)
-        # Smooth decay so the meter does not flicker.
+        # Smooth decay so the meter does not flicker; emit at ~10/s.
         self._last_level = max(level, self._last_level * 0.8)
-        self._emit('Level', round(self._last_level, 3))
+        now = time.monotonic()
+        if now - self._level_emitted >= LEVEL_PERIOD_S:
+            self._level_emitted = now
+            self._emit('Level', round(self._last_level, 3))
         for ev in self._segmenter.feed(chunk):
             self._handle_event(gen, ev)
-        now = time.monotonic()
         speaking = self._segmenter.in_speech
         if speaking != self._speaking:
             self._speaking = speaking
@@ -227,25 +307,16 @@ class Engine:
     # -- decoding -----------------------------------------------------------
 
     def _submit(self, gen, samples, final):
-        if final:
-            job = lambda: self._decode_final(samples)
-        else:
+        if not final:
             self._partial_inflight = True
-            job = lambda: self._recognizer.transcribe(samples)
-        fut = self._loop.run_in_executor(self._executor, job)
+        self._inflight += 1
+        fut = self._loop.run_in_executor(self._executor, self._recognizer.transcribe, samples)
         self._pending.add(fut)
         fut.add_done_callback(lambda f: self._on_decoded(gen, final, f))
 
-    def _decode_final(self, samples):
-        raw = self._recognizer.transcribe(samples)
-        if raw and self._opts['polish']:
-            from .polish import DEFAULT_MODEL, DEFAULT_URL, polish
-            raw = polish(raw, url=self._opts['polish_url'] or DEFAULT_URL,
-                         model=self._opts['polish_model'] or DEFAULT_MODEL)
-        return raw
-
     def _on_decoded(self, gen, final, fut):
         self._pending.discard(fut)
+        self._inflight -= 1
         if not final:
             self._partial_inflight = False
         if gen != self._gen:
@@ -255,13 +326,36 @@ class Engine:
         except Exception as e:
             self._emit('Error', f'decode: {e}')
             return
+        if final and raw and self._opts['polish']:
+            from .polish import DEFAULT_MODEL, DEFAULT_URL, polish
+            self._inflight += 1
+            pf = self._loop.run_in_executor(
+                self._polish_executor, polish, raw,
+                self._opts['polish_url'] or DEFAULT_URL,
+                self._opts['polish_model'] or DEFAULT_MODEL)
+            self._pending.add(pf)
+            pf.add_done_callback(lambda f: self._on_polished(gen, raw, f))
+            return
+        self._emit_text(raw, final)
+
+    def _on_polished(self, gen, raw, fut):
+        self._pending.discard(fut)
+        self._inflight -= 1
+        if gen != self._gen:
+            return
+        try:
+            out = fut.result()
+        except Exception:
+            out = raw
+        self._emit_text(out or raw, True)
+
+    def _emit_text(self, raw, final):
         text = textmod.clean(raw)
+        if not text:
+            return
         if final:
-            if not text and textmod.is_only_command(raw):
-                text = '\n'
-            if text:
-                self._emit('Final', text)
-        elif text and self.active and not self._stopping:
+            self._emit('Final', text)
+        elif text.strip() and self.active and not self._stopping:
             self._emit('Partial', text)
 
     # -- idle ---------------------------------------------------------------
@@ -279,15 +373,24 @@ class Engine:
 
     def _on_idle(self):
         self._idle_handle = None
-        if self.active:
+        if self.busy:
+            # A session, a Start, or a decode still on a worker: later.
+            self._schedule_idle()
             return
         if self._recognizer is not None and self._recognizer.loaded:
-            self._recognizer.unload()
-            self._vad = None
+            self.unload()
             self._emit('State', IDLE)
-            self._idle_handle = self._loop.call_later(self._idle_unload_s, self._on_idle)
+            self._schedule_idle()
         else:
             self.exit_event.set()
+
+    def unload(self):
+        from .asr import release_memory
+        if self._recognizer is not None:
+            self._recognizer.unload()
+        self._vad = None
+        gc.collect()
+        release_memory()
 
 
 class VoiceHoldInterface(ServiceInterface):
@@ -297,7 +400,11 @@ class VoiceHoldInterface(ServiceInterface):
 
     @method()
     async def Start(self, options: 'a{sv}'):
-        await self._engine.start(options)
+        self._engine.exit_event.clear()
+        try:
+            await self._engine.start(options)
+        except Busy:
+            raise DBusError(BUSY_ERROR, 'a dictation session is still active')
 
     @method()
     async def Stop(self):
@@ -313,16 +420,18 @@ class VoiceHoldInterface(ServiceInterface):
 
     @method()
     def Quit(self):
+        self._engine.quit_requested = True
         self._engine.exit_event.set()
 
     @method()
-    def ListSources(self) -> 'aa{sv}':
+    async def ListSources(self) -> 'aa{sv}':
         from .sources import list_sources
+        sources = await asyncio.get_running_loop().run_in_executor(None, list_sources)
         return [{
             'name': Variant('s', s['name']),
             'description': Variant('s', s['description']),
             'default': Variant('b', s['default']),
-        } for s in list_sources()]
+        } for s in sources]
 
     @signal()
     def State(self, state: 's') -> 's':
@@ -381,9 +490,19 @@ async def serve():
         raise SystemExit(f'{BUS_NAME} is already running')
     # Exit when idle for long enough even if nobody ever called us.
     engine._schedule_idle()
-    done = loop.create_task(engine.exit_event.wait())
     gone = loop.create_task(bus.wait_for_disconnect())
-    await asyncio.wait({done, gone}, return_when=asyncio.FIRST_COMPLETED)
+    while True:
+        done = loop.create_task(engine.exit_event.wait())
+        await asyncio.wait({done, gone}, return_when=asyncio.FIRST_COMPLETED)
+        if gone.done():
+            done.cancel()
+            break
+        # A Start may have slipped in between the idle timer and here: stay.
+        if engine.busy and not engine.quit_requested:
+            engine.exit_event.clear()
+            continue
+        break
     if engine.active:
         engine.cancel()
+    gone.cancel()
     bus.disconnect()

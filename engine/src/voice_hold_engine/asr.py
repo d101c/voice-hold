@@ -1,5 +1,6 @@
 """Speech recognition (Parakeet TDT v3 int8) and voice activity detection
 (Silero), both through sherpa-onnx."""
+import ctypes
 import os
 import time
 
@@ -49,6 +50,17 @@ class Recognizer:
         return s.result.text.strip()
 
 
+def release_memory():
+    """Give freed heap back to the kernel. Dropping the recogniser frees the
+    weights but glibc keeps ~600 MB of them resident until asked; without
+    this the promise "the model leaves memory after 5 minutes" is false."""
+    try:
+        libc = ctypes.CDLL('libc.so.6')
+        libc.malloc_trim(0)
+    except (OSError, AttributeError):
+        pass
+
+
 class SileroVad:
     """Adapter with the interface segmenter.Segmenter expects."""
 
@@ -60,6 +72,7 @@ class SileroVad:
     def __init__(self, base=None, threshold=0.5, min_silence_s=0.3,
                  min_speech_s=0.25, max_speech_s=8.0):
         import sherpa_onnx
+        self.max_speech_s = max_speech_s
         cfg = sherpa_onnx.VadModelConfig()
         cfg.silero_vad.model = models.vad_path(base)
         cfg.silero_vad.threshold = threshold
