@@ -74,10 +74,13 @@ export default class VoiceHoldExtension extends Extension {
     _bind() {
         if (this._bound || !this._settings.get_boolean('enabled'))
             return;
+        // IGNORE_AUTOREPEAT: Mutter only suppresses key repeat when asked.
+        // Without it, holding Super+R re-fires the binding every ~30 ms after
+        // the repeat delay, and every re-fire is read as "stop".
         Main.wm.addKeybinding(
             'dictation-shortcut',
             this._settings,
-            Meta.KeyBindingFlags.NONE,
+            Meta.KeyBindingFlags.IGNORE_AUTOREPEAT,
             Shell.ActionMode.NORMAL,
             () => this._dictation?.shortcut(),
         );
