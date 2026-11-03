@@ -17,8 +17,14 @@ import numpy as np
 SAMPLE_RATE = 16000
 
 
+# The partial window must be at least the VAD's longest segment (8 s in
+# asr.SileroVad) plus the pre-roll, or the live text loses its first words
+# before the final restores them. The engine passes the exact value.
+DEFAULT_PARTIAL_WINDOW_S = 9.0
+
+
 class Segmenter:
-    def __init__(self, vad, *, pre_roll_s=0.3, partial_window_s=6.0,
+    def __init__(self, vad, *, pre_roll_s=0.3, partial_window_s=DEFAULT_PARTIAL_WINDOW_S,
                  partial_min_new_s=0.7, sample_rate=SAMPLE_RATE):
         self._vad = vad
         self._rate = sample_rate
@@ -32,6 +38,10 @@ class Segmenter:
     @property
     def in_speech(self):
         return self._current is not None
+
+    @property
+    def partial_window_s(self):
+        return self._window / self._rate
 
     def feed(self, chunk):
         chunk = np.asarray(chunk, dtype=np.float32)

@@ -101,6 +101,12 @@ def test_two_segments_two_finals():
     assert [e[0] for e in evs] == ['start', 'final', 'start', 'final']
 
 
+def test_default_partial_window_covers_the_longest_segment():
+    # asr.SileroVad cuts at 8 s: the default window must not be shorter.
+    seg = Segmenter(FakeVad([]))
+    assert seg.partial_window_s >= 8.0 + 0.3
+
+
 def test_rms_scale():
     assert rms(np.zeros(100)) == 0.0
     assert 0.3 < rms(np.full(100, 0.1)) < 0.5
