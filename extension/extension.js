@@ -6,7 +6,7 @@ import {Extension, gettext as _} from 'resource:///org/gnome/shell/extensions/ex
 import {Dictation} from './dictation.js';
 import {addIndicator} from './panelIndicator.js';
 
-// Hold the `trigger` shortcut (<Super>r by default) and speak: the words are
+// Hold the `trigger` shortcut (<Super>x by default) and speak: the words are
 // typed where the text cursor is (dictation.js).
 export default class VoiceHoldExtension extends Extension {
     enable() {
@@ -74,7 +74,7 @@ export default class VoiceHoldExtension extends Extension {
         if (this._bound || !this._settings.get_boolean('enabled'))
             return;
         // IGNORE_AUTOREPEAT: Mutter only suppresses key repeat when asked.
-        // Without it, holding Super+R re-fires the binding every ~30 ms after
+        // Without it, holding Super+X re-fires the binding every ~30 ms after
         // the repeat delay, and every re-fire is read as "stop".
         Main.wm.addKeybinding(
             'dictation-shortcut',

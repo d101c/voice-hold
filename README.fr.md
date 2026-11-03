@@ -6,9 +6,9 @@ hors-ligne.
 
 [English version](README.md)
 
-![Maintenir Super+R et parler](docs/demo-dictation.gif)
+![Maintenir Super+X et parler](docs/demo-dictation.gif)
 
-- **Maintenez `Super+R`** et parlez ; relâchez pour arrêter. **Tapez**-le
+- **Maintenez `Super+X`** et parlez ; relâchez pour arrêter. **Tapez**-le
   brièvement pour dicter mains libres (un second appui, `Échap` ou quelques
   secondes de silence arrêtent).
 - Le texte arrive **dans le champ sous le curseur**, bloc par bloc, pendant
@@ -55,7 +55,7 @@ git clone https://github.com/d101c/voice-hold && cd voice-hold
 ```
 
 Déconnectez-vous puis reconnectez-vous (Wayland), activez *Voice Hold*,
-cliquez dans un champ texte, maintenez `Super+R` et parlez.
+cliquez dans un champ texte, maintenez `Super+X` et parlez.
 
 ## Prérequis et limites
 

@@ -26,7 +26,7 @@ const START_WAIT_MS = 3000;
 // Engine errors after which no further signal is to be expected.
 const FATAL_ERRORS = ['models-missing', 'audio:', 'model:'];
 
-// Modifier masks named in an accelerator string such as '<Super>r'.
+// Modifier masks named in an accelerator string such as '<Super>x'.
 export function modifierMask(accel) {
     let mask = 0;
     const s = accel.toLowerCase();

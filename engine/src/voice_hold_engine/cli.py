@@ -43,7 +43,7 @@ def cmd_setup(args):
         return 1
     print('Models ready.')
     install_service()
-    print('Done. Enable the Voice Hold extension and hold Super+R in a text field.')
+    print('Done. Enable the Voice Hold extension and hold Super+X in a text field.')
     return 0
 
 
