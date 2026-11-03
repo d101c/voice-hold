@@ -59,7 +59,6 @@ export default class VoiceHoldExtension extends Extension {
             this._settings,
             `${this.path}/icons/voice-hold-symbolic.svg`,
             () => this.openPreferences(),
-            () => this._dictation?.shortcut(),
             _,
         );
     }
