@@ -22,6 +22,8 @@ gnome-extensions pack "$SRC" \
   --extra-source=hud.js \
   --extra-source=keyHook.js \
   --extra-source=panelIndicator.js \
+  --extra-source=setup.js \
+  --extra-source=setupPage.js \
   --extra-source=textSink.js \
   "${PODIR[@]}" \
   --schema="$SCHEMA" \

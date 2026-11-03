@@ -7,6 +7,7 @@ import Pango from 'gi://Pango';
 
 import {ExtensionPreferences, gettext as _} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 import {listSources} from './engine.js';
+import {buildSetupPage} from './setupPage.js';
 
 const BUS_NAME = 'org.griffit.VoiceHold';
 const OBJECT_PATH = '/org/griffit/VoiceHold';
@@ -21,6 +22,14 @@ export default class VoiceHoldPreferences extends ExtensionPreferences {
             icon_name: 'audio-input-microphone-symbolic',
         });
         window.add(page);
+        // The assistant installs the engine without a terminal; it is shown
+        // first as long as the engine is missing.
+        const setup = buildSetupPage(window, _, {components: ['voice']});
+        window.add(setup);
+        this._engineStatus().then(s => {
+            if (s.startsWith(_('Not installed')))
+                window.set_visible_page(setup);
+        });
         this._buildEngineGroup(page, window);
         this._buildGestureGroup(page, settings);
         this._buildMicrophoneGroup(page, settings);
@@ -33,7 +42,7 @@ export default class VoiceHoldPreferences extends ExtensionPreferences {
     _buildEngineGroup(page, window) {
         const group = new Adw.PreferencesGroup({
             title: _('Engine'),
-            description: _('Speech recognition runs on this computer, offline, in a separate helper program.'),
+            description: _('Speech recognition runs on this computer, offline, in a separate helper program. The Installation page installs it for you; the command below does the same by hand.'),
         });
         page.add(group);
 

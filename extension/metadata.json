@@ -13,5 +13,5 @@
   "settings-schema": "org.gnome.shell.extensions.voice-hold",
   "gettext-domain": "voice-hold",
   "url": "https://github.com/d101c/voice-hold",
-  "version-name": "0.2"
+  "version-name": "0.3"
 }
