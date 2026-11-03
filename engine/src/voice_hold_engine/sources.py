@@ -3,17 +3,14 @@ import json
 import subprocess
 
 
-def list_sources():
-    """Returns [{'name', 'description', 'default'}], default first. Empty
-    when PipeWire cannot be queried."""
-    try:
-        out = subprocess.run(['pw-dump'], capture_output=True, text=True, timeout=5, check=True).stdout
-        objects = json.loads(out)
-    except Exception:
-        return []
+def parse_sources(objects):
+    """`objects` is the parsed output of `pw-dump`. Returns
+    [{'name', 'description', 'default'}], default first."""
     default = None
     nodes = []
     for obj in objects:
+        if not isinstance(obj, dict):
+            continue
         t = obj.get('type', '')
         if t == 'PipeWire:Interface:Metadata' and obj.get('props', {}).get('metadata.name') == 'default':
             for entry in obj.get('metadata', []):
@@ -38,6 +35,19 @@ def list_sources():
         nodes[0]['default'] = True
     nodes.sort(key=lambda n: (not n['default'], n['description'].lower()))
     return nodes
+
+
+def list_sources():
+    """Runs `pw-dump` (blocking, up to 5 s: call it off the event loop).
+    Empty when PipeWire cannot be queried."""
+    try:
+        out = subprocess.run(['pw-dump'], capture_output=True, text=True, timeout=5, check=True).stdout
+        objects = json.loads(out)
+    except Exception:
+        return []
+    if not isinstance(objects, list):
+        return []
+    return parse_sources(objects)
 
 
 def describe(name=''):
