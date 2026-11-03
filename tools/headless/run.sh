@@ -6,7 +6,8 @@
 #
 #   tools/headless/run.sh [wav] [key sequence]
 #
-# Outputs: tools/headless/env/{client.log,shell.log,engine.log}; frames in
+# Outputs: tools/headless/env/{client.log,shell.log} (the engine, activated
+# by the private bus, logs to this script's stderr); frames in
 # tools/headless/frames when SNAP=1.
 set -u
 S="$(cd "$(dirname "$0")" && pwd)"; REPO="$(cd "$S/../.." && pwd)"; T="$S/env"

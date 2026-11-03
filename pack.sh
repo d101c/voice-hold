@@ -9,16 +9,9 @@ SCHEMA="schemas/org.gnome.shell.extensions.voice-hold.gschema.xml"
 DOMAIN="voice-hold"
 ZIP="$REPO/voice-hold@griffit.gmail.com.shell-extension.zip"
 
-if command -v msgfmt >/dev/null 2>&1; then
-    for po in "$SRC"/po/*.po; do
-        [ -e "$po" ] || continue
-        lang="$(basename "$po" .po)"
-        dest="$SRC/locale/$lang/LC_MESSAGES"
-        mkdir -p "$dest"
-        msgfmt "$po" -o "$dest/$DOMAIN.mo"
-    done
-fi
-
+# The .po files are compiled by `gnome-extensions pack` itself (--podir).
+# For an in-place install (a symlink to extension/), compile them by hand:
+#   msgfmt extension/po/fr.po -o extension/locale/fr/LC_MESSAGES/voice-hold.mo
 PODIR=()
 [ -d "$SRC/po" ] && PODIR=(--podir=po --gettext-domain="$DOMAIN")
 
@@ -27,6 +20,7 @@ gnome-extensions pack "$SRC" \
   --extra-source=engine.js \
   --extra-source=holdMachine.js \
   --extra-source=hud.js \
+  --extra-source=keyHook.js \
   --extra-source=panelIndicator.js \
   --extra-source=textSink.js \
   "${PODIR[@]}" \

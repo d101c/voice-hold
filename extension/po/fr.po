@@ -1,6 +1,9 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: voice-hold 0.1\n"
+"Project-Id-Version: voice-hold 0.2\n"
+"PO-Revision-Date: 2026-11-03 12:00+0100\n"
+"Last-Translator: Julien Griffit\n"
+"Language-Team: French\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -40,6 +43,9 @@ msgstr "Moteur injoignable — le micro par défaut sera utilisé"
 msgid "Microphone (engine not reachable)"
 msgstr "Micro (moteur injoignable)"
 
+msgid "Microphone (engine not started)"
+msgstr "Micro (moteur non démarré)"
+
 msgid "Starting…"
 msgstr "Démarrage…"
 
@@ -64,8 +70,14 @@ msgstr "Modèles manquants — lancez : voice-hold-engine setup"
 msgid "Engine did not answer"
 msgstr "Le moteur ne répond pas"
 
+msgid "Engine busy — try again"
+msgstr "Moteur occupé — réessayez"
+
 msgid "D-Bus unavailable"
 msgstr "D-Bus indisponible"
+
+msgid "Engine stopped unexpectedly"
+msgstr "Le moteur s'est arrêté brutalement"
 
 msgid "Voice Hold"
 msgstr "Voice Hold"
