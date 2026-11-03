@@ -13,7 +13,7 @@ def test_service_file_uses_the_running_interpreter(tmp_path, monkeypatch):
     assert text == (
         '[D-BUS Service]\n'
         'Name=org.griffit.VoiceHold\n'
-        f'Exec={Path(sys.executable).resolve()} -m voice_hold_engine serve\n'
+        f'Exec={sys.executable} -m voice_hold_engine serve\n'
     )
 
 
@@ -35,3 +35,12 @@ def test_module_entry_point_runs():
                          capture_output=True, text=True, timeout=30)
     assert out.returncode == 0
     assert out.stdout.strip() == cli.__version__
+
+
+def test_service_interpreter_can_import_the_engine():
+    """Regression: resolving the venv symlink gave /usr/bin/python, which
+    cannot import voice_hold_engine, so the service never started."""
+    interpreter = cli.service_exec().split(' -m ')[0]
+    out = subprocess.run([interpreter, '-c', 'import voice_hold_engine'],
+                         capture_output=True, text=True)
+    assert out.returncode == 0, out.stderr

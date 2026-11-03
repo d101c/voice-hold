@@ -19,8 +19,9 @@ def service_dir():
 def service_exec():
     """The interpreter running `setup`, not whichever voice-hold-engine is
     first in PATH: with pipx or uv that is the venv's python, and
-    `pipx reinstall` keeps the same path."""
-    return f'{Path(sys.executable).resolve()} -m voice_hold_engine serve'
+    `pipx reinstall` keeps the same path. Never resolve() it: a venv's
+    python is a symlink to the system interpreter, which cannot import us."""
+    return f'{sys.executable} -m voice_hold_engine serve'
 
 
 def install_service(log=print):
