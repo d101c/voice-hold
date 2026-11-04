@@ -23,6 +23,17 @@ VAD_FILE = 'silero_vad.onnx'
 VAD_SIZE = 643_854
 VAD_SHA256 = '9e2449e1087496d8d4caba907f23e0bd3f78d91fa552479bb9c23ac09cbb1fd6'
 
+# Voices for the optional text-to-speech (Piper VITS models from the
+# `tts-models` release of sherpa-onnx; each archive holds the model, its
+# tokens and the espeak-ng data it needs). Installed by `setup --tts`.
+TTS_RELEASES = 'https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/'
+VOICES = {
+    'fr': {'name': 'vits-piper-fr_FR-siwis-medium', 'model': 'fr_FR-siwis-medium.onnx',
+           'size': 67_207_459, 'sha256': '375909aa30842b3a4efa10b1beb1d761af792960ae6873b4d53889f96c66195b'},
+    'en': {'name': 'vits-piper-en_US-lessac-medium', 'model': 'en_US-lessac-medium.onnx',
+           'size': 67_230_653, 'sha256': '9e3febfacf0abf4270172d2958bcec246032b7e88efc2720840cc80c93de334e'},
+}
+
 # Files a complete install must have: exact size (checked at every start,
 # cheap) and SHA-256 (checked by setup and `status --verify`).
 REQUIRED = {
@@ -155,3 +166,52 @@ def setup(base=None, log=None):
         log(f'Downloading {VAD_FILE}...\n')
         _fetch(RELEASES + VAD_FILE, base / VAD_FILE, log, size=VAD_SIZE, sha256=VAD_SHA256)
     return missing(base)
+
+
+# -- text-to-speech voices ---------------------------------------------------
+
+def voice_dir(lang, base=None):
+    return (base or models_dir()) / VOICES[lang]['name']
+
+
+def voice_paths(lang, base=None):
+    """Files of an installed voice: {model, tokens, data_dir}."""
+    d = voice_dir(lang, base)
+    return {'model': str(d / VOICES[lang]['model']), 'tokens': str(d / 'tokens.txt'),
+            'data_dir': str(d / 'espeak-ng-data')}
+
+
+def voice_ready(lang, base=None):
+    p = voice_paths(lang, base)
+    return Path(p['model']).is_file() and Path(p['tokens']).is_file() and Path(p['data_dir']).is_dir()
+
+
+def voices_ready(base=None):
+    """Languages whose voice is installed."""
+    return [lang for lang in VOICES if voice_ready(lang, base)]
+
+
+def setup_voice(lang, base=None, log=None):
+    """Download and unpack one voice (~65 MB). Returns True when ready."""
+    base = base or models_dir()
+    log = log or (lambda s: (sys.stderr.write(s), sys.stderr.flush()))
+    if voice_ready(lang, base):
+        return True
+    v = VOICES[lang]
+    base.mkdir(parents=True, exist_ok=True)
+    log(f'Downloading the {lang} voice {v["name"]} (~{v["size"] >> 20} MB)...\n')
+    with tempfile.TemporaryDirectory(dir=base) as tmp:
+        archive = Path(tmp) / (v['name'] + '.tar.bz2')
+        _fetch(TTS_RELEASES + archive.name, archive, log, size=v['size'], sha256=v['sha256'])
+        log('  extracting...\n')
+        _safe_extract(archive, Path(tmp))
+        archive.unlink()
+        extracted = Path(tmp) / v['name']
+        if not (extracted / v['model']).is_file():
+            raise RuntimeError(f'{archive.name}: no {v["model"]} inside')
+        shutil.rmtree(extracted / 'test_wavs', ignore_errors=True)
+        target = base / v['name']
+        if target.exists():
+            shutil.rmtree(target)
+        extracted.rename(target)
+    return voice_ready(lang, base)

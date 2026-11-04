@@ -418,3 +418,27 @@ def test_interface_start_busy_is_a_dbus_error(fake, speech_wav):
         h.engine.cancel()
         return h
     run(main())
+
+
+def test_speak_reports_missing_voice_then_speaks_on_a_fake_player(monkeypatch):
+    asyncio.run(_speak_scenario(monkeypatch))
+
+
+async def _speak_scenario(monkeypatch):
+    from voice_hold_engine import tts
+    loop = asyncio.get_running_loop()
+    emitted = []
+    eng = Engine(lambda *a: emitted.append(a), loop=loop, idle_unload_s=0)
+    monkeypatch.setattr(models, 'voice_ready', lambda lang, base=None: False)
+    assert await eng.speak('bonjour') == 'voice-missing'
+    assert await eng.speak('') == 'empty'
+    monkeypatch.setattr(models, 'voice_ready', lambda lang, base=None: True)
+    eng._speaker = tts.Speaker(player=['sleep', '0.2'], synth=lambda t, l, s: ([0.0] * 10, 22050))
+    assert await eng.speak('bonjour', 'xx') == ''
+    assert ('Speaking', True) in emitted and eng.status()['speaking'].value is True
+    await eng._speak_task
+    assert ('Speaking', False) in emitted and eng.status()['speaking'].value is False
+    assert await eng.speak('encore') == ''
+    eng.stop_speaking()
+    assert eng.status()['speaking'].value is False
+    eng._speak_task.cancel()

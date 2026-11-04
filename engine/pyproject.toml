@@ -1,13 +1,13 @@
 [project]
 name = "voice-hold-engine"
-version = "0.2.0"
+version = "0.3.0"
 description = "Offline speech-to-text engine for the Voice Hold GNOME Shell extension (D-Bus service)."
 readme = "README.md"
 license = "GPL-2.0-or-later"
 requires-python = ">=3.12"
 authors = [{name = "Julien Griffit"}]
 dependencies = [
-    "sherpa-onnx>=1.12",
+    "sherpa-onnx>=1.12,<2",   # 2.0 dropped espeak-ng, which the Piper voices need
     "numpy>=1.26",
     "dbus-fast>=2.0",
 ]

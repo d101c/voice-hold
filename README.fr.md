@@ -57,6 +57,19 @@ git clone https://github.com/d101c/voice-hold && cd voice-hold
 Déconnectez-vous puis reconnectez-vous (Wayland), activez *Voice Hold*,
 cliquez dans un champ texte, maintenez `Super+X` et parlez.
 
+Voix facultatives, pour les réponses parlées de Command Hold :
+
+```bash
+voice-hold-engine setup --tts        # français et anglais (~65 Mo chacune), ou : --tts fr
+voice-hold-engine speak "Bonjour"    # une vérification rapide
+```
+
+Ce sont des voix [Piper](https://github.com/rhasspy/piper) (fr_FR-siwis,
+en_US-lessac) exécutées par sherpa-onnx et jouées par PipeWire ; une phrase
+est synthétisée en quelques centaines de millisecondes sur un processeur de
+portable. Le moteur épingle sherpa-onnx sous la 2.0, qui a retiré le
+frontal espeak-ng dont ces voix ont besoin.
+
 ## Prérequis et limites
 
 - GNOME Shell 45 à 50 sous Wayland.
@@ -88,7 +101,9 @@ leurs empreintes.
 Raccourci, geste (maintien / appui / les deux), seuil d'appui, délai de
 silence, polissage Ollama facultatif (modèle, URL), pastille et indicateur
 de barre supérieure. La page de réglages montre aussi l'état du moteur et la
-commande d'installation.
+commande d'installation. La méthode `Speak` du moteur (texte, langue) sert
+aux réponses parlées de Command Hold ; `voice-hold-engine status` liste les
+voix installées.
 
 ## Sécurité
 

@@ -53,6 +53,9 @@ class Engine:
             float(os.environ.get('VOICE_HOLD_IDLE_S', '300'))
         self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix='decode')
         self._polish_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix='polish')
+        self._tts_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix='tts')
+        self._speaker = None                  # tts.Speaker, made on the first Speak
+        self._speak_task = None
         self._recognizer = None
         self._vad = None
         self.state = IDLE
@@ -98,7 +101,61 @@ class Engine:
             'missing': Variant('as', miss),
             'loaded': Variant('b', bool(self._recognizer and self._recognizer.loaded)),
             'load_seconds': Variant('d', self._recognizer.load_seconds if self._recognizer else 0.0),
+            'voices': Variant('as', models.voices_ready()),
+            'speaking': Variant('b', bool(self._speaker and self._speaker.speaking)),
         }
+
+    # -- text-to-speech -------------------------------------------------------
+
+    def _get_speaker(self):
+        if self._speaker is None:
+            from .tts import Speaker
+            self._speaker = Speaker()
+        return self._speaker
+
+    async def speak(self, text, lang='fr', speed=1.0):
+        """Say `text` aloud. Returns '' when it started, else why not
+        ('voice-missing', 'empty', 'failed'). A sentence being said is cut."""
+        self._cancel_idle()
+        text = ' '.join(str(text or '').split())
+        if not text:
+            return 'empty'
+        lang = lang if lang in models.VOICES else 'fr'
+        if not models.voice_ready(lang):
+            self._schedule_idle()
+            return 'voice-missing'
+        speaker = self._get_speaker()
+        self._inflight += 1
+        try:
+            proc = await self._loop.run_in_executor(self._tts_executor, speaker.speak, text, lang, speed)
+        except Exception:
+            self._schedule_idle()
+            return 'failed'
+        finally:
+            self._inflight -= 1
+        if proc is None:
+            self._schedule_idle()
+            return 'empty'
+        self._emit('Speaking', True)
+        if self._speak_task:
+            self._speak_task.cancel()
+        self._speak_task = self._loop.create_task(self._watch_player(proc))
+        return ''
+
+    async def _watch_player(self, proc):
+        try:
+            await self._loop.run_in_executor(None, proc.wait)
+        finally:
+            if self._speaker:
+                self._speaker.finished()
+            if not (self._speaker and self._speaker.speaking):
+                self._emit('Speaking', False)
+            self._schedule_idle()
+
+    def stop_speaking(self):
+        if self._speaker and self._speaker.speaking:
+            self._speaker.stop()
+            self._emit('Speaking', False)
 
     def _ensure_models(self):
         from .asr import Recognizer, SileroVad
@@ -388,6 +445,8 @@ class Engine:
         from .asr import release_memory
         if self._recognizer is not None:
             self._recognizer.unload()
+        if self._speaker is not None:
+            self._speaker.unload()
         self._vad = None
         gc.collect()
         release_memory()
@@ -422,6 +481,18 @@ class VoiceHoldInterface(ServiceInterface):
     def Quit(self):
         self._engine.quit_requested = True
         self._engine.exit_event.set()
+
+    @method()
+    async def Speak(self, text: 's', options: 'a{sv}') -> 's':
+        """Say text aloud with the installed voice. options: lang ("fr" or
+        "en"), speed (1.0). Returns '' or why it could not."""
+        self._engine.exit_event.clear()
+        return await self._engine.speak(text, str(_opt(options, 'lang', 'fr')),
+                                        float(_opt(options, 'speed', 1.0)))
+
+    @method()
+    def StopSpeaking(self):
+        self._engine.stop_speaking()
 
     @method()
     async def ListSources(self) -> 'aa{sv}':
@@ -460,6 +531,10 @@ class VoiceHoldInterface(ServiceInterface):
     @signal()
     def Stopped(self, reason: 's') -> 's':
         return reason
+
+    @signal()
+    def Speaking(self, speaking: 'b') -> 'b':
+        return speaking
 
     @signal()
     def Error(self, message: 's') -> 's':

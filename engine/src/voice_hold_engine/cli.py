@@ -1,4 +1,4 @@
-"""Command line: `voice-hold-engine [serve|setup|status [--verify]|transcribe FILE|install-service|uninstall [--models]]`."""
+"""Command line: `voice-hold-engine [serve|setup [--tts [LANG…]]|status [--verify]|transcribe FILE|speak TEXT|install-service|uninstall [--models]]`."""
 import argparse
 import asyncio
 import os
@@ -37,6 +37,18 @@ def cmd_setup(args):
     log = lambda s: (sys.stderr.write(s), sys.stderr.flush())
     base = models.models_dir()
     print(f'Models directory: {base}')
+    if args.tts is not None:
+        # `setup --tts`: only the voices, for an install that already works.
+        langs = args.tts or list(models.VOICES)
+        for lang in langs:
+            if lang not in models.VOICES:
+                print(f'No voice for {lang!r}: choose from {", ".join(models.VOICES)}', file=sys.stderr)
+                return 2
+            ok = models.setup_voice(lang, base, log)
+            print(f'Voice {lang}: {"ready" if ok else "FAILED"}')
+        if not shutil.which('pw-play'):
+            print('pw-play not found: install pipewire-audio-client-libraries (Ubuntu) or pipewire-utils', file=sys.stderr)
+        return 0
     miss = models.setup(base, log)
     if miss:
         print('Still missing: ' + ', '.join(miss), file=sys.stderr)
@@ -44,6 +56,7 @@ def cmd_setup(args):
     print('Models ready.')
     install_service()
     print('Done. Enable the Voice Hold extension and hold Super+X in a text field.')
+    print('Spoken answers (Command Hold): voice-hold-engine setup --tts')
     return 0
 
 
@@ -59,6 +72,9 @@ def cmd_status(args):
     svc = service_dir() / SERVICE_FILE
     print(f'D-Bus service file: {svc} ({"present" if svc.exists() else "absent"})')
     print(f'pw-record: {shutil.which("pw-record") or "NOT FOUND"}')
+    voices = models.voices_ready(base)
+    print(f'voices: {", ".join(voices) if voices else "none (voice-hold-engine setup --tts)"}; '
+          f'pw-play: {shutil.which("pw-play") or "NOT FOUND"}')
     return 0 if not miss and svc.exists() else 1
 
 
@@ -74,6 +90,23 @@ def cmd_transcribe(args):
     print(rec.transcribe(audio))
     dur = len(audio) / 16000
     print(f'[{dur:.1f}s audio decoded in {time.perf_counter() - t0:.2f}s]', file=sys.stderr)
+    return 0
+
+
+def cmd_speak(args):
+    from .tts import Speaker
+    import time
+    lang = args.lang
+    if not models.voice_ready(lang):
+        print(f'No {lang} voice installed: voice-hold-engine setup --tts {lang}', file=sys.stderr)
+        return 1
+    sp = Speaker()
+    t0 = time.perf_counter()
+    proc = sp.speak(' '.join(args.text), lang, args.speed)
+    print(f'[voice loaded in {sp.load_seconds:.1f}s, synthesized in {time.perf_counter() - t0 - sp.load_seconds:.2f}s]', file=sys.stderr)
+    if proc is not None:
+        proc.wait()
+        sp.finished()
     return 0
 
 
@@ -105,7 +138,9 @@ def main(argv=None):
     p.add_argument('--version', action='version', version=__version__)
     sub = p.add_subparsers(dest='cmd')
     sub.add_parser('serve', help='run the D-Bus service (default)').set_defaults(fn=cmd_serve)
-    sub.add_parser('setup', help='download the models and install the D-Bus service').set_defaults(fn=cmd_setup)
+    se = sub.add_parser('setup', help='download the models and install the D-Bus service')
+    se.add_argument('--tts', nargs='*', metavar='LANG', help='download the voices for spoken answers (fr, en; all when none given)')
+    se.set_defaults(fn=cmd_setup)
     st = sub.add_parser('status', help='check models and service')
     st.add_argument('--verify', action='store_true', help='also check the SHA-256 of every model file')
     st.set_defaults(fn=cmd_status)
@@ -113,6 +148,11 @@ def main(argv=None):
     t = sub.add_parser('transcribe', help='transcribe a WAV file (debug)')
     t.add_argument('file')
     t.set_defaults(fn=cmd_transcribe)
+    sp = sub.add_parser('speak', help='say a sentence aloud (debug of the voices)')
+    sp.add_argument('--lang', default='fr', choices=sorted(models.VOICES))
+    sp.add_argument('--speed', type=float, default=1.0)
+    sp.add_argument('text', nargs='+')
+    sp.set_defaults(fn=cmd_speak)
     u = sub.add_parser('uninstall', help='remove the D-Bus service file (and models with --models)')
     u.add_argument('--models', action='store_true')
     u.set_defaults(fn=cmd_uninstall)

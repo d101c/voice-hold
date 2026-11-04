@@ -49,6 +49,18 @@ git clone https://github.com/d101c/voice-hold && cd voice-hold
 Log out and back in (Wayland), enable *Voice Hold*, click in a text field,
 hold `Super+X` and speak.
 
+Optional voices, for the spoken answers of Command Hold:
+
+```bash
+voice-hold-engine setup --tts        # French and English (~65 MB each), or: --tts fr
+voice-hold-engine speak "Bonjour"    # a quick check
+```
+
+They are [Piper](https://github.com/rhasspy/piper) voices (fr_FR-siwis,
+en_US-lessac) run by sherpa-onnx and played through PipeWire; a sentence is
+synthesised in a few hundred milliseconds on a laptop CPU. The engine pins
+sherpa-onnx below 2.0, which dropped the espeak-ng front end these voices need.
+
 ## Requirements and limits
 
 - GNOME Shell 45 – 50 on Wayland.
@@ -76,7 +88,9 @@ the pipx environment, whose path does not change. `voice-hold-engine status
 
 Shortcut, gesture (hold / tap / both), tap threshold, silence timeout,
 optional Ollama polish (model, URL), pill and top-bar indicator. The settings
-page also shows the engine status and the install command.
+page also shows the engine status and the install command. The engine's
+`Speak` method (text, language) is used by Command Hold for spoken answers;
+`voice-hold-engine status` lists the installed voices.
 
 ## How it works
 
