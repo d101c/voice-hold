@@ -65,7 +65,7 @@ après fusion des PR.
 - Suivi : les tâches planifiées `accent-hold-bilan-weekend` (8/11) et
   `accent-hold-bilan-semaine-2` (14/11) ajoutent Voice Hold à leur bilan.
 
-## 4. Voice Hold 0.4 (préparé le 10 novembre 2026, pas encore envoyé)
+## 5. Voice Hold 0.4 (préparé le 10 novembre 2026, pas encore envoyé)
 
 - Changement visible : la pastille est un « îlot » qui sort de la barre du
   haut (réglage `hud-position`, `cursor` garde l'ancien placement).
@@ -81,6 +81,12 @@ après fusion des PR.
 > `Main.inputMethod._cursorRect`. The capsule reads the panel's background
 > colour from its theme node and `panelBox`'s geometry; it writes nothing to
 > the panel. The Installation page lost the parts that served another
-> extension: it only downloads the speech engine and its models now. No new
-> prototype patch, no subprocess. I used AI assistance to write and review
+> extension: it only downloads the speech engine and its models now, and is
+> laid out as three numbered steps with a field to try the dictation in.
+> First run: when the engine is not on the session bus, the extension shows
+> one notification (its MessageTray source is destroyed in disable()) whose
+> button calls openPreferences(); pressing the shortcut without the engine
+> does the same. After writing the D-Bus service file the preferences call
+> org.freedesktop.DBus.ReloadConfig so no logout is needed. The default
+> shortcut is now Ctrl+Space. No new prototype patch, no subprocess. I used AI assistance to write and review
 > this code and can explain every line.
