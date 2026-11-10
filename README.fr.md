@@ -6,9 +6,9 @@ hors-ligne.
 
 [English version](README.md)
 
-![Maintenir Ctrl+Super+Espace et parler](docs/demo-dictation.gif)
+![Maintenir Ctrl+Espace et parler](docs/demo-dictation.gif)
 
-- **Maintenez `Ctrl+Super+Espace`** et parlez ; relâchez pour arrêter. **Tapez**-le
+- **Maintenez `Ctrl+Espace`** et parlez ; relâchez pour arrêter. **Tapez**-le
   brièvement pour dicter mains libres (un second appui, `Échap` ou quelques
   secondes de silence arrêtent).
 - Le texte arrive **dans le champ sous le curseur**, bloc par bloc, pendant
@@ -57,7 +57,7 @@ git clone https://github.com/d101c/voice-hold && cd voice-hold
 ```
 
 Déconnectez-vous puis reconnectez-vous (Wayland), activez *Voice Hold*,
-cliquez dans un champ texte, maintenez `Ctrl+Super+Espace` et parlez.
+cliquez dans un champ texte, maintenez `Ctrl+Espace` et parlez.
 
 Voix facultatives, pour les autres programmes qui veulent faire parler le moteur :
 

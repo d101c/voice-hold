@@ -6,7 +6,7 @@ import {Extension, gettext as _} from 'resource:///org/gnome/shell/extensions/ex
 import {Dictation} from './dictation.js';
 import {addIndicator} from './panelIndicator.js';
 
-// Hold the `dictation-shortcut` (<Control><Super>space by default) and speak: the words are
+// Hold the `dictation-shortcut` (<Control>space by default) and speak: the words are
 // typed where the text cursor is (dictation.js).
 export default class VoiceHoldExtension extends Extension {
     enable() {

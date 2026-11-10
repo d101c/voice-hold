@@ -1,5 +1,5 @@
 # Inject key events into the headless shell through Mutter's RemoteDesktop.
-# Usage: inject.py "down:ctrl down:meta sp p:9000 up:meta up:ctrl"
+# Usage: inject.py "down:ctrl sp p:9000 up:ctrl"
 #   name        tap (press + release)
 #   down:name   press and keep
 #   up:name     release

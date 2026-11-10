@@ -5,9 +5,9 @@ Press-and-hold dictation for GNOME, fully offline.
 
 [Version française](README.fr.md)
 
-![Hold Ctrl+Super+Space and speak](docs/demo-dictation.gif)
+![Hold Ctrl+Space and speak](docs/demo-dictation.gif)
 
-- **Hold `Ctrl+Super+Space`** and talk; release to stop. **Tap** it instead to dictate
+- **Hold `Ctrl+Space`** and talk; release to stop. **Tap** it instead to dictate
   hands-free (tap again, `Esc`, or a few seconds of silence stop it).
 - The text lands **in the field under your cursor**, block by block, while
   you speak: a grey live preview, then each phrase is typed for good.
@@ -49,7 +49,7 @@ git clone https://github.com/d101c/voice-hold && cd voice-hold
 ```
 
 Log out and back in (Wayland), enable *Voice Hold*, click in a text field,
-hold `Ctrl+Super+Space` and speak.
+hold `Ctrl+Space` and speak.
 
 Optional voices, for other programs that want the engine to speak:
 

@@ -22,7 +22,7 @@ if [ "${PREFS:-0}" = 1 ]; then
     WAYLAND_DISPLAY=wayland-t GDK_BACKEND=wayland gnome-extensions prefs voice-hold@griffit.gmail.com > "$T/prefs.err" 2>&1 &
     sleep 4
 fi
-# WARM="down:ctrl down:meta sp p:12000 up:meta up:ctrl p:2000": a first dictation so the model
+# WARM="down:ctrl sp p:12000 up:ctrl p:2000": a first dictation so the model
 # is loaded before the frames of the demo are grabbed. Everything runs in one
 # virtual keyboard session (the `go` token starts the grabber).
 SEQ="$1"
