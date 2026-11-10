@@ -20,6 +20,7 @@ gnome-extensions pack "$SRC" \
   --extra-source=engine.js \
   --extra-source=holdMachine.js \
   --extra-source=hud.js \
+  --extra-source=hudGeometry.js \
   --extra-source=keyHook.js \
   --extra-source=panelIndicator.js \
   --extra-source=setup.js \

@@ -307,6 +307,100 @@ def test_start_while_stop_is_decoding_is_busy(fake, speech_wav):
     assert h.of('Final')
 
 
+def test_second_stop_waits_for_the_first(fake, speech_wav):
+    """The engine is already stopping on its own (end of audio, silence) with
+    a decode in flight when the client calls Stop. That call must not return
+    before `Stopped`: the client would give up on a session that is about to
+    deliver its last block."""
+    fake.gate = threading.Event()
+
+    async def main():
+        h = Harness(asyncio.get_running_loop())
+        await h.engine.start({'audio-file': speech_wav, 'realtime': True})
+        await asyncio.sleep(0.6)
+        first = asyncio.ensure_future(h.engine.stop('end-of-audio'))
+        await asyncio.sleep(0.1)
+        second = asyncio.ensure_future(h.engine.stop())
+        await asyncio.sleep(0.2)
+        returned_early = second.done()
+        fake.gate.set()
+        await asyncio.wait_for(asyncio.gather(first, second), timeout=5)
+        return h, returned_early
+    h, returned_early = run(main())
+    assert not returned_early
+    assert h.of('Stopped') == ['end-of-audio']
+    assert h.of('Final')
+
+
+def test_stop_waiting_on_another_returns_on_cancel(fake, speech_wav):
+    fake.gate = threading.Event()
+
+    async def main():
+        h = Harness(asyncio.get_running_loop())
+        await h.engine.start({'audio-file': speech_wav, 'realtime': True})
+        await asyncio.sleep(0.6)
+        first = asyncio.ensure_future(h.engine.stop('end-of-audio'))
+        await asyncio.sleep(0.1)
+        second = asyncio.ensure_future(h.engine.stop())
+        await asyncio.sleep(0.1)
+        assert not second.done()
+        h.engine.cancel()
+        await asyncio.wait_for(second, timeout=2)
+        fake.gate.set()
+        await asyncio.wait_for(first, timeout=5)
+        return h
+    h = run(main())
+    assert h.of('Stopped') == ['cancel']
+
+
+def test_stop_that_raises_does_not_block_the_next_one(fake, speech_wav):
+    """A stop() that dies half way must not leave later callers waiting for
+    it for ever."""
+    async def main():
+        h = Harness(asyncio.get_running_loop())
+        await h.engine.start({'audio-file': speech_wav, 'realtime': True})
+        await asyncio.sleep(0.3)
+        source = h.engine._source
+        real_stop = source.stop
+
+        def boom():
+            source.stop = real_stop
+            raise RuntimeError('boom')
+        source.stop = boom
+        with pytest.raises(RuntimeError):
+            await h.engine.stop()
+        await asyncio.wait_for(h.engine.stop(), timeout=2)
+        return h
+    h = run(main())
+    assert h.of('Stopped') == ['stop']
+
+
+def test_load_failure_while_stop_waits_stops_once(fake, speech_wav):
+    """stop() is waiting for the model to load and the load fails: one
+    `Stopped`, the error one."""
+    fake.fail_load = True
+    gate = threading.Event()
+    failing_load = fake.load
+
+    def slow_load():
+        gate.wait(5)
+        failing_load()
+    fake.load = slow_load
+
+    async def main():
+        h = Harness(asyncio.get_running_loop())
+        await h.engine.start({'audio-file': speech_wav, 'realtime': True})
+        await asyncio.sleep(0.3)
+        stopping = asyncio.ensure_future(h.engine.stop())
+        await asyncio.sleep(0.1)
+        gate.set()
+        await asyncio.wait_for(stopping, timeout=5)
+        await asyncio.sleep(0.2)
+        return h
+    h = run(main())
+    assert h.of('Stopped') == ['error']
+
+
 def test_stop_cancel_start_race_keeps_the_new_session(fake, speech_wav):
     """stop() is waiting for a decode; cancel() then start() happen meanwhile.
     When the old stop() resumes it must not finish the new session nor stop

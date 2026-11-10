@@ -46,7 +46,7 @@ export class Dictation {
         this._settings = settings;
         this._ = gettext || (s => s);
         this._machine = new HoldMachine(this._machineOptions());
-        this._hud = new Hud(iconPath, this._);
+        this._hud = new Hud(iconPath, this._, () => settings.get_string('hud-position'));
         this._sink = new TextSink(Main.inputMethod, Clutter);
         this._engine = new EngineClient({
             Owner: has => this._onOwner(has),
@@ -211,7 +211,8 @@ export class Dictation {
             return;
         session.ending = true;
         this._stopSilence();
-        this._hud.status(this._('…'), 'listening');
+        this._cancelGuard();              // the answer to Stop arms it again
+        this._hud.pending();
         this._engine.stop().then(err => {
             if (this._session !== session)
                 return;                   // Stopped already arrived
@@ -234,7 +235,7 @@ export class Dictation {
             return;
         this._stopSilence();
         this._sink.end();
-        this._hud.hideNow();
+        this._hud.hide(0);
         if (session.ending)
             return;                       // Stop is on its way; let it finish
         session.ending = true;
@@ -380,7 +381,7 @@ export class Dictation {
         else if (state === 'listening')
             this._hud.status(this._listeningHint(), 'listening');
         else if (state === 'decoding')
-            this._hud.status(this._('…'), 'listening');
+            this._hud.pending();
     }
 
     _onSpeech(speaking) {
@@ -434,13 +435,21 @@ export class Dictation {
     }
 
     _onError(message) {
-        if (message === 'models-missing')
+        const fatal = FATAL_ERRORS.some(p => message.startsWith(p));
+        if (message === 'models-missing') {
             this._showEngineError('models-missing');
-        else
+        } else if (!fatal && this._live && this._hud.visible) {
+            // One block failed, the dictation goes on: say so in the pill
+            // without closing it under a session that is still listening.
+            this._hud.status(message, 'error');
+        } else {
             this._hud.error(message.startsWith('audio') ? this._('Microphone unavailable') : message);
+        }
         // The engine sends Stopped('error') after these; an older engine does
-        // not, so end the session ourselves if nothing follows.
-        if (this._session && FATAL_ERRORS.some(p => message.startsWith(p)))
+        // not, so end the session ourselves if nothing follows. Not while a
+        // Stop or Cancel is in flight: its answer arms the guard, and the
+        // last block may take longer than the guard to decode.
+        if (this._session && !this._session.ending && fatal)
             this._armGuard(this._session);
     }
 
@@ -448,7 +457,7 @@ export class Dictation {
         const texts = {
             'not-installed': this._('Engine not installed — see the extension settings'),
             'spawn-failed': this._('Engine failed to start — see the extension settings'),
-            'models-missing': this._('Models missing — run: voice-hold-engine setup'),
+            'models-missing': this._('Models missing — see the extension settings'),
             'timeout': this._('Engine did not answer'),
             'busy': this._('Engine busy — try again'),
             'no-proxy': this._('D-Bus unavailable'),

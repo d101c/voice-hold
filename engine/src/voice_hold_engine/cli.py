@@ -56,7 +56,7 @@ def cmd_setup(args):
     print('Models ready.')
     install_service()
     print('Done. Enable the Voice Hold extension and hold Super+X in a text field.')
-    print('Spoken answers (Command Hold): voice-hold-engine setup --tts')
+    print('Optional voices (text to speech): voice-hold-engine setup --tts')
     return 0
 
 

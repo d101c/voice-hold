@@ -6,11 +6,11 @@ import * as Setup from './setup.js';
 
 // The "Installation" page of the preferences: one row per component, an
 // Install button, a progress bar, a banner that says what is left and offers
-// to log out when everything is in place. Shared by the Hold extensions.
+// to log out when everything is in place. Used by Voice Hold.
 //
-// components: any of 'voice', 'command', 'llm' (in that order).
+// components: 'voice' is the only one; the page stays written per component.
 
-export function buildSetupPage(window, gettext, {components = ['voice', 'command'], title = null} = {}) {
+export function buildSetupPage(window, gettext, {components = ['voice'], title = null} = {}) {
     const _ = gettext || (s => s);
     const page = new Adw.PreferencesPage({title: title ?? _('Installation'), icon_name: 'system-software-install-symbolic'});
     const state = {manifest: null, detect: null, busy: null, changed: false, installer: null};
@@ -30,8 +30,6 @@ export function buildSetupPage(window, gettext, {components = ['voice', 'command
     const rows = {};
     const labels = {
         voice: {title: _('Speech engine (Voice Hold)'), what: _('Listens and transcribes offline: Python engine and models.')},
-        command: {title: _('Command engine (Command Hold)'), what: _('Understands what you said and runs confirmed commands.')},
-        llm: {title: _('Local language model (optional)'), what: _('Ollama and a small model for open requests, such as shell commands. Without it, GNOME actions still work.')},
     };
     for (const key of components) {
         const row = new Adw.ActionRow({title: labels[key].title, subtitle: _('Checking…')});
@@ -59,10 +57,6 @@ export function buildSetupPage(window, gettext, {components = ['voice', 'command
             return 0;
         if (key === 'voice')
             return m.wheels[tag].voice.reduce((s, i) => s + i.size, 0) + m.voice.models.reduce((s, i) => s + i.size, 0);
-        if (key === 'command')
-            return m.wheels[tag].command.reduce((s, i) => s + i.size, 0);
-        if (key === 'llm')
-            return (m.llm.ollama?.size ?? 0) + (m.llm.model_size ?? 0);
         return 0;
     };
 
@@ -78,23 +72,6 @@ export function buildSetupPage(window, gettext, {components = ['voice', 'command
             if (d.voice.service === 'assistant')
                 return [_('Engine present, models missing'), false];
             return [labels.voice.what + ' ' + _('(%s)').format(Setup.formatSize(sizeOf('voice'))), false];
-        }
-        if (key === 'command') {
-            if (d.command.service === 'external')
-                return [_('Installed another way (pipx or a venv): nothing to do'), true];
-            if (d.command.service === 'assistant')
-                return [_('Installed'), true];
-            return [labels.command.what + ' ' + _('(%s)').format(Setup.formatSize(sizeOf('command'))), false];
-        }
-        if (key === 'llm') {
-            const o = state.ollama;
-            if (o?.ok && o.hasModel)
-                return [o.bundled ? _('Installed (bundled Ollama, model ready)') : _('Ollama is running on this computer and the model is present'), true];
-            if (o?.ok)
-                return [_('Ollama is running; the model %s is missing').format(state.manifest?.llm?.model ?? ''), false];
-            if (d.ollama.bundled)
-                return [_('Ollama bundle present but not running; the command engine starts it on demand'), false];
-            return [labels.llm.what + ' ' + _('(%s)').format(Setup.formatSize(sizeOf('llm'))), false];
         }
         return ['', false];
     };
@@ -115,7 +92,7 @@ export function buildSetupPage(window, gettext, {components = ['voice', 'command
             r.bar.visible = false;
         }
         const d = state.detect;
-        const left = components.filter(k => !describe(k)[1] && k !== 'llm');
+        const left = components.filter(k => !describe(k)[1]);
         if (!state.manifest) {
             banner.title = state.manifestError ?? _('Checking what is installed…');
             banner.button_label = state.manifestError ? _('Try again') : null;
@@ -147,14 +124,6 @@ export function buildSetupPage(window, gettext, {components = ['voice', 'command
             Setup.logout();
     });
 
-    const checkOllama = async () => {
-        const url = 'http://127.0.0.1:11434';
-        const st = await Setup.ollamaStatus(url);
-        const model = state.manifest?.llm?.model ?? '';
-        const want = model.includes(':') ? model : `${model}:latest`;
-        state.ollama = {ok: st.ok, hasModel: st.models.includes(model) || st.models.includes(want), bundled: state.detect?.ollama?.bundled};
-    };
-
     const load = async () => {
         state.manifestError = null;
         refreshRows();
@@ -166,8 +135,6 @@ export function buildSetupPage(window, gettext, {components = ['voice', 'command
             return;
         }
         state.detect = Setup.detect(state.manifest);
-        if (components.includes('llm'))
-            await checkOllama();
         refreshRows();
     };
 
@@ -210,36 +177,12 @@ export function buildSetupPage(window, gettext, {components = ['voice', 'command
         const installer = new Setup.Installer(state.manifest, {progress});
         state.installer = installer;
         try {
-            if (key === 'voice') {
+            if (key === 'voice')
                 await installer.installVoice();
-            } else if (key === 'command') {
-                await installer.installCommand();
-            } else if (key === 'llm') {
-                await checkOllama();
-                if (!state.ollama.ok) {
-                    if (!state.detect.ollama.bundled) {
-                        installer.progress = ev => progress({...ev, fraction: (ev.fraction ?? 0) * 0.6});
-                        await installer.installOllama();
-                        state.detect = Setup.detect(state.manifest);
-                    }
-                    r.bar.text = _('Starting Ollama…');
-                    if (state.detect.command.service === 'missing')
-                        throw new Error(_('Install the command engine first: it starts Ollama'));
-                    if (!await Setup.ensureOllama())
-                        throw new Error(_('Ollama did not start'));
-                    await checkOllama();
-                }
-                if (!state.ollama.hasModel) {
-                    installer.progress = ev => progress({...ev, fraction: 0.6 + (ev.fraction ?? 0) * 0.4});
-                    await installer.pullModel();
-                }
-            }
             state.changed = true;
             r.bar.fraction = 1;
             r.bar.text = _('Done');
             state.detect = Setup.detect(state.manifest);
-            if (components.includes('llm'))
-                await checkOllama();
             r.row.set_subtitle(describe(key)[0]);
         } catch (e) {
             fail(key, e);

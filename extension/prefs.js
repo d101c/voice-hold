@@ -27,7 +27,7 @@ export default class VoiceHoldPreferences extends ExtensionPreferences {
         const setup = buildSetupPage(window, _, {components: ['voice']});
         window.add(setup);
         this._engineStatus().then(s => {
-            if (s.startsWith(_('Not installed')))
+            if (!s.installed)
                 window.set_visible_page(setup);
         });
         this._buildEngineGroup(page, window);
@@ -78,14 +78,17 @@ export default class VoiceHoldPreferences extends ExtensionPreferences {
 
         const check = () => {
             statusRow.set_subtitle(_('Checking…'));
-            this._engineStatus().then(s => statusRow.set_subtitle(s));
+            this._engineStatus().then(s => statusRow.set_subtitle(s.text));
         };
         refresh.connect('clicked', check);
         check();
     }
 
+    // Resolves to {text, installed}; `installed` is false only when no engine
+    // is registered on the session bus.
     _engineStatus() {
-        return new Promise(resolve => {
+        return new Promise(done => {
+            const resolve = (text, installed = true) => done({text, installed});
             try {
                 Gio.DBus.session.call(BUS_NAME, OBJECT_PATH, INTERFACE, 'Status', null,
                     new GLib.VariantType('(a{sv})'), Gio.DBusCallFlags.NONE, 15000, null,
@@ -94,13 +97,13 @@ export default class VoiceHoldPreferences extends ExtensionPreferences {
                             const [dict] = conn.call_finish(res).deepUnpack();
                             const get = k => dict[k]?.deepUnpack();
                             if (!get('models_ready'))
-                                resolve(_('Engine %s found, models missing — run: voice-hold-engine setup').format(get('version')));
+                                resolve(_('Engine %s found, models missing — see the Installation page').format(get('version')));
                             else
                                 resolve(_('Ready — engine %s, models installed').format(get('version')));
                         } catch (e) {
                             const name = Gio.DBusError.is_remote_error(e) ? Gio.DBusError.get_remote_error(e) : '';
                             if (name === 'org.freedesktop.DBus.Error.ServiceUnknown')
-                                resolve(_('Not installed — run the command below, then check again'));
+                                resolve(_('Not installed — see the Installation page'), false);
                             else if (name.startsWith('org.freedesktop.DBus.Error.Spawn'))
                                 resolve(_('Installed but failed to start: %s').format(e.message));
                             else
@@ -287,10 +290,24 @@ export default class VoiceHoldPreferences extends ExtensionPreferences {
 
         const hud = new Adw.SwitchRow({
             title: _('Show the pill while dictating'),
-            subtitle: _('Microphone level and live text next to the cursor.'),
+            subtitle: _('Microphone level and live text. Errors are always shown.'),
         });
         group.add(hud);
         settings.bind('show-hud', hud, 'active', Gio.SettingsBindFlags.DEFAULT);
+
+        const positions = ['island', 'cursor'];
+        const position = new Adw.ComboRow({
+            title: _('Pill position'),
+            subtitle: _('Under the top bar: it slides out of the bar, always in the same place.'),
+            model: Gtk.StringList.new([_('Under the top bar'), _('Next to the text cursor')]),
+        });
+        position.set_selected(Math.max(0, positions.indexOf(settings.get_string('hud-position'))));
+        position.connect('notify::selected', () => {
+            const value = positions[position.get_selected()];
+            if (settings.get_string('hud-position') !== value)
+                settings.set_string('hud-position', value);
+        });
+        group.add(position);
 
         const ind = new Adw.SwitchRow({title: _('Top-bar indicator')});
         group.add(ind);

@@ -12,7 +12,7 @@
 set -u
 S="$(cd "$(dirname "$0")" && pwd)"; REPO="$(cd "$S/../.." && pwd)"; T="$S/env"
 WAV="${1:-$REPO/engine/tests/data/cafe.wav}"
-SEQ="${2:-down:meta r p:12000 up:meta p:1500}"
+SEQ="${2:-down:meta x p:12000 up:meta p:1500}"
 ENGINE="${ENGINE:-$REPO/engine/.venv/bin/voice-hold-engine}"
 MODELS="${VOICE_HOLD_MODELS:-$HOME/.local/share/voice-hold/models}"
 

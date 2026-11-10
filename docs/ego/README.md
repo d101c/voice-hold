@@ -64,3 +64,23 @@ après fusion des PR.
   mots de l'utilisateur (règle : jamais un texte prêt à coller).
 - Suivi : les tâches planifiées `accent-hold-bilan-weekend` (8/11) et
   `accent-hold-bilan-semaine-2` (14/11) ajoutent Voice Hold à leur bilan.
+
+## 4. Voice Hold 0.4 (préparé le 10 novembre 2026, pas encore envoyé)
+
+- Changement visible : la pastille est un « îlot » qui sort de la barre du
+  haut (réglage `hud-position`, `cursor` garde l'ancien placement).
+- `./pack.sh` → zip ; l'upload remplace la 0.3 encore en file (#77772).
+- Capture : `docs/ego/voice-hold-screenshot.png` est désormais une vraie image
+  du banc headless (`SNAP=1 tools/headless/run.sh`), plus une maquette SVG.
+- Commentaire auteur, en anglais :
+
+> 0.4 moves the pill: by default it is now a small capsule that slides out
+> of the top bar (an actor added to `Main.layoutManager.uiGroup`, never
+> reactive, destroyed when the dictation ends) instead of following the text
+> cursor; the old placement is still a setting, and only that one reads
+> `Main.inputMethod._cursorRect`. The capsule reads the panel's background
+> colour from its theme node and `panelBox`'s geometry; it writes nothing to
+> the panel. The Installation page lost the parts that served another
+> extension: it only downloads the speech engine and its models now. No new
+> prototype patch, no subprocess. I used AI assistance to write and review
+> this code and can explain every line.

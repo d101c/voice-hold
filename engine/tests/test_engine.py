@@ -17,7 +17,9 @@ SAMPLE = HERE / 'data' / 'cafe.wav'
 needs_models = pytest.mark.skipif(bool(models.missing()), reason='models not installed')
 
 
-def _collect(audio_file, realtime=False, **opts):
+def _collect(audio_file, realtime=False, warm=False, **opts):
+    """Events of one session. `warm`: a first session loads the model, and the
+    events are those of a second one."""
     events = []
 
     async def run():
@@ -30,6 +32,11 @@ def _collect(audio_file, realtime=False, **opts):
                 done.set()
 
         engine = Engine(emit, loop=loop, idle_unload_s=0)
+        if warm:
+            await engine.start({'audio-file': audio_file, **opts})
+            await asyncio.wait_for(done.wait(), timeout=120)
+            done.clear()
+            events.clear()
         await engine.start({'audio-file': audio_file, 'realtime': realtime, **opts})
         await asyncio.wait_for(done.wait(), timeout=120)
 
@@ -41,10 +48,12 @@ def _collect(audio_file, realtime=False, **opts):
 def test_wav_gives_partials_then_finals():
     assert SAMPLE.exists()
     # Real time: partials only make sense while audio is still coming in.
-    events = _collect(str(SAMPLE), realtime=True)
+    # Model loaded beforehand: on a slow or busy machine the cold load
+    # outlasts the 4.6 s of the sample, and no partial can come out of it.
+    events = _collect(str(SAMPLE), realtime=True, warm=True)
     names = [e[0] for e in events]
     assert ('Source', 'cafe.wav') in events
-    assert ('State', 'loading') in events[:3]
+    assert ('State', 'listening') in events[:3]
     assert 'Level' in names
     finals = [e[1] for e in events if e[0] == 'Final']
     partials = [e[1] for e in events if e[0] == 'Partial']
@@ -57,6 +66,14 @@ def test_wav_gives_partials_then_finals():
     last_partial = max(i for i, e in enumerate(events) if e[0] == 'Partial')
     last_final = max(i for i, e in enumerate(events) if e[0] == 'Final')
     assert last_partial < last_final
+
+
+@needs_models
+def test_cold_start_loads_then_delivers():
+    events = _collect(str(SAMPLE))
+    assert ('State', 'loading') in events[:3]
+    assert [e for e in events if e[0] == 'Final']
+    assert events[-1] == ('Stopped', 'end-of-audio')
 
 
 @needs_models

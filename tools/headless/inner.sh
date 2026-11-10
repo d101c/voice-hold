@@ -9,6 +9,9 @@ gnome-shell --headless --wayland --no-x11 --virtual-monitor 1280x800 --wayland-d
 SH=$!
 sleep 6
 gnome-extensions enable voice-hold@griffit.gmail.com
+# HUD=cursor: the pill next to the text cursor instead of the island.
+[ -n "${HUD:-}" ] && gsettings --schemadir "$T/data/gnome-shell/extensions/voice-hold@griffit.gmail.com/schemas" \
+    set org.gnome.shell.extensions.voice-hold hud-position "$HUD"
 [ "${SNAP:-0}" = 1 ] && gnome-extensions enable snap@test
 sleep 1
 WAYLAND_DISPLAY=wayland-t GDK_BACKEND=wayland python3 "$S/client.py" "$T/client.log" > "$T/client.err" 2>&1 &
@@ -19,7 +22,7 @@ if [ "${PREFS:-0}" = 1 ]; then
     WAYLAND_DISPLAY=wayland-t GDK_BACKEND=wayland gnome-extensions prefs voice-hold@griffit.gmail.com > "$T/prefs.err" 2>&1 &
     sleep 4
 fi
-# WARM="down:meta r p:12000 up:meta p:2000": a first dictation so the model
+# WARM="down:meta x p:12000 up:meta p:2000": a first dictation so the model
 # is loaded before the frames of the demo are grabbed. Everything runs in one
 # virtual keyboard session (the `go` token starts the grabber).
 SEQ="$1"

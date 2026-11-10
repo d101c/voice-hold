@@ -62,7 +62,16 @@
     <key name="show-hud" type="b">
       <default>true</default>
       <summary>Show the pill</summary>
-      <description>Show the microphone level and live text next to the cursor while dictating.</description>
+      <description>Show the microphone level and live text while dictating.</description>
+    </key>
+    <key name="hud-position" type="s">
+      <choices>
+        <choice value="island"/>
+        <choice value="cursor"/>
+      </choices>
+      <default>'island'</default>
+      <summary>Pill position</summary>
+      <description>island: a capsule that slides out of the top bar, always in the same place. cursor: next to the text cursor (the pointer when the application does not report one).</description>
     </key>
   </schema>
 </schemalist>

@@ -14,7 +14,9 @@ hors-ligne.
 - Le texte arrive **dans le champ sous le curseur**, bloc par bloc, pendant
   que vous parlez : un aperçu gris en direct, puis chaque phrase est tapée
   pour de bon.
-- Une pastille sombre à côté du curseur montre le niveau du micro et les mots.
+- Une pastille glisse hors de la barre du haut pendant la dictée, avec le
+  niveau du micro et les mots, et y rentre quand vous arrêtez. Toujours au
+  même endroit ; elle peut aussi suivre le curseur de texte (réglages).
 - **Hors-ligne.** Français, anglais et 23 autres langues européennes, avec
   ponctuation et majuscules, reconnus sur votre processeur par Parakeet TDT
   0.6B v3 (via sherpa-onnx). Ni compte, ni réseau, ni cloud. Ça marche dans
@@ -57,7 +59,7 @@ git clone https://github.com/d101c/voice-hold && cd voice-hold
 Déconnectez-vous puis reconnectez-vous (Wayland), activez *Voice Hold*,
 cliquez dans un champ texte, maintenez `Super+X` et parlez.
 
-Voix facultatives, pour les réponses parlées de Command Hold :
+Voix facultatives, pour les autres programmes qui veulent faire parler le moteur :
 
 ```bash
 voice-hold-engine setup --tts        # français et anglais (~65 Mo chacune), ou : --tts fr
@@ -99,11 +101,12 @@ leurs empreintes.
 ## Réglages
 
 Raccourci, geste (maintien / appui / les deux), seuil d'appui, délai de
-silence, polissage Ollama facultatif (modèle, URL), pastille et indicateur
-de barre supérieure. La page de réglages montre aussi l'état du moteur et la
-commande d'installation. La méthode `Speak` du moteur (texte, langue) sert
-aux réponses parlées de Command Hold ; `voice-hold-engine status` liste les
-voix installées.
+silence, polissage Ollama facultatif (modèle, URL), pastille (affichée ou
+non, sous la barre du haut ou à côté du curseur de texte) et indicateur de
+barre supérieure. La page de réglages montre aussi l'état du moteur et la
+commande d'installation. La méthode `Speak` du moteur (texte, langue) est à
+la disposition des autres programmes du bus de session ;
+`voice-hold-engine status` liste les voix installées.
 
 ## Sécurité
 

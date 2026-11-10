@@ -1,11 +1,24 @@
-/* Same family as Accent Hold's .accent-popup: dark pill, 12px radius. */
-.voice-hud {
+/* The capsule (.voice-hud-capsule) is animated and paints the background;
+   the content box (.voice-hud) carries the padding and spacing. */
+.voice-hud-capsule { color: #fff; }
+.voice-hud { padding: 8px 12px; spacing: 10px; }
+
+/* Next to the cursor: same family as Accent Hold's .accent-popup, dark
+   pill, 12px radius. */
+.voice-hud-cursor {
     background-color: rgba(40,40,40,0.95);
     border-radius: 12px;
-    padding: 8px 12px;
-    spacing: 10px;
-    color: #fff;
 }
+
+/* Island: part of the top bar. Same background as the bar (set inline from
+   its theme), square top, rounded bottom, a soft shadow on the desktop. */
+.voice-hud-island {
+    background-color: #000;
+    border-radius: 0 0 22px 22px;
+    box-shadow: 0 5px 16px rgba(0,0,0,0.45);
+}
+.voice-hud-content-island { padding: 10px 20px 11px 20px; spacing: 12px; }
+
 .voice-hud-icon {
     icon-size: 16px;
     color: #ddd;
@@ -13,7 +26,8 @@
 .voice-hud-icon:loading {
     color: #999;
 }
-.voice-hud-icon:listening {
+.voice-hud-icon:listening,
+.voice-hud-icon:busy {
     color: #3584e4;
 }
 .voice-hud-icon:error {
@@ -31,6 +45,8 @@
 .voice-hud-bar:quiet {
     background-color: rgba(255,255,255,0.25);
 }
+/* A long sentence is cut at its start by the label (hud.js): the pill keeps
+   one steady width instead of following every word. */
 .voice-hud-text {
     font-size: 14px;
     color: #ddd;

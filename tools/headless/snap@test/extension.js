@@ -1,5 +1,6 @@
 // Frame grabber for the demo GIF: once $SNAP_DIR/go exists, screenshots the
-// focused window every ~30 ms into $SNAP_DIR/fNNNNNN.png until $SNAP_DIR/stop.
+// focused window and everything above it, up to the top bar the island hangs
+// from, every ~30 ms into $SNAP_DIR/fNNNNNN.png until $SNAP_DIR/stop.
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Shell from 'gi://Shell';
@@ -19,8 +20,9 @@ export default class Snap {
             this._t0 = GLib.get_monotonic_time();
             const w = global.display.focus_window;
             const r = w.get_frame_rect();
-            // Leave room below the window for the pill.
-            this._rect = [r.x, r.y, r.width, r.height + 70];
+            // From the top of the screen (the island), with room below the
+            // window for the pill when it follows the cursor.
+            this._rect = [r.x, 0, r.width, r.y + r.height + 70];
             GLib.file_set_contents(`${this._dir}/rect`, this._rect.join(' '));
         }
         this._busy = true;

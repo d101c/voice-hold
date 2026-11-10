@@ -11,7 +11,9 @@ Press-and-hold dictation for GNOME, fully offline.
   hands-free (tap again, `Esc`, or a few seconds of silence stop it).
 - The text lands **in the field under your cursor**, block by block, while
   you speak: a grey live preview, then each phrase is typed for good.
-- A dark pill next to the cursor shows the microphone level and the words.
+- A pill slides out of the top bar while you dictate, with the microphone
+  level and the words, and goes back into it when you stop. Always in the
+  same place; it can follow the text cursor instead (settings).
 - **Offline.** French, English and 23 other European languages, with
   punctuation and capitals, recognised on your CPU by Parakeet TDT 0.6B v3
   (via sherpa-onnx). No account, no network, no cloud. It works on a plane.
@@ -49,7 +51,7 @@ git clone https://github.com/d101c/voice-hold && cd voice-hold
 Log out and back in (Wayland), enable *Voice Hold*, click in a text field,
 hold `Super+X` and speak.
 
-Optional voices, for the spoken answers of Command Hold:
+Optional voices, for other programs that want the engine to speak:
 
 ```bash
 voice-hold-engine setup --tts        # French and English (~65 MB each), or: --tts fr
@@ -87,9 +89,10 @@ the pipx environment, whose path does not change. `voice-hold-engine status
 ## Settings
 
 Shortcut, gesture (hold / tap / both), tap threshold, silence timeout,
-optional Ollama polish (model, URL), pill and top-bar indicator. The settings
-page also shows the engine status and the install command. The engine's
-`Speak` method (text, language) is used by Command Hold for spoken answers;
+optional Ollama polish (model, URL), pill (on or off, under the top bar or
+next to the text cursor) and top-bar indicator. The settings page also shows
+the engine status and the install command. The engine's `Speak` method
+(text, language) is there for other programs on the session bus;
 `voice-hold-engine status` lists the installed voices.
 
 ## How it works

@@ -1,7 +1,7 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: voice-hold 0.2\n"
-"PO-Revision-Date: 2026-11-03 12:00+0100\n"
+"Project-Id-Version: voice-hold 0.4\n"
+"PO-Revision-Date: 2026-11-10 16:30+0100\n"
 "Last-Translator: Julien Griffit\n"
 "Language-Team: French\n"
 "Language: fr\n"
@@ -52,9 +52,6 @@ msgstr "Démarrage…"
 msgid "Loading the model… speak, nothing is lost"
 msgstr "Chargement du modèle… parlez, rien n'est perdu"
 
-msgid "…"
-msgstr "…"
-
 msgid "Microphone unavailable"
 msgstr "Micro indisponible"
 
@@ -64,8 +61,8 @@ msgstr "Moteur non installé — voir les réglages de l'extension"
 msgid "Engine failed to start — see the extension settings"
 msgstr "Le moteur n'a pas démarré — voir les réglages de l'extension"
 
-msgid "Models missing — run: voice-hold-engine setup"
-msgstr "Modèles manquants — lancez : voice-hold-engine setup"
+msgid "Models missing — see the extension settings"
+msgstr "Modèles manquants — voyez les réglages de l'extension"
 
 msgid "Engine did not answer"
 msgstr "Le moteur ne répond pas"
@@ -91,9 +88,6 @@ msgstr "Réglages"
 msgid "Engine"
 msgstr "Moteur"
 
-msgid "Speech recognition runs on this computer, offline, in a separate helper program."
-msgstr "La reconnaissance vocale tourne sur cet ordinateur, hors-ligne, dans un programme séparé."
-
 msgid "Status"
 msgstr "État"
 
@@ -112,14 +106,14 @@ msgstr "Copier"
 msgid "Copied"
 msgstr "Copié"
 
-msgid "Engine %s found, models missing — run: voice-hold-engine setup"
-msgstr "Moteur %s trouvé, modèles manquants — lancez : voice-hold-engine setup"
+msgid "Engine %s found, models missing — see the Installation page"
+msgstr "Moteur %s trouvé, modèles manquants — voyez la page Installation"
 
 msgid "Ready — engine %s, models installed"
 msgstr "Prêt — moteur %s, modèles installés"
 
-msgid "Not installed — run the command below, then check again"
-msgstr "Non installé — lancez la commande ci-dessous, puis vérifiez à nouveau"
+msgid "Not installed — see the Installation page"
+msgstr "Non installé — voyez la page Installation"
 
 msgid "Installed but failed to start: %s"
 msgstr "Installé mais n'a pas démarré : %s"
@@ -190,14 +184,23 @@ msgstr "Apparence"
 msgid "Show the pill while dictating"
 msgstr "Afficher la pastille pendant la dictée"
 
-msgid "Microphone level and live text next to the cursor."
-msgstr "Niveau du micro et texte en direct à côté du curseur."
+msgid "Microphone level and live text. Errors are always shown."
+msgstr "Niveau du micro et texte en direct. Les erreurs sont toujours affichées."
+
+msgid "Pill position"
+msgstr "Position de la pastille"
+
+msgid "Under the top bar: it slides out of the bar, always in the same place."
+msgstr "Sous la barre du haut : elle glisse hors de la barre, toujours au même endroit."
+
+msgid "Under the top bar"
+msgstr "Sous la barre du haut"
+
+msgid "Next to the text cursor"
+msgstr "À côté du curseur de texte"
 
 msgid "Top-bar indicator"
 msgstr "Indicateur dans la barre supérieure"
-
-msgid "Not installed"
-msgstr "Non installé"
 
 msgid "Installation"
 msgstr "Installation"
@@ -217,18 +220,6 @@ msgstr "Moteur vocal (Voice Hold)"
 msgid "Listens and transcribes offline: Python engine and models."
 msgstr "Écoute et transcrit hors-ligne : moteur Python et modèles."
 
-msgid "Command engine (Command Hold)"
-msgstr "Moteur de commandes (Command Hold)"
-
-msgid "Understands what you said and runs confirmed commands."
-msgstr "Comprend ce que vous avez dit et lance les commandes confirmées."
-
-msgid "Local language model (optional)"
-msgstr "Modèle de langue local (optionnel)"
-
-msgid "Ollama and a small model for open requests, such as shell commands. Without it, GNOME actions still work."
-msgstr "Ollama et un petit modèle pour les demandes ouvertes, comme les commandes shell. Sans lui, les actions GNOME marchent quand même."
-
 msgid "Install"
 msgstr "Installer"
 
@@ -243,18 +234,6 @@ msgstr "Moteur présent, modèles manquants"
 
 msgid "(%s)"
 msgstr "(%s)"
-
-msgid "Installed (bundled Ollama, model ready)"
-msgstr "Installé (Ollama embarqué, modèle prêt)"
-
-msgid "Ollama is running on this computer and the model is present"
-msgstr "Ollama tourne sur cet ordinateur et le modèle est présent"
-
-msgid "Ollama is running; the model %s is missing"
-msgstr "Ollama tourne ; le modèle %s manque"
-
-msgid "Ollama bundle present but not running; the command engine starts it on demand"
-msgstr "Ollama embarqué présent mais arrêté ; le moteur de commandes le démarre à la demande"
 
 msgid "Try again"
 msgstr "Réessayer"
@@ -310,17 +289,11 @@ msgstr "Décompression"
 msgid "Registering"
 msgstr "Enregistrement"
 
-msgid "Starting Ollama…"
-msgstr "Démarrage d'Ollama…"
-
-msgid "Install the command engine first: it starts Ollama"
-msgstr "Installez d'abord le moteur de commandes : c'est lui qui démarre Ollama"
-
-msgid "Ollama did not start"
-msgstr "Ollama n'a pas démarré"
-
 msgid "Speech recognition runs on this computer, offline, in a separate helper program. The Installation page installs it for you; the command below does the same by hand."
 msgstr "La reconnaissance vocale tourne sur cet ordinateur, hors-ligne, dans un programme séparé. La page Installation l'installe pour vous ; la commande ci-dessous fait la même chose à la main."
 
 msgid "Done"
 msgstr "Terminé"
+
+msgid "Cancel"
+msgstr "Annuler"

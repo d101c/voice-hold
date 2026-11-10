@@ -2,20 +2,19 @@ import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Soup from 'gi://Soup?version=3.0';
 
-// The setup assistant's logic, shared by the Hold extensions (copied into
-// each one; the source of truth is github.com/d101c/hold-setup).
+// The setup assistant's logic for Voice Hold (the extension carries a copy;
+// the source of truth is github.com/d101c/hold-setup).
 //
 // Everything happens in the preferences process, with GNOME libraries and
 // no subprocess: files are downloaded with libsoup, checked against the
 // SHA-256 of the manifest, unpacked with libgnome-autoar, and a D-Bus
-// service file is written so the engines run with the system Python.
+// service file is written so the engine runs with the system Python.
 //
 // Layout (XDG data dir, ~/.local/share by default):
-//   hold/pylib/            unpacked Python wheels, shared by the engines
+//   hold/pylib/            unpacked Python wheels
 //   hold/downloads/        archives while they are being fetched
-//   hold/ollama/           the Ollama bundle (optional)
 //   voice-hold/models/     speech models (where voice-hold-engine looks)
-//   dbus-1/services/       org.griffit.VoiceHold.service, org.griffit.CommandHold.service
+//   dbus-1/services/       org.griffit.VoiceHold.service
 
 export const MANIFEST_URL = 'https://raw.githubusercontent.com/d101c/hold-setup/master/manifest.json';
 const CHUNK = 256 * 1024;
@@ -30,7 +29,6 @@ export function paths(base = dataDir()) {
         hold: GLib.build_filenamev([base, 'hold']),
         pylib: GLib.build_filenamev([base, 'hold', 'pylib']),
         downloads: GLib.build_filenamev([base, 'hold', 'downloads']),
-        ollama: GLib.build_filenamev([base, 'hold', 'ollama']),
         models: GLib.build_filenamev([base, 'voice-hold', 'models']),
         services: GLib.build_filenamev([base, 'dbus-1', 'services']),
     };
@@ -106,12 +104,9 @@ function modelsPresent(p, manifest) {
 export function detect(manifest, base = dataDir()) {
     const p = paths(base);
     const voice = serviceState(p, manifest?.voice?.bus_name ?? 'org.griffit.VoiceHold', manifest?.voice?.module ?? 'voice_hold_engine');
-    const command = serviceState(p, manifest?.command?.bus_name ?? 'org.griffit.CommandHold', manifest?.command?.module ?? 'command_hold_engine');
     return {
         python: systemPython(),
         voice: {service: voice, models: manifest ? modelsPresent(p, manifest) : null},
-        command: {service: command},
-        ollama: {bundled: exists(GLib.build_filenamev([p.ollama, 'bin', 'ollama']))},
     };
 }
 
@@ -353,97 +348,6 @@ export class Installer {
         writeService(m.voice.bus_name, m.voice.module, this.python, this.p, {VOICE_HOLD_MODELS: this.p.models});
         this.progress({step: 'done', label: '', fraction: 1});
     }
-
-    async installCommand() {
-        this._needPython();
-        const m = this.manifest;
-        const files = await this._fetchAll(m.wheels[this.python.tag].command, {start: 0, span: 0.7});
-        await this._unpackWheels(files, {start: 0.7, span: 0.25});
-        this.progress({step: 'service', label: m.command.bus_name, fraction: 0.98});
-        writeService(m.command.bus_name, m.command.module, this.python, this.p);
-        this.progress({step: 'done', label: '', fraction: 1});
-    }
-
-    // The Ollama bundle, unpacked into hold/ollama (bin/ollama, lib/ollama).
-    async installOllama() {
-        const item = this.manifest.llm.ollama;
-        const [file] = await this._fetchAll([item], {start: 0, span: 0.85});
-        this.progress({step: 'extract', label: item.name, fraction: 0.86});
-        await extract(file, this.p.ollama, null, this.cancellable);
-        GLib.unlink(file);
-        this.progress({step: 'done', label: '', fraction: 1});
-    }
-
-    // Pull the model through a running Ollama (system or bundled, started by
-    // the command engine). Streams /api/pull for progress.
-    async pullModel(url = 'http://127.0.0.1:11434') {
-        const model = this.manifest.llm.model;
-        const msg = Soup.Message.new('POST', `${url}/api/pull`);
-        msg.set_request_body_from_bytes('application/json', new GLib.Bytes(new TextEncoder().encode(JSON.stringify({model, stream: true}))));
-        const stream = await new Promise((resolve, reject) => {
-            soup().send_async(msg, GLib.PRIORITY_DEFAULT, this.cancellable, (s, res) => {
-                try {
-                    resolve(s.send_finish(res));
-                } catch (e) {
-                    reject(e);
-                }
-            });
-        });
-        const dis = new Gio.DataInputStream({base_stream: stream});
-        for (;;) {
-            const line = await new Promise((resolve, reject) => {
-                dis.read_line_async(GLib.PRIORITY_DEFAULT, this.cancellable, (d, res) => {
-                    try {
-                        const [l] = d.read_line_finish_utf8(res);
-                        resolve(l);
-                    } catch (e) {
-                        reject(e);
-                    }
-                });
-            });
-            if (line === null)
-                break;
-            let ev;
-            try {
-                ev = JSON.parse(line);
-            } catch {
-                continue;
-            }
-            if (ev.error)
-                throw new Error(ev.error);
-            if (ev.total)
-                this.progress({step: 'download', label: model, done: ev.completed ?? 0, total: ev.total, fraction: (ev.completed ?? 0) / ev.total});
-            if (ev.status === 'success')
-                break;
-        }
-        this.progress({step: 'done', label: '', fraction: 1});
-    }
-}
-
-// Ollama reachable? Resolves to {ok, models: [names]}.
-export async function ollamaStatus(url = 'http://127.0.0.1:11434', cancellable = null) {
-    try {
-        const data = await httpJson(`${url}/api/tags`, cancellable);
-        return {ok: true, models: (data.models ?? []).map(m => m.name)};
-    } catch {
-        return {ok: false, models: []};
-    }
-}
-
-// Ask the command engine to start the bundled Ollama (it may spawn; the
-// preferences never do). Resolves to true when Ollama answers.
-export function ensureOllama(cancellable = null) {
-    return new Promise(resolve => {
-        Gio.DBus.session.call('org.griffit.CommandHold', '/org/griffit/CommandHold', 'org.griffit.CommandHold',
-            'EnsureOllama', null, new GLib.VariantType('(b)'), Gio.DBusCallFlags.NONE, 30000, cancellable,
-            (conn, res) => {
-                try {
-                    resolve(conn.call_finish(res).deepUnpack()[0]);
-                } catch {
-                    resolve(false);
-                }
-            });
-    });
 }
 
 // Log out through gnome-session (the engines and the extension start fresh).

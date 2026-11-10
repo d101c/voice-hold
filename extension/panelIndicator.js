@@ -19,10 +19,12 @@ class VoiceHoldIndicator extends PanelMenu.Button {
         this._settings = settings;
         this._openPreferences = openPreferences;
 
-        this.add_child(new St.Icon({
+        this._icon = new St.Icon({
             gicon: Gio.icon_new_for_string(iconPath),
             style_class: 'system-status-icon',
-        }));
+        });
+        this.add_child(this._icon);
+        this._syncIcon();
 
         this._toggle = new PopupMenu.PopupSwitchMenuItem(
             _('Enabled'), this._settings.get_boolean('enabled'));
@@ -50,7 +52,14 @@ class VoiceHoldIndicator extends PanelMenu.Button {
 
         this._settings.connectObject('changed::enabled', () => {
             this._toggle.setToggleState(this._settings.get_boolean('enabled'));
+            this._syncIcon();
         }, this);
+    }
+
+    // Dimmed while the shortcut is switched off, so the bar says why nothing
+    // happens.
+    _syncIcon() {
+        this._icon.opacity = this._settings.get_boolean('enabled') ? 255 : 110;
     }
 
     // Opening the menu must not spawn the engine (NO_AUTO_START): when it is
@@ -90,6 +99,7 @@ class VoiceHoldIndicator extends PanelMenu.Button {
         this._settings = null;
         this._openPreferences = null;
         this._toggle = null;
+        this._icon = null;
         super.destroy();
     }
 });

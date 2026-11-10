@@ -70,6 +70,7 @@ class Engine:
         self._last_level = 0.0
         self._level_emitted = 0.0
         self._stopping = False
+        self._stop_done = None                # set by _finish() for stop() callers that wait
         self._starting = False
         self._speaking = False
         self._idle_handle = None
@@ -276,26 +277,46 @@ class Engine:
         self._schedule_idle()
 
     async def stop(self, reason='stop'):
-        if not self.active or self._stopping:
+        if not self.active:
+            return
+        if self._stopping:
+            # Already stopping (end of audio, silence, an earlier Stop) and
+            # waiting for its decodes: this caller gets its answer when that
+            # stop is over, not before. A client takes the answer to mean
+            # that `Stopped` is out, and gives up on the session otherwise.
+            await self._stop_done.wait()
             return
         self._stopping = True
+        done = self._stop_done = asyncio.Event()
         gen = self._gen
-        self._source.stop()
-        if self._segmenter is not None:
-            for ev in self._segmenter.flush():
-                self._handle_event(gen, ev)
-        if self._pending:
-            self._set_state(DECODING)
-        # A decode may queue a polish job when it completes: loop until the
-        # session has nothing left in flight. gather() of futures that are
-        # already done returns without yielding (Python 3.12+), while their
-        # own done-callbacks (_on_decoded, which emits Final and drops them
-        # from _pending) are only queued: sleep(0) lets those run first.
-        while self._pending and gen == self._gen:
-            await asyncio.gather(*list(self._pending), return_exceptions=True)
-            await asyncio.sleep(0)
+        try:
+            self._source.stop()
+            if self._segmenter is not None:
+                for ev in self._segmenter.flush():
+                    self._handle_event(gen, ev)
+            if self._pending:
+                self._set_state(DECODING)
+            # A decode may queue a polish job when it completes: loop until
+            # the session has nothing left in flight. gather() of futures that
+            # are already done returns without yielding (Python 3.12+), while
+            # their own done-callbacks (_on_decoded, which emits Final and
+            # drops them from _pending) are only queued: sleep(0) lets those
+            # run first.
+            while self._pending and gen == self._gen:
+                await asyncio.gather(*list(self._pending), return_exceptions=True)
+                await asyncio.sleep(0)
+        except Exception:
+            # A stop that dies must not keep the session "stopping" for ever,
+            # nor the callers that wait for it: the next stop() starts over.
+            if self._stop_done is done:
+                self._stopping = False
+                self._stop_done = None
+            done.set()
+            raise
         if gen != self._gen:
             return                            # cancelled meanwhile; maybe restarted
+        if self._stop_done is not done:
+            return                            # finished meanwhile (the model failed to load)
         self._finish(reason)
 
     def cancel(self):
@@ -317,6 +338,9 @@ class Engine:
         self._partial_inflight = False
         self._set_state(IDLE)
         self._emit('Stopped', reason)
+        if self._stop_done is not None:
+            self._stop_done.set()
+            self._stop_done = None
         self._schedule_idle()
 
     # -- audio --------------------------------------------------------------
