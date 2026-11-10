@@ -11,7 +11,22 @@ export default class Snap {
         this._t0 = 0;
         this._id = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 30, () => this._tick());
     }
+    // $SNAP_DIR/full holds a name: one screenshot of the whole screen.
+    _full() {
+        const req = `${this._dir}/full`;
+        if (!GLib.file_test(req, GLib.FileTest.EXISTS))
+            return;
+        const [, bytes] = GLib.file_get_contents(req);
+        GLib.unlink(req);
+        const name = new TextDecoder().decode(bytes).trim();
+        const stream = Gio.File.new_for_path(`${this._dir}/${name}.png`).replace(null, false, Gio.FileCreateFlags.NONE, null);
+        new Shell.Screenshot().screenshot(false, stream, (o, res) => {
+            try { o.screenshot_finish(res); } catch (e) { logError(e, 'snap'); }
+            stream.close(null);
+        });
+    }
     _tick() {
+        this._full();
         const go = GLib.file_test(`${this._dir}/go`, GLib.FileTest.EXISTS);
         const stop = GLib.file_test(`${this._dir}/stop`, GLib.FileTest.EXISTS);
         if (!go || stop || this._busy)

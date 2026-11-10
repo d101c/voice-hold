@@ -42,8 +42,9 @@ export function modifierMask(accel) {
 }
 
 export class Dictation {
-    constructor(settings, iconPath, gettext) {
+    constructor(settings, iconPath, gettext, openSetup = null) {
         this._settings = settings;
+        this._openSetup = openSetup;
         this._ = gettext || (s => s);
         this._machine = new HoldMachine(this._machineOptions());
         this._hud = new Hud(iconPath, this._, () => settings.get_string('hud-position'));
@@ -66,7 +67,6 @@ export class Dictation {
         this._mask = modifierMask(settings.get_strv('dictation-shortcut')[0] ?? '');
         this._session = null;        // {ending, window, focus}
         this._startQueued = false;
-        this._mic = '';
 
         settings.connectObject(
             'changed::mode', () => this._reconfigure(),
@@ -357,11 +357,10 @@ export class Dictation {
 
     // -- engine events -----------------------------------------------------
 
+    // While listening the pill is the microphone and its level, nothing
+    // else: words appear when there are words.
     _listeningHint() {
-        const how = this._machine.state === TOGGLE
-            ? this._('press again or Esc to stop')
-            : this._('release to stop');
-        return this._mic ? `${this._mic} — ${how}` : `${this._('Listening')} — ${how}`;
+        return '';
     }
 
     _onOwner(hasOwner) {
@@ -371,9 +370,7 @@ export class Dictation {
         this._finishLocally('error');
     }
 
-    _onSource(description) {
-        this._mic = description;
-    }
+    _onSource(_description) {}
 
     _onState(state) {
         if (!this._live)
@@ -457,9 +454,9 @@ export class Dictation {
 
     _showEngineError(code) {
         const texts = {
-            'not-installed': this._('Engine not installed — see the extension settings'),
+            'not-installed': this._('Speech engine not installed yet — opening the installer'),
             'spawn-failed': this._('Engine failed to start — see the extension settings'),
-            'models-missing': this._('Models missing — see the extension settings'),
+            'models-missing': this._('Speech models missing — opening the installer'),
             'timeout': this._('Engine did not answer'),
             'busy': this._('Engine busy — try again'),
             'no-proxy': this._('D-Bus unavailable'),
@@ -467,6 +464,10 @@ export class Dictation {
         if (code === 'cancelled')
             return;
         this._hud.error(texts[code] ?? code);
+        // Nothing can be dictated until the engine is there: take the user to
+        // the Installation page instead of leaving them to look for it.
+        if (code === 'not-installed' || code === 'models-missing')
+            this._openSetup?.();
     }
 
     // -- Escape inside text fields ---------------------------------------------

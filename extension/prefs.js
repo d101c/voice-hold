@@ -24,7 +24,19 @@ export default class VoiceHoldPreferences extends ExtensionPreferences {
         window.add(page);
         // The assistant installs the engine without a terminal; it is shown
         // first as long as the engine is missing.
-        const setup = buildSetupPage(window, _, {components: ['voice']});
+        const [accel] = settings.get_strv('dictation-shortcut');
+        let shortcut = null;
+        if (accel) {
+            const [ok, key, mods] = Gtk.accelerator_parse(accel);
+            if (ok && key)
+                shortcut = Gtk.accelerator_get_label(key, mods);
+        }
+        const setup = buildSetupPage(window, _, {
+            components: ['voice'],
+            shortcut,
+            accelerator: shortcut ? accel : null,
+            picture: `${this.path}/icons/pill.png`,
+        });
         window.add(setup);
         this._engineStatus().then(s => {
             if (!s.installed)

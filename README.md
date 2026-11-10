@@ -29,7 +29,13 @@ Second member of the *Hold* family after
 
 ## Install
 
-Two parts: the engine (a small Python program) and the extension.
+**The easy way, no terminal:** install the extension, then press `Ctrl`+`Space`
+(or the *Install* button of the notification). The settings open on an
+*Installation* page: one *Install* button downloads the speech engine and its
+models (about 500 MB) into your home folder, and a field lets you try the
+dictation right there.
+
+**By hand:** two parts, the engine (a small Python program) and the extension.
 
 ```bash
 pipx install git+https://github.com/d101c/voice-hold#subdirectory=engine

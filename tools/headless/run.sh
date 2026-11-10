@@ -22,7 +22,8 @@ rm -f "$S"/frames/*
 cp -r "$REPO/extension" "$T/data/gnome-shell/extensions/voice-hold@griffit.gmail.com"
 glib-compile-schemas "$T/data/gnome-shell/extensions/voice-hold@griffit.gmail.com/schemas"
 [ -d "$S/snap@test" ] && cp -r "$S/snap@test" "$T/data/gnome-shell/extensions/"
-printf '[D-BUS Service]\nName=org.griffit.VoiceHold\nExec=%s serve\n' "$ENGINE" \
+# NOENGINE=1: a fresh install, before the speech engine is there.
+[ "${NOENGINE:-0}" = 1 ] || printf '[D-BUS Service]\nName=org.griffit.VoiceHold\nExec=%s serve\n' "$ENGINE" \
   > "$T/data/dbus-1/services/org.griffit.VoiceHold.service"
 
 env -u WAYLAND_DISPLAY -u DISPLAY -u DBUS_SESSION_BUS_ADDRESS \

@@ -26,6 +26,7 @@ gnome-extensions pack "$SRC" \
   --extra-source=setup.js \
   --extra-source=setupPage.js \
   --extra-source=textSink.js \
+  --extra-source=welcome.js \
   "${PODIR[@]}" \
   --schema="$SCHEMA" \
   --out-dir="$REPO" \

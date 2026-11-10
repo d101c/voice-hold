@@ -297,3 +297,48 @@ msgstr "Terminé"
 
 msgid "Cancel"
 msgstr "Annuler"
+
+msgid "Speech engine not installed yet — opening the installer"
+msgstr "Moteur vocal pas encore installé — ouverture de l'installation"
+
+msgid "Speech models missing — opening the installer"
+msgstr "Modèles vocaux manquants — ouverture de l'installation"
+
+msgid "Voice Hold: one last step"
+msgstr "Voice Hold : une dernière étape"
+
+msgid "Install the speech engine: one click, about 500 MB."
+msgstr "Installez le moteur vocal : un clic, environ 500 Mo."
+
+msgid "Three steps and you are dictating"
+msgstr "Trois étapes et vous dictez"
+
+msgid "The speech engine is downloaded and unpacked into your home folder by this window: no terminal, no administrator password. Afterwards nothing leaves this computer."
+msgstr "Le moteur vocal est téléchargé et décompressé dans votre dossier personnel par cette fenêtre : ni terminal, ni mot de passe administrateur. Ensuite, rien ne quitte cet ordinateur."
+
+msgid "Install the speech engine"
+msgstr "Installer le moteur vocal"
+
+msgid "Hold %s and speak"
+msgstr "Maintenez %s et parlez"
+
+msgid "Hold the shortcut and speak"
+msgstr "Maintenez le raccourci et parlez"
+
+msgid "Release to stop. Or tap once to start and once more to stop."
+msgstr "Relâchez pour arrêter. Ou un appui bref pour démarrer, un autre pour arrêter."
+
+msgid "Try it here: click, hold the shortcut, say a sentence"
+msgstr "Essayez ici : cliquez, maintenez le raccourci, dites une phrase"
+
+msgid "While you dictate, a small pill slides out of the top bar with the microphone level and the text."
+msgstr "Pendant la dictée, une petite pastille sort de la barre du haut avec le niveau du micro et le texte."
+
+msgid "One click left: press Install below."
+msgstr "Plus qu'un clic : appuyez sur Installer ci-dessous."
+
+msgid "Installed. Log out and back in once so that GNOME sees the speech engine."
+msgstr "Installé. Fermez puis rouvrez votre session une fois pour que GNOME voie le moteur vocal."
+
+msgid "Ready: hold %s and speak. Try it in the field below."
+msgstr "Prêt : maintenez %s et parlez. Essayez dans le champ ci-dessous."

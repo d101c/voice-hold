@@ -426,6 +426,8 @@ export class Hud {
             this._label.remove_style_pseudo_class(p);
         this._label.add_style_pseudo_class(pseudo);
         this._label.set_text(text);
+        // No words: the pill is the icon and the level, without a gap.
+        this._label.visible = !!text;
     }
 
     _paintBars() {

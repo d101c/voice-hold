@@ -35,7 +35,13 @@ Deuxième membre de la famille *Hold* après
 
 ## Installation
 
-Deux parties : le moteur (un petit programme Python) et l'extension.
+**Le plus simple, sans terminal :** installez l'extension, puis appuyez sur
+`Ctrl`+`Espace` (ou sur le bouton *Installer* de la notification). Les réglages
+s'ouvrent sur une page *Installation* : un bouton *Installer* télécharge le
+moteur vocal et ses modèles (environ 500 Mo) dans votre dossier personnel, et
+un champ permet d'essayer la dictée sur place.
+
+**À la main :** deux parties, le moteur (un petit programme Python) et l'extension.
 
 ```bash
 pipx install git+https://github.com/d101c/voice-hold#subdirectory=engine

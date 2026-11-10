@@ -54,6 +54,11 @@
       <summary>Ollama URL</summary>
       <description>Base URL of the Ollama server.</description>
     </key>
+    <key name="welcome-shown" type="b">
+      <default>false</default>
+      <summary>Welcome shown</summary>
+      <description>Whether the first-run check for the speech engine has run.</description>
+    </key>
     <key name="show-indicator" type="b">
       <default>true</default>
       <summary>Top-bar indicator</summary>

@@ -29,6 +29,9 @@ SEQ="$1"
 [ "${SNAP:-0}" = 1 ] && SEQ="go $SEQ"
 [ -n "${WARM:-}" ] && SEQ="$WARM $SEQ"
 python3 "$S/inject.py" "$SEQ"
+# FULL=name (with SNAP=1): one screenshot of the whole screen at the end,
+# in frames/name.png.
+[ -n "${FULL:-}" ] && { echo "$FULL" > "$S/frames/full"; sleep 1.5; }
 [ "${SNAP:-0}" = 1 ] && { sleep 0.8; touch "$S/frames/stop"; sleep 0.5; }
 # Let the engine log its tail before the bus goes away.
 sleep 0.5

@@ -4,16 +4,16 @@ import Gtk from 'gi://Gtk';
 
 import * as Setup from './setup.js';
 
-// The "Installation" page of the preferences: one row per component, an
-// Install button, a progress bar, a banner that says what is left and offers
-// to log out when everything is in place. Used by Voice Hold.
+// The "Installation" page of the preferences, as three numbered steps: an
+// Install button with its progress bar, the gesture, and a field to try the
+// dictation in. A banner says what is left. Used by Voice Hold.
 //
 // components: 'voice' is the only one; the page stays written per component.
 
-export function buildSetupPage(window, gettext, {components = ['voice'], title = null} = {}) {
+export function buildSetupPage(window, gettext, {components = ['voice'], title = null, shortcut = null, accelerator = null, picture = null} = {}) {
     const _ = gettext || (s => s);
     const page = new Adw.PreferencesPage({title: title ?? _('Installation'), icon_name: 'system-software-install-symbolic'});
-    const state = {manifest: null, detect: null, busy: null, changed: false, installer: null};
+    const state = {manifest: null, detect: null, busy: null, changed: false, installer: null, needLogout: false};
 
     // -- banner ---------------------------------------------------------------
     const banner = new Adw.Banner({revealed: true, title: _('Checking what is installed…')});
@@ -21,20 +21,31 @@ export function buildSetupPage(window, gettext, {components = ['voice'], title =
     bannerGroup.add(banner);
     page.add(bannerGroup);
 
+    // -- three steps -----------------------------------------------------------
+    // 1 install (the only click), 2 the gesture, 3 a field to try it in.
     const group = new Adw.PreferencesGroup({
-        title: _('Everything stays on this computer'),
-        description: _('The pieces below are downloaded and unpacked into your home folder by this window: no terminal, no administrator password. Sizes are what you will download.'),
+        title: _('Three steps and you are dictating'),
+        description: _('The speech engine is downloaded and unpacked into your home folder by this window: no terminal, no administrator password. Afterwards nothing leaves this computer.'),
     });
     page.add(group);
 
+    const badge = n => {
+        const l = new Gtk.Label({label: String(n), width_request: 32, height_request: 32, valign: Gtk.Align.CENTER});
+        l.add_css_class('title-3');
+        l.add_css_class('numeric');
+        return l;
+    };
+
     const rows = {};
     const labels = {
-        voice: {title: _('Speech engine (Voice Hold)'), what: _('Listens and transcribes offline: Python engine and models.')},
+        voice: {title: _('Install the speech engine'), what: _('Listens and transcribes offline: Python engine and models.')},
     };
     for (const key of components) {
         const row = new Adw.ActionRow({title: labels[key].title, subtitle: _('Checking…')});
+        row.add_prefix(badge(1));
         const button = new Gtk.Button({label: _('Install'), valign: Gtk.Align.CENTER, sensitive: false});
         button.add_css_class('suggested-action');
+        button.add_css_class('pill');
         const cancel = new Gtk.Button({icon_name: 'process-stop-symbolic', valign: Gtk.Align.CENTER, visible: false, tooltip_text: _('Cancel')});
         const done = new Gtk.Image({icon_name: 'emblem-ok-symbolic', visible: false, valign: Gtk.Align.CENTER});
         done.add_css_class('success');
@@ -47,6 +58,36 @@ export function buildSetupPage(window, gettext, {components = ['voice'], title =
         rows[key] = {row, button, cancel, done, bar};
         button.connect('clicked', () => install(key));
         cancel.connect('clicked', () => state.installer?.cancel());
+    }
+
+    const gestureRow = new Adw.ActionRow({
+        title: shortcut ? _('Hold %s and speak').format(shortcut) : _('Hold the shortcut and speak'),
+        subtitle: _('Release to stop. Or tap once to start and once more to stop.'),
+    });
+    gestureRow.add_prefix(badge(2));
+    if (accelerator) {
+        // Keycaps: libadwaita's label from 1.8, GTK's before.
+        const keys = Adw.ShortcutLabel
+            ? new Adw.ShortcutLabel({accelerator, valign: Gtk.Align.CENTER})
+            : new Gtk.ShortcutLabel({accelerator, valign: Gtk.Align.CENTER});
+        gestureRow.add_suffix(keys);
+    }
+    group.add(gestureRow);
+
+    const tryRow = new Adw.EntryRow({title: _('Try it here: click, hold the shortcut, say a sentence'), sensitive: false});
+    tryRow.add_prefix(badge(3));
+    group.add(tryRow);
+
+    if (picture) {
+        const shot = Gtk.Picture.new_for_filename(picture);
+        shot.set_can_shrink(true);
+        shot.set_content_fit?.(Gtk.ContentFit.CONTAIN);
+        shot.add_css_class('card');
+        shot.set_margin_top(18);
+        shot.set_size_request(-1, 120);
+        const shotGroup = new Adw.PreferencesGroup({description: _('While you dictate, a small pill slides out of the top bar with the microphone level and the text.')});
+        shotGroup.add(shot);
+        page.add(shotGroup);
     }
 
     // -- helpers ----------------------------------------------------------------
@@ -106,14 +147,23 @@ export function buildSetupPage(window, gettext, {components = ['voice'], title =
             banner.title = _('Installing… keep this window open.');
             banner.button_label = null;
         } else if (left.length) {
-            banner.title = _('%d step(s) left: press Install on each row.').format(left.length);
+            banner.title = _('One click left: press Install below.');
             banner.button_label = null;
-        } else if (state.changed) {
-            banner.title = _('Everything is installed. Log out and back in for the extension to see the engines.');
+        } else if (state.needLogout) {
+            banner.title = _('Installed. Log out and back in once so that GNOME sees the speech engine.');
             banner.button_label = _('Log out now');
+        } else if (shortcut) {
+            banner.title = _('Ready: hold %s and speak. Try it in the field below.').format(shortcut);
+            banner.button_label = null;
         } else {
             banner.title = _('Everything is installed.');
             banner.button_label = null;
+        }
+        const ready = !!state.manifest && !left.length && !state.needLogout;
+        tryRow.sensitive = ready;
+        if (ready && state.changed && !state.focused) {
+            state.focused = true;
+            tryRow.grab_focus();
         }
     };
 
@@ -180,6 +230,9 @@ export function buildSetupPage(window, gettext, {components = ['voice'], title =
             if (key === 'voice')
                 await installer.installVoice();
             state.changed = true;
+            // Normally the session bus sees the new service at once; only an
+            // unusual bus needs a new session.
+            state.needLogout = !await Setup.activatable(state.manifest.voice?.bus_name ?? 'org.griffit.VoiceHold');
             r.bar.fraction = 1;
             r.bar.text = _('Done');
             state.detect = Setup.detect(state.manifest);

@@ -350,6 +350,27 @@ export class Installer {
     }
 }
 
+// Ask the session bus to read its service files again, then say whether
+// `busName` can be started by a method call. dbus-broker and dbus-daemon both
+// answer ReloadConfig; when the name is activatable no logout is needed.
+export function activatable(busName) {
+    const call = (method, type) => new Promise((resolve, reject) => {
+        Gio.DBus.session.call('org.freedesktop.DBus', '/org/freedesktop/DBus', 'org.freedesktop.DBus',
+            method, null, type ? new GLib.VariantType(type) : null, Gio.DBusCallFlags.NONE, 5000, null,
+            (conn, res) => {
+                try {
+                    resolve(conn.call_finish(res));
+                } catch (e) {
+                    reject(e);
+                }
+            });
+    });
+    return call('ReloadConfig', null).catch(() => null)
+        .then(() => call('ListActivatableNames', '(as)'))
+        .then(v => v.deepUnpack()[0].includes(busName))
+        .catch(() => false);
+}
+
 // Log out through gnome-session (the engines and the extension start fresh).
 export function logout() {
     Gio.DBus.session.call('org.gnome.SessionManager', '/org/gnome/SessionManager', 'org.gnome.SessionManager',
