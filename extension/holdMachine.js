@@ -1,7 +1,7 @@
 // Dictation gesture state machine, free of Shell imports so it can be tested
 // with plain gjs. Same spirit as Accent Hold's holdMachine.js.
 //
-// The shortcut (e.g. <Super>x) starts listening at once. What happens next
+// The shortcut (e.g. <Control><Super>space) starts listening at once. What happens next
 // depends on the modifier:
 //   - still held `tapMs` after the activation  -> HOLD mode: releasing the
 //     modifier stops the dictation (like holding Fn on macOS);

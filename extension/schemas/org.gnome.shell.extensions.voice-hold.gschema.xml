@@ -3,7 +3,7 @@
   <schema id="org.gnome.shell.extensions.voice-hold"
           path="/org/gnome/shell/extensions/voice-hold/">
     <key name="dictation-shortcut" type="as">
-      <default>['&lt;Super&gt;x']</default>
+      <default>['&lt;Control&gt;&lt;Super&gt;space']</default>
       <summary>Dictation shortcut</summary>
       <description>Hold it to dictate; tap it to toggle hands-free dictation.</description>
     </key>

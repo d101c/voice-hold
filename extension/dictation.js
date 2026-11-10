@@ -26,7 +26,7 @@ const START_WAIT_MS = 3000;
 // Engine errors after which no further signal is to be expected.
 const FATAL_ERRORS = ['models-missing', 'audio:', 'model:'];
 
-// Modifier masks named in an accelerator string such as '<Super>x'.
+// Modifier masks named in an accelerator string such as '<Control><Super>space'.
 export function modifierMask(accel) {
     let mask = 0;
     const s = accel.toLowerCase();
@@ -301,7 +301,9 @@ export class Dictation {
         }
         this._watchId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, WATCH_MS, () => {
             const [, , mods] = global.get_pointer();
-            const held = (mods & this._mask) !== 0;
+            // Every modifier of the shortcut: letting go of one of two
+            // (Ctrl of Ctrl+Super) is letting go.
+            const held = (mods & this._mask) === this._mask;
             this._run(this._machine.modifier(GLib.get_monotonic_time() / 1000, held));
             if (!this._watchId)
                 return GLib.SOURCE_REMOVE;
