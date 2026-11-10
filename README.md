@@ -65,7 +65,7 @@ sherpa-onnx below 2.0, which dropped the espeak-ng front end these voices need.
 
 ## Requirements and limits
 
-- GNOME Shell 45 – 50 on Wayland.
+- GNOME Shell 45 – 51 on Wayland.
 - Works in applications that use the Wayland text-input protocol (GTK 4,
   GTK 3, Qt, Electron with Wayland, Firefox…). Terminals get the final
   blocks but not the grey preview. X11 applications are not supported.

@@ -74,7 +74,7 @@ frontal espeak-ng dont ces voix ont besoin.
 
 ## Prérequis et limites
 
-- GNOME Shell 45 à 50 sous Wayland.
+- GNOME Shell 45 à 51 sous Wayland.
 - Fonctionne dans les applications qui utilisent le protocole Wayland
   text-input (GTK 4, GTK 3, Qt, Electron en Wayland, Firefox…). Les
   terminaux reçoivent les blocs finaux mais pas l'aperçu gris. Les
