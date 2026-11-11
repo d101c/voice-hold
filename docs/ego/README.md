@@ -104,7 +104,7 @@ après fusion des PR.
 > (1) the extension itself never runs a shell command: it sends the transcript
 > to a second D-Bus service of the same separate helper
 > (`org.griffit.VoiceHold.Commands`), which classifies it; GNOME actions
-> (volume, dark mode, workspace, launching an app through `Shell.AppSystem`)
+> (volume, dark mode, workspace, launching an app through `Gio.DesktopAppInfo`)
 > are done in the extension, and a shell command is only run by the helper, in
 > a visible terminal, after the user confirmed it in a modal dialog;
 > (2) the Commands page of the preferences has one Install button that spawns
