@@ -135,9 +135,14 @@ def command(base=None, threads=None):
             '--sleep-idle-seconds', str(IDLE_S)]
 
 
+_started = []      # servers this process started, to reap them when they die
+
+
 def ensure(wait_s=60.0, base=None, spawn=subprocess.Popen):
     """Return True when the server answers; start it if it is installed and
-    does not. Reading 1.2 GB of weights takes a few seconds."""
+    does not (also after it died or was killed). Reading 1.2 GB of weights
+    takes a few seconds."""
+    _started[:] = [p for p in _started if p.poll() is None]     # no zombies
     if healthy():
         return True
     if not installed(base):
@@ -148,6 +153,7 @@ def ensure(wait_s=60.0, base=None, spawn=subprocess.Popen):
     with open(_state_dir() / 'llama-server.log', 'wb') as log:
         proc = spawn(command(base), stdin=subprocess.DEVNULL, stdout=log, stderr=log,
                      start_new_session=True, env=env, cwd=str(binary.parent))
+    _started.append(proc)
     try:
         _pid_file().write_text(str(proc.pid))
     except OSError:
