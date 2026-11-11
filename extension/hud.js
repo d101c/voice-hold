@@ -5,7 +5,9 @@ import Pango from 'gi://Pango';
 import St from 'gi://St';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
+import * as effects from './hudEffects.js';
 import {cursorPosition, islandPosition, trailing, ISLAND_OVERLAP} from './hudGeometry.js';
+import {systemFontCss} from './systemFont.js';
 
 // The pill: microphone icon, level bars, and a line of text (status, then the
 // words as they come). It never takes focus and only exists while there is
@@ -36,18 +38,15 @@ const HIDE_DELAY_MS = 450;
 // max-width, so a long sentence keeps the capsule at one steady width.
 const MAX_CHARS = 120;
 
-const ISLAND_SEED_W = 64;    // width of the bump the capsule swells from
-const ISLAND_IN_MS = 380;
-const ISLAND_OUT_MS = 240;
 const RESIZE_MS = 220;
-const CONTENT_FADE_MS = 160;
-const CURSOR_FADE_MS = 150;
 const PANEL_OPAQUE_ALPHA = 200;   // below this the bar is see-through (Blur my Shell…): use black
 const MONITOR_MARGIN = 24;        // the capsule never comes closer than this to the monitor's edges
 
 export class Hud {
-    // getPosition: () => 'island' | 'cursor', read each time the pill opens.
-    constructor(iconPath, gettext, getPosition = () => 'island') {
+    // getPosition: () => 'island' | 'cursor' and getEffect: () => one of
+    // hudEffects.EFFECTS, both read each time the pill opens.
+    constructor(iconPath, gettext, getPosition = () => 'island', getEffect = () => effects.DEFAULT_EFFECT) {
+        this._getEffect = getEffect;
         this._ = gettext || (s => s);
         this._iconPath = iconPath;
         this._getPosition = getPosition;
@@ -89,8 +88,8 @@ export class Hud {
             reactive: false,
             opacity: 0,
         });
-        if (this._island)
-            this._box.set_style(`background-color: ${this._panelColor()};`);
+        // The system's interface font, and for the island the bar's colour.
+        this._box.set_style(systemFontCss() + (this._island ? ` background-color: ${this._panelColor()};` : ''));
 
         this._clip = new St.Widget({
             layout_manager: new Clutter.FixedLayout(),
@@ -139,6 +138,7 @@ export class Hud {
     }
 
     _destroyBox() {
+        effects.cancel(this._fx);
         if (this._box) {
             this._box.destroy();
             this._box = null;
@@ -232,58 +232,27 @@ export class Hud {
 
     // -- entrance / exit -------------------------------------------------
 
-    // Island: a small bump swells out of the bar into the full capsule, the
-    // content fading in once there is room for it. Cursor: a short fade.
-    _enter() {
-        this._leaving = false;
-        this._box.remove_all_transitions();
-        this._content.remove_all_transitions();
-        if (!this._island) {
-            this._content.opacity = 255;
-            this._box.ease({opacity: 255, duration: CURSOR_FADE_MS, mode: Clutter.AnimationMode.EASE_OUT_QUAD});
-            return;
-        }
-        const [w, h] = this._natural();
-        const [x, y] = this._islandAnchor(w);
-        const seedW = Math.min(ISLAND_SEED_W * this._scale, w);
-        this._box.set_position(Math.round(x + (w - seedW) / 2), y);
-        this._box.set_size(seedW, 0);
-        this._box.opacity = 255;
-        this._content.opacity = 0;
-        this._box.ease({
-            x, width: w, height: h,
-            duration: ISLAND_IN_MS,
-            mode: Clutter.AnimationMode.EASE_OUT_BACK,
-        });
-        this._content.ease({
-            opacity: 255,
-            duration: CONTENT_FADE_MS,
-            delay: ISLAND_IN_MS - CONTENT_FADE_MS - 60,
-            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
-        });
+    // How the pill comes and goes is in hudEffects.js; the effect is read
+    // each time, so a change in the settings shows at the next pill.
+    _parts() {
+        this._fx ??= {};
+        return Object.assign(this._fx, {box: this._box, content: this._content, bars: this._bars, scale: this._scale});
     }
 
-    // ... and back into the bar.
+    _enter() {
+        this._leaving = false;
+        let geo = null;
+        if (this._island) {
+            const [w, h] = this._natural();
+            const [x, y] = this._islandAnchor(w);
+            geo = {x, y, w, h};
+        }
+        effects.enter(this._parts(), geo, this._getEffect(), this._island);
+    }
+
     _leave(onComplete) {
         this._leaving = true;
-        this._box.remove_all_transitions();
-        this._content.remove_all_transitions();
-        if (!this._island) {
-            this._box.ease({opacity: 0, duration: CURSOR_FADE_MS, mode: Clutter.AnimationMode.EASE_OUT_QUAD, onComplete});
-            return;
-        }
-        const w = this._box.width;
-        const seedW = Math.min(ISLAND_SEED_W * this._scale, w);
-        this._content.ease({opacity: 0, duration: CONTENT_FADE_MS * 0.6, mode: Clutter.AnimationMode.EASE_IN_QUAD});
-        this._box.ease({
-            x: Math.round(this._box.x + (w - seedW) / 2),
-            width: seedW,
-            height: 0,
-            duration: ISLAND_OUT_MS,
-            delay: 40,
-            mode: Clutter.AnimationMode.EASE_IN_CUBIC,
-            onComplete,
-        });
+        effects.leave(this._parts(), this._getEffect(), this._island, onComplete);
     }
 
     // -- public ----------------------------------------------------------

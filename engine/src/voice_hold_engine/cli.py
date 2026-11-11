@@ -1,4 +1,4 @@
-"""Command line: `voice-hold-engine [serve|setup [--tts [LANG…]]|status [--verify]|transcribe FILE|speak TEXT|install-service|uninstall [--models]]`."""
+"""Command line: `voice-hold-engine [serve|setup [--tts [LANG…]|--commands]|status [--verify]|transcribe FILE|speak TEXT|interpret TEXT|apps|commands-serve|install-service|uninstall [--models]]`."""
 import argparse
 import asyncio
 import os
@@ -7,8 +7,10 @@ import sys
 from pathlib import Path
 
 from . import BUS_NAME, __version__, models
+from .commands import BUS_NAME as COMMANDS_BUS_NAME
 
 SERVICE_FILE = f'{BUS_NAME}.service'
+COMMANDS_SERVICE_FILE = f'{COMMANDS_BUS_NAME}.service'
 
 
 def service_dir():
@@ -33,6 +35,18 @@ def install_service(log=print):
     return path
 
 
+def install_commands_service(log=print):
+    """The helper behind the optional voice commands: its own bus name, so
+    it starts only when the commands are used."""
+    d = service_dir()
+    d.mkdir(parents=True, exist_ok=True)
+    path = d / COMMANDS_SERVICE_FILE
+    path.write_text(f'[D-BUS Service]\nName={COMMANDS_BUS_NAME}\n'
+                    f'Exec={sys.executable} -m voice_hold_engine commands-serve\n')
+    log(f'D-Bus service installed: {path}')
+    return path
+
+
 def cmd_setup(args):
     log = lambda s: (sys.stderr.write(s), sys.stderr.flush())
     base = models.models_dir()
@@ -49,12 +63,25 @@ def cmd_setup(args):
         if not shutil.which('pw-play'):
             print('pw-play not found: install pipewire-audio-client-libraries (Ubuntu) or pipewire-utils', file=sys.stderr)
         return 0
+    if args.commands:
+        # `setup --commands`: the local LLM (llama.cpp and its model) and
+        # the helper's D-Bus service, for an install that already works.
+        from . import llamacpp
+        print(f'LLM directory: {llamacpp.llm_dir()}')
+        miss = llamacpp.setup(log=log)
+        if miss:
+            print('Still missing: ' + ', '.join(miss), file=sys.stderr)
+            return 1
+        install_commands_service()
+        print('Voice commands ready. Switch them on in the Voice Hold preferences.')
+        return 0
     miss = models.setup(base, log)
     if miss:
         print('Still missing: ' + ', '.join(miss), file=sys.stderr)
         return 1
     print('Models ready.')
     install_service()
+    install_commands_service()
     print('Done. Enable the Voice Hold extension and hold Ctrl+Space in a text field.')
     print('Optional voices (text to speech): voice-hold-engine setup --tts')
     return 0
@@ -75,7 +102,44 @@ def cmd_status(args):
     voices = models.voices_ready(base)
     print(f'voices: {", ".join(voices) if voices else "none (voice-hold-engine setup --tts)"}; '
           f'pw-play: {shutil.which("pw-play") or "NOT FOUND"}')
+    from . import llamacpp
+    from .commands import jobs
+    lm = llamacpp.missing()
+    term = jobs.find_terminal()
+    print(f'voice commands: LLM {llamacpp.MODEL_NAME} '
+          f'{"ready" if not lm else "not installed (voice-hold-engine setup --commands)"}'
+          f'{", server running" if llamacpp.healthy(0.3) else ""}; '
+          f'terminal: {term[0] if term else "NOT FOUND"}')
+    if models.upgrade_available(base) and not miss:
+        print(f'a better speech model is available ({models.ASR_NAME}): voice-hold-engine setup')
     return 0 if not miss and svc.exists() else 1
+
+
+def cmd_interpret(args):
+    import json
+    from .commands.interpreter import Interpreter
+    it = Interpreter(use_llm=not args.no_llm)
+    if it.use_llm:
+        from . import llamacpp
+        llamacpp.ensure()
+    print(json.dumps(it.interpret(' '.join(args.text)), ensure_ascii=False, indent=1))
+    return 0
+
+
+def cmd_apps(args):
+    from .commands.apps import list_apps
+    for a in list_apps(force=True):
+        print(f"{a['id']:40} {a['name']}" + (f"  ({a['name_fr']})" if a['name_fr'] else ''))
+    return 0
+
+
+def cmd_commands_serve(args):
+    from .commands.service import serve
+    try:
+        asyncio.run(serve())
+    except KeyboardInterrupt:
+        pass
+    return 0
 
 
 def cmd_transcribe(args):
@@ -120,15 +184,18 @@ def cmd_serve(args):
 
 
 def cmd_uninstall(args):
-    svc = service_dir() / SERVICE_FILE
-    if svc.exists():
-        svc.unlink()
-        print(f'Removed {svc}')
+    from . import llamacpp
+    llamacpp.stop()
+    for name in (SERVICE_FILE, COMMANDS_SERVICE_FILE):
+        svc = service_dir() / name
+        if svc.exists():
+            svc.unlink()
+            print(f'Removed {svc}')
     if args.models:
-        base = models.models_dir()
-        if base.exists():
-            shutil.rmtree(base)
-            print(f'Removed {base}')
+        for base in (models.models_dir(), llamacpp.llm_dir()):
+            if base.exists():
+                shutil.rmtree(base)
+                print(f'Removed {base}')
     print('Now run: pipx uninstall voice-hold-engine  (or: uv tool uninstall voice-hold-engine)')
     return 0
 
@@ -140,11 +207,19 @@ def main(argv=None):
     sub.add_parser('serve', help='run the D-Bus service (default)').set_defaults(fn=cmd_serve)
     se = sub.add_parser('setup', help='download the models and install the D-Bus service')
     se.add_argument('--tts', nargs='*', metavar='LANG', help='download the voices for spoken answers (fr, en; all when none given)')
+    se.add_argument('--commands', action='store_true', help='download the local LLM for the voice commands (llama.cpp, ~1.3 GB)')
     se.set_defaults(fn=cmd_setup)
     st = sub.add_parser('status', help='check models and service')
     st.add_argument('--verify', action='store_true', help='also check the SHA-256 of every model file')
     st.set_defaults(fn=cmd_status)
-    sub.add_parser('install-service', help='(re)write the D-Bus service file').set_defaults(fn=lambda a: (install_service(), 0)[1])
+    sub.add_parser('install-service', help='(re)write the D-Bus service files').set_defaults(
+        fn=lambda a: (install_service(), install_commands_service(), 0)[2])
+    sub.add_parser('commands-serve', help='run the voice-command D-Bus service').set_defaults(fn=cmd_commands_serve)
+    i = sub.add_parser('interpret', help='print what a spoken command would do, without doing it')
+    i.add_argument('--no-llm', action='store_true')
+    i.add_argument('text', nargs='+')
+    i.set_defaults(fn=cmd_interpret)
+    sub.add_parser('apps', help='list the applications the voice commands know').set_defaults(fn=cmd_apps)
     t = sub.add_parser('transcribe', help='transcribe a WAV file (debug)')
     t.add_argument('file')
     t.set_defaults(fn=cmd_transcribe)
@@ -153,7 +228,7 @@ def main(argv=None):
     sp.add_argument('--speed', type=float, default=1.0)
     sp.add_argument('text', nargs='+')
     sp.set_defaults(fn=cmd_speak)
-    u = sub.add_parser('uninstall', help='remove the D-Bus service file (and models with --models)')
+    u = sub.add_parser('uninstall', help='remove the D-Bus service files (and models with --models)')
     u.add_argument('--models', action='store_true')
     u.set_defaults(fn=cmd_uninstall)
     args = p.parse_args(argv)

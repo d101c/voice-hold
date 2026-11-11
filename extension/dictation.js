@@ -47,7 +47,11 @@ export class Dictation {
         this._openSetup = openSetup;
         this._ = gettext || (s => s);
         this._machine = new HoldMachine(this._machineOptions());
-        this._hud = new Hud(iconPath, this._, () => settings.get_string('hud-position'));
+        this._hud = new Hud(iconPath, this._, () => settings.get_string('hud-position'),
+            () => settings.get_string('hud-effect'));
+        // The preferences' Preview button: show the pill once, as it would
+        // look while listening.
+        settings.connectObject('changed::hud-preview', () => this._preview(), this);
         this._sink = new TextSink(Main.inputMethod, Clutter);
         this._engine = new EngineClient({
             Owner: has => this._onOwner(has),
@@ -67,6 +71,7 @@ export class Dictation {
         this._mask = modifierMask(settings.get_strv('dictation-shortcut')[0] ?? '');
         this._session = null;        // {ending, window, focus}
         this._startQueued = false;
+        this._elsewhere = null;      // see setElsewhere()
 
         settings.connectObject(
             'changed::mode', () => this._reconfigure(),
@@ -123,6 +128,27 @@ export class Dictation {
     // A session that is listening (not ending).
     get _live() {
         return !!this._session && !this._session.ending;
+    }
+
+    // Dictating, or finishing a dictation: the voice commands, when they
+    // are switched on, leave the microphone alone meanwhile (extension.js).
+    _preview() {
+        if (this.active || this._hud.visible)
+            return;
+        this._hud.show(this._('Listening…'), 'listening');
+        this._hud.hide(1800);
+    }
+
+    get active() {
+        return this._machine.state !== IDLE || !!this._session || this._startQueued;
+    }
+
+    // `fn()` is true while someone else is using the speech engine (the
+    // voice commands): the engine sends its signals to every client, and an
+    // error of theirs is theirs to show. Never set unless the commands are
+    // switched on.
+    setElsewhere(fn) {
+        this._elsewhere = fn;
     }
 
     // -- actions -----------------------------------------------------------
@@ -186,8 +212,6 @@ export class Dictation {
         const options = {
             'silence-stop-s': 0,
             'polish': this._settings.get_boolean('polish'),
-            'polish-model': this._settings.get_string('polish-model'),
-            'polish-url': this._settings.get_string('polish-url'),
             'source': this._settings.get_string('microphone'),
         };
         this._engine.start(options).then(err => {
@@ -434,6 +458,8 @@ export class Dictation {
     }
 
     _onError(message) {
+        if (!this._session && this._elsewhere?.())
+            return;
         const fatal = FATAL_ERRORS.some(p => message.startsWith(p));
         if (message === 'models-missing') {
             this._showEngineError('models-missing');

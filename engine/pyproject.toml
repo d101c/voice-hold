@@ -1,7 +1,7 @@
 [project]
 name = "voice-hold-engine"
-version = "0.3.1"
-description = "Offline speech-to-text engine for the Voice Hold GNOME Shell extension (D-Bus service)."
+version = "0.4.0"
+description = "Offline speech-to-text engine for the Voice Hold GNOME Shell extension (D-Bus service), with optional voice commands through a local llama.cpp server."
 readme = "README.md"
 license = "GPL-2.0-or-later"
 requires-python = ">=3.12"
@@ -13,7 +13,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-test = ["pytest>=8"]
+test = ["pytest>=8", "pytest-asyncio>=0.24"]
 
 [project.scripts]
 voice-hold-engine = "voice_hold_engine.cli:main"
@@ -27,3 +27,4 @@ packages = ["src/voice_hold_engine"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+asyncio_mode = "auto"

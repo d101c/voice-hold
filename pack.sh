@@ -20,7 +20,9 @@ gnome-extensions pack "$SRC" \
   --extra-source=engine.js \
   --extra-source=holdMachine.js \
   --extra-source=hud.js \
+  --extra-source=hudEffects.js \
   --extra-source=hudGeometry.js \
+  --extra-source=systemFont.js \
   --extra-source=keyHook.js \
   --extra-source=panelIndicator.js \
   --extra-source=setup.js \
@@ -33,7 +35,8 @@ gnome-extensions pack "$SRC" \
   --force
 
 # `gnome-extensions pack` flattens --extra-source files, so the icons/
-# directory is added afterwards with its path preserved.
-( cd "$SRC" && zip -r -q "$ZIP" icons )
+# directory and commands/ (the optional voice commands, imported as
+# ./commands/*.js) are added afterwards with their paths preserved.
+( cd "$SRC" && zip -r -q "$ZIP" icons commands )
 
 echo "Built: $ZIP"

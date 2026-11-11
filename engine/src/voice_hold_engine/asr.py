@@ -1,4 +1,4 @@
-"""Speech recognition (Parakeet TDT v3 int8) and voice activity detection
+"""Speech recognition (Parakeet TDT 0.6B int8) and voice activity detection
 (Silero), both through sherpa-onnx."""
 import ctypes
 import os

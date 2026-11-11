@@ -187,13 +187,15 @@ class Engine:
         gen = self._gen
         self._opts = {
             'polish': bool(_opt(options, 'polish', False)),
-            'polish_model': str(_opt(options, 'polish-model', '')),
-            'polish_url': str(_opt(options, 'polish-url', '')),
             'silence_stop_s': float(_opt(options, 'silence-stop-s', 0.0)),
             'audio_file': str(_opt(options, 'audio-file', '')),
             'realtime': bool(_opt(options, 'realtime', True)),
             'source': str(_opt(options, 'source', '')),
         }
+        if self._opts['polish']:
+            # Start the LLM server while the user talks (a few seconds).
+            from . import polish
+            self._loop.run_in_executor(self._polish_executor, polish.prepare)
         self._ensure_models()
         # The live window must cover a whole segment: the VAD cuts a segment
         # at max_speech_s, so a shorter window would drop the first words of
@@ -408,12 +410,9 @@ class Engine:
             self._emit('Error', f'decode: {e}')
             return
         if final and raw and self._opts['polish']:
-            from .polish import DEFAULT_MODEL, DEFAULT_URL, polish
+            from .polish import polish
             self._inflight += 1
-            pf = self._loop.run_in_executor(
-                self._polish_executor, polish, raw,
-                self._opts['polish_url'] or DEFAULT_URL,
-                self._opts['polish_model'] or DEFAULT_MODEL)
+            pf = self._loop.run_in_executor(self._polish_executor, polish, raw)
             self._pending.add(pf)
             pf.add_done_callback(lambda f: self._on_polished(gen, raw, f))
             return

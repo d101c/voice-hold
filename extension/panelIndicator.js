@@ -9,7 +9,8 @@ import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import {listSources} from './engine.js';
 
 // Top-bar indicator: the microphone icon plus a menu with a toggle bound to
-// the `enabled` setting, the microphone choice and the preferences.
+// the `enabled` setting, the microphone choice and the preferences. When the
+// voice commands are switched on, their last requests too (setCommands).
 export const VoiceHoldIndicator = GObject.registerClass(
 class VoiceHoldIndicator extends PanelMenu.Button {
     _init(settings, iconPath, openPreferences, gettext) {
@@ -18,6 +19,9 @@ class VoiceHoldIndicator extends PanelMenu.Button {
 
         this._settings = settings;
         this._openPreferences = openPreferences;
+        this._gettext = _;
+        this._commands = null;
+        this._recentMenu = null;
 
         this._icon = new St.Icon({
             gicon: Gio.icon_new_for_string(iconPath),
@@ -40,8 +44,10 @@ class VoiceHoldIndicator extends PanelMenu.Button {
         this._micMenu = new PopupMenu.PopupSubMenuMenuItem(_('Microphone'));
         this.menu.addMenuItem(this._micMenu);
         this.menu.connectObject('open-state-changed', (_m, open) => {
-            if (open)
+            if (open) {
                 this._fillMicrophones(_);
+                this._fillRecent();
+            }
         }, this);
 
         this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
@@ -92,8 +98,50 @@ class VoiceHoldIndicator extends PanelMenu.Button {
         });
     }
 
+    // The voice commands' corner of the menu: a submenu of the last requests,
+    // filled each time the menu opens; activating one shows it again in the
+    // commands' pill. `commands` has recent() (a promise of [{label, entry}])
+    // and recall(entry); null takes the submenu away. Not called at all
+    // while the commands are switched off.
+    setCommands(commands) {
+        this._commands = commands;
+        if (commands && !this._recentMenu) {
+            this._recentMenu = new PopupMenu.PopupSubMenuMenuItem(this._gettext('Recent commands'));
+            // Right under the microphone, above the separator and Preferences.
+            const items = this.menu._getMenuItems();
+            this.menu.addMenuItem(this._recentMenu, items.indexOf(this._micMenu) + 1);
+        } else if (!commands && this._recentMenu) {
+            this._recentMenu.destroy();
+            this._recentMenu = null;
+        }
+    }
+
+    _fillRecent() {
+        const commands = this._commands;
+        if (!commands || !this._recentMenu)
+            return;
+        commands.recent().then(found => {
+            if (!this._recentMenu || this._commands !== commands)
+                return;
+            const menu = this._recentMenu.menu;
+            menu.removeAll();
+            if (!found.length) {
+                menu.addMenuItem(new PopupMenu.PopupMenuItem(this._gettext('Nothing yet'), {reactive: false}));
+                return;
+            }
+            for (const {label, entry} of found) {
+                const item = new PopupMenu.PopupMenuItem(label);
+                item.connectObject('activate', () => this._commands?.recall(entry), this);
+                menu.addMenuItem(item);
+            }
+        }).catch(e => logError(e, 'voice-hold: recent commands'));
+    }
+
     destroy() {
         this.menu.disconnectObject(this);
+        this._commands = null;
+        this._recentMenu = null;
+        this._gettext = null;
         this._micMenu = null;
         this._settings.disconnectObject(this);
         this._settings = null;

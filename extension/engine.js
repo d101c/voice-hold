@@ -19,6 +19,12 @@ const IFACE_XML = `
     <method name="Status"><arg type="a{sv}" name="status" direction="out"/></method>
     <method name="Quit"/>
     <method name="ListSources"><arg type="aa{sv}" name="sources" direction="out"/></method>
+    <method name="Speak">
+      <arg type="s" name="text" direction="in"/>
+      <arg type="a{sv}" name="options" direction="in"/>
+      <arg type="s" name="error" direction="out"/>
+    </method>
+    <method name="StopSpeaking"/>
     <signal name="State"><arg type="s" name="state"/></signal>
     <signal name="Source"><arg type="s" name="description"/></signal>
     <signal name="Level"><arg type="d" name="level"/></signal>
@@ -127,6 +133,39 @@ export class EngineClient {
 
     cancel() {
         return this._call('Cancel');
+    }
+
+    // Say `text` aloud with the engine's voice (the spoken answers of the
+    // voice commands; the dictation never speaks). Resolves to '' when it
+    // was said, else why not: 'voice-missing' when no voice is installed
+    // for `lang`, or an error code as above.
+    speak(text, lang = 'fr') {
+        return new Promise(resolve => {
+            if (!this._proxy) {
+                resolve('no-proxy');
+                return;
+            }
+            const args = new GLib.Variant('(sa{sv})', [text, {lang: GLib.Variant.new_string(lang)}]);
+            this._proxy.call('Speak', args, Gio.DBusCallFlags.NONE, STOP_TIMEOUT_MS, this._cancellable,
+                (proxy, res) => {
+                    try {
+                        resolve(proxy.call_finish(res).deepUnpack()[0] ?? '');
+                    } catch (e) {
+                        resolve(classify(e));
+                    }
+                });
+        });
+    }
+
+    // Never starts the engine: when it is not running, nothing is speaking.
+    stopSpeaking() {
+        return new Promise(resolve => {
+            if (!this._proxy?.g_name_owner) {
+                resolve(null);
+                return;
+            }
+            this._call('StopSpeaking').then(resolve);
+        });
     }
 }
 

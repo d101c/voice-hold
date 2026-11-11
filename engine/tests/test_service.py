@@ -456,22 +456,21 @@ def test_idle_does_not_unload_during_a_decode(fake, speech_wav):
 def test_polish_runs_off_the_decode_worker(fake, speech_wav, monkeypatch):
     seen = []
 
-    def fake_polish(text, url, model):
-        seen.append((threading.current_thread().name, text, url, model))
+    def fake_polish(text):
+        seen.append((threading.current_thread().name, text))
         time.sleep(0.05)
         return text.upper()
     monkeypatch.setattr('voice_hold_engine.polish.polish', fake_polish)
+    monkeypatch.setattr('voice_hold_engine.polish.prepare', lambda: True)
 
     async def main():
         h = Harness(asyncio.get_running_loop())
-        await h.engine.start({'audio-file': speech_wav, 'realtime': False, 'polish': True,
-                              'polish-url': 'http://x', 'polish-model': 'm'})
+        await h.engine.start({'audio-file': speech_wav, 'realtime': False, 'polish': True})
         await h.wait_stopped()
         return h
     h = run(main())
     assert h.of('Final') == ['SEG10', 'SEG8']
     assert all(name.startswith('polish') for name, *_ in seen)
-    assert seen[0][2:] == ('http://x', 'm')
     assert h.events[-1] == ('Stopped', 'end-of-audio'), 'Stopped waits for the polish'
 
 

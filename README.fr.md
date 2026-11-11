@@ -19,14 +19,23 @@ hors-ligne.
   même endroit ; elle peut aussi suivre le curseur de texte (réglages).
 - **Hors-ligne.** Français, anglais et 23 autres langues européennes, avec
   ponctuation et majuscules, reconnus sur votre processeur par Parakeet TDT
-  0.6B v3 (via sherpa-onnx). Ni compte, ni réseau, ni cloud. Ça marche dans
+  0.6B « Ultra » (via sherpa-onnx). Ni compte, ni réseau, ni cloud. Ça marche dans
   l'avion.
 - Dites *nouvelle ligne* / *à la ligne* / *nouveau paragraphe* pour un saut
   de ligne : seul, ou en fin de phrase (« à demain, nouvelle ligne »). Au
   milieu d'une phrase, ça reste du texte (« il a une nouvelle ligne de
   vêtements »).
-- En option : un LLM local (Ollama) peut polir chaque bloc. Éteint par
-  défaut.
+- En option : le LLM local des commandes vocales peut polir chaque bloc.
+  Éteint par défaut.
+- En option : des **commandes vocales**, éteintes par défaut (réglages, page
+  *Commandes*). Un second raccourci (Ctrl+Alt+Espace) : maintenez-le, dites quoi
+  faire, relâchez. Ouvrir une application, le volume, le mode sombre, un
+  espace de travail… se font aussitôt ; une commande shell est d'abord
+  affichée et ne s'exécute qu'après votre confirmation. Les demandes que les
+  règles ne connaissent pas passent par un petit modèle de langage que le
+  moteur fait tourner sur votre ordinateur (llama.cpp) ; c'est un
+  téléchargement à part (`voice-hold-engine setup --commands`, ou le bouton
+  Installer de cette page).
 - Rien ne tourne quand vous ne dictez pas ; le modèle quitte la mémoire après
   5 minutes d'inactivité.
 
@@ -107,7 +116,7 @@ leurs empreintes.
 ## Réglages
 
 Raccourci, geste (maintien / appui / les deux), seuil d'appui, délai de
-silence, polissage Ollama facultatif (modèle, URL), pastille (affichée ou
+silence, polissage facultatif par le LLM local, pastille (affichée ou
 non, sous la barre du haut ou à côté du curseur de texte) et indicateur de
 barre supérieure. La page de réglages montre aussi l'état du moteur et la
 commande d'installation. La méthode `Speak` du moteur (texte, langue) est à
@@ -137,10 +146,13 @@ moteur utilise sherpa-onnx, sous Apache-2.0, compatible avec la GPLv3 mais
 pas avec la GPLv2 seule ; l'ensemble est distribué aux conditions de la
 GPLv3.
 
-Composants du moteur : Parakeet TDT 0.6B v3 (NVIDIA, CC-BY-4.0, téléchargé
-par vous à `setup`, non redistribué ici), Silero VAD (MIT, idem),
-sherpa-onnx (Apache-2.0), onnxruntime (MIT), dbus-fast (MIT), numpy
-(BSD-3-Clause). Les modèles viennent de la release `asr-models` de
+Composants du moteur : Parakeet Ultra (Moondream, CC-BY-4.0, post-entraîné
+à partir de Parakeet TDT 0.6B v3 de NVIDIA ; téléchargé par vous à `setup`,
+non redistribué ici), Silero VAD (MIT, idem), sherpa-onnx (Apache-2.0),
+onnxruntime (MIT), dbus-fast (MIT), numpy (BSD-3-Clause). En option, pour
+les commandes vocales et le polissage : le serveur llama.cpp (MIT) et le
+modèle Qwen3.5-2B (Apache-2.0), téléchargés par vous à `setup --commands`,
+non redistribués ici. Les modèles viennent de la release `asr-models` de
 sherpa-onnx et sont vérifiés contre des empreintes SHA-256 épinglées dans
 `engine/src/voice_hold_engine/models.py`. Le fichier
 `engine/tests/data/cafe.wav` est une phrase synthétisée avec Piper et

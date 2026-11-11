@@ -1,7 +1,7 @@
 # voice-hold-engine
 
 Local speech-to-text service for the [Voice Hold](../README.md) GNOME Shell
-extension. Runs Parakeet TDT 0.6B v3 (int8, via sherpa-onnx) and the Silero
+extension. Runs Parakeet TDT 0.6B "Ultra" (int8, via sherpa-onnx) and the Silero
 voice activity detector on the CPU, fully offline, and exposes a small session
 D-Bus service (`org.griffit.VoiceHold`) that the extension talks to.
 
@@ -21,7 +21,7 @@ Object `/org/griffit/VoiceHold`, interface `org.griffit.VoiceHold`:
 
 | Member | Kind | Notes |
 |---|---|---|
-| `Start(a{sv})` | method | options: `source` (s, PipeWire node name, '' = default microphone), `silence-stop-s` (d), `polish` (b), `polish-model` (s), `polish-url` (s), `audio-file` (s, tests), `realtime` (b). Fails with `org.griffit.VoiceHold.Error.Busy` while a session is active or still decoding. A start that goes nowhere (models missing, microphone, model load) emits `Error` then `Stopped("error")`. |
+| `Start(a{sv})` | method | options: `source` (s, PipeWire node name, '' = default microphone), `silence-stop-s` (d), `polish` (b, through the local llama.cpp server), `audio-file` (s, tests), `realtime` (b). Fails with `org.griffit.VoiceHold.Error.Busy` while a session is active or still decoding. A start that goes nowhere (models missing, microphone, model load) emits `Error` then `Stopped("error")`. |
 | `ListSources() → aa{sv}` | method | microphones known to PipeWire: `name`, `description`, `default` |
 | `Source(s)` | signal | human name of the microphone (or file) just opened |
 | `Stop()` | method | finishes: decodes what is left, then `Stopped("stop")` |
@@ -44,8 +44,25 @@ runs `<python of the install> -m voice_hold_engine serve`.
 Security: this is an ordinary session-bus service; any process of the
 user's session can call it and read its signals. Licence: GPL-2.0-or-later
 (see `LICENSE`; the "or later" is what allows linking Apache-2.0
-sherpa-onnx). Models: Parakeet TDT 0.6B v3 (NVIDIA, CC-BY-4.0) and Silero
-VAD (MIT), downloaded by the user, verified against pinned SHA-256 sums.
+sherpa-onnx). Models: Parakeet Ultra (Moondream, CC-BY-4.0, post-trained from
+NVIDIA's Parakeet TDT 0.6B v3) and Silero VAD (MIT), downloaded by the user,
+verified against pinned SHA-256 sums.
+
+## Voice commands (optional)
+
+`voice-hold-engine setup --commands` downloads a llama.cpp server (MIT,
+release b12284) and Qwen3.5-2B Q4_K_M (Apache-2.0, 1.2 GB) into
+`~/.local/share/voice-hold/llm`, both pinned to a SHA-256, and installs a
+second D-Bus service, `org.griffit.VoiceHold.Commands` (`voice-hold-engine
+commands-serve`). It turns a transcript into an intent: rules first (under a
+millisecond), the LLM for what they leave (constrained to a JSON schema),
+then guard rails computed from the command text alone (refuse, confirm, or
+run silently when read-only). The server listens on 127.0.0.1:18642
+(`VOICE_HOLD_LLM_PORT`), is started on demand, unloads the model after ten
+minutes without a request and is stopped when the helper exits.
+`voice-hold-engine interpret "ouvre firefox"` shows what a sentence would
+do, without doing it. The optional polish of dictated blocks uses the same
+server.
 
 ## Development
 

@@ -9,6 +9,9 @@ import pytest
 from voice_hold_engine import models
 
 
+OLD = 'sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8'
+
+
 def _sha(data):
     return hashlib.sha256(data).hexdigest()
 
@@ -35,19 +38,16 @@ def pinned(monkeypatch, tmp_path):
         tar.addfile(ti, io.BytesIO(b'RIFF'))
     archive = buf.getvalue()
     vad = b'V' * 300
-    served = {models.RELEASES + models.ASR_ARCHIVE: archive, models.RELEASES + models.VAD_FILE: vad}
+    served = {models.RELEASES + models.ASR_NAME + '.tar.bz2': archive, models.RELEASES + models.VAD_FILE: vad}
 
-    monkeypatch.setattr(models, 'ASR_ARCHIVE_SIZE', len(archive))
-    monkeypatch.setattr(models, 'ASR_ARCHIVE_SHA256', _sha(archive))
     monkeypatch.setattr(models, 'VAD_SIZE', len(vad))
     monkeypatch.setattr(models, 'VAD_SHA256', _sha(vad))
-    monkeypatch.setattr(models, 'REQUIRED', {
-        f'{models.ASR_NAME}/encoder.int8.onnx': (1000, _sha(files['encoder.int8.onnx'])),
-        f'{models.ASR_NAME}/decoder.int8.onnx': (200, _sha(files['decoder.int8.onnx'])),
-        f'{models.ASR_NAME}/joiner.int8.onnx': (100, _sha(files['joiner.int8.onnx'])),
-        f'{models.ASR_NAME}/tokens.txt': (len(files['tokens.txt']), _sha(files['tokens.txt'])),
-        models.VAD_FILE: (len(vad), _sha(vad)),
-    })
+    spec = lambda: {
+        'archive_size': len(archive), 'archive_sha256': _sha(archive),
+        'files': {n: (len(files[n]), _sha(files[n]))
+                  for n in ('encoder.int8.onnx', 'decoder.int8.onnx', 'joiner.int8.onnx', 'tokens.txt')},
+    }
+    monkeypatch.setattr(models, 'ASR_MODELS', {models.ASR_NAME: spec(), OLD: spec()})
 
     class Resp(io.BytesIO):
         headers = {'Content-Length': '0'}
@@ -100,7 +100,7 @@ def test_verify_detects_tampering(pinned):
 def test_checksum_mismatch_leaves_nothing_behind(pinned, monkeypatch):
     base, served = pinned
     served[models.RELEASES + models.VAD_FILE] = b'W' * 300        # right size, wrong content
-    monkeypatch.setattr(models, 'ASR_ARCHIVE_SHA256', 'x' * 64)   # archive refused too
+    monkeypatch.setitem(models.ASR_MODELS[models.ASR_NAME], 'archive_sha256', 'x' * 64)   # archive refused too
     with pytest.raises(RuntimeError, match='pinned checksum'):
         models.setup(base, lambda s: None)
     assert not list(base.glob('**/*.part'))
@@ -131,8 +131,23 @@ def test_interrupted_download_removes_part(pinned, monkeypatch):
     assert list(base.iterdir()) == []
 
 
+def test_older_model_keeps_working_until_setup(pinned):
+    base, _ = pinned
+    assert models.setup(base, lambda s: None) == []
+    (base / models.ASR_NAME).rename(base / OLD)          # an install from before the change
+    assert models.asr_name(base) == OLD and models.missing(base) == []
+    assert models.upgrade_available(base)
+    assert OLD in models.asr_paths(base)['encoder']
+    assert models.setup(base, lambda s: None) == []       # setup fetches the current one...
+    assert models.asr_name(base) == models.ASR_NAME and not models.upgrade_available(base)
+    assert not (base / OLD).exists()                      # ...and drops the old weights
+
+
 def test_real_pins_are_well_formed():
-    assert len(models.ASR_ARCHIVE_SHA256) == 64 and len(models.VAD_SHA256) == 64
-    for rel, (size, sha) in models.REQUIRED.items():
-        assert size > 0 and len(sha) == 64, rel
-    assert models.REQUIRED[f'{models.ASR_NAME}/encoder.int8.onnx'][0] == 652_184_281
+    assert len(models.VAD_SHA256) == 64
+    assert models.ASR_NAME.endswith('ultra-int8')
+    for name, spec in models.ASR_MODELS.items():
+        assert len(spec['archive_sha256']) == 64 and spec['archive_size'] > 400_000_000, name
+        assert set(spec['files']) == {'encoder.int8.onnx', 'decoder.int8.onnx', 'joiner.int8.onnx', 'tokens.txt'}
+        for f, (size, sha) in spec['files'].items():
+            assert size > 0 and len(sha) == 64, f

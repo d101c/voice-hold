@@ -1,0 +1,657 @@
+import Clutter from 'gi://Clutter';
+import GLib from 'gi://GLib';
+import IBus from 'gi://IBus';
+import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+
+import {modifierMask} from '../dictation.js';
+import {EngineClient} from '../engine.js';
+import {HoldMachine, IDLE, TOGGLE} from '../holdMachine.js';
+import {installKeyHook} from '../keyHook.js';
+import {Actions} from './actions.js';
+import {CommandEngineClient, commandHistory} from './commandEngine.js';
+import {CommandHud} from './commandHud.js';
+import {confirm} from './confirmDialog.js';
+import {dispatch} from './dispatch.js';
+import {RECENT, recentLabel} from './recent.js';
+
+// The voice commands, an optional second gesture of Voice Hold: hold the
+// `command-shortcut`, say what to do, release. The speech engine listens (the
+// same one as the dictation, through its own client), the sentence goes to
+// the command helper (commandEngine.js), and the intent that comes back is
+// executed here (GNOME actions) or shown and confirmed first (shell
+// commands, power). One session at a time, and never while a dictation is
+// running: extension.js keeps the two shortcuts apart.
+//
+// The gesture settings (mode, tap-ms, silence-stop-s), the microphone and
+// the pill's settings are the dictation's; only the `command-*` keys are
+// the commands' own.
+
+const WATCH_MS = 50;
+const END_GUARD_MS = 3000;
+const SHOW_RESULT_MS = 2500;
+const SHOW_ANSWER_MS = 6000;
+const SHOW_JOB_MS = 4000;
+const SHOW_OUTPUT_MS = 45000;     // a command's output stays until clicked, or this long
+const SHOW_RECALL_MS = 30000;     // a history entry recalled from the menu
+
+export class Commander {
+    constructor(settings, iconPath, gettext) {
+        this._settings = settings;
+        this._ = gettext || (s => s);
+        this._machine = new HoldMachine(this._machineOptions());
+        this._hud = new CommandHud(iconPath, this._, () => this._settings.get_string('hud-position'),
+            () => this._settings.get_string('hud-effect'));
+        this._actions = new Actions(this._);
+        // The speech engine sends its signals to every client: everything
+        // below is ignored unless the session is ours (a dictation has its
+        // own client and its own pill).
+        this._voice = new EngineClient({
+            Owner: has => this._onVoiceOwner(has),
+            State: s => this._onState(s),
+            Level: v => this._live && this._hud.level(v),
+            Speech: b => this._onSpeech(b),
+            Final: t => this._onFinal(t),
+            Stopped: r => this._onStopped(r),
+            Error: m => this._onVoiceError(m),
+        });
+        this._engine = new CommandEngineClient({
+            Owner: has => this._onEngineOwner(has),
+            Job: (id, state, code, tail) => this._onJob(id, state, code, tail),
+        });
+        this._watchId = 0;
+        this._silenceId = 0;
+        this._guardId = 0;
+        this._mask = modifierMask(settings.get_strv('command-shortcut')[0] ?? '');
+        this._session = null;   // {ending, texts: [], window}
+        this._busy = false;     // interpreting / confirming / executing
+        this._closeDialog = null;   // closes the confirmation that is open
+        this._jobs = new Map(); // job id -> {command, id: history id}
+
+        settings.connectObject(
+            'changed::mode', () => this._reconfigure(),
+            'changed::tap-ms', () => this._reconfigure(),
+            'changed::command-shortcut', () => this._reconfigure(),
+            this);
+        this._keyHook = installKeyHook(IBus.InputContext.prototype, (keyval, state) => this._filterKey(keyval, state));
+    }
+
+    destroy() {
+        this._run(this._machine.external('cancel'));
+        this._endSession();
+        this._closeDialog?.();
+        this._closeDialog = null;
+        this._keyHook.uninstall();
+        this._keyHook = null;
+        this._settings.disconnectObject(this);
+        this._stopWatch();
+        this._voice.destroy();
+        this._voice = null;
+        this._engine.destroy();
+        this._engine = null;
+        this._actions.destroy();
+        this._actions = null;
+        this._hud.destroy();
+        this._hud = null;
+        this._settings = null;
+    }
+
+    _machineOptions() {
+        return {
+            mode: this._settings.get_string('mode'),
+            tapMs: this._settings.get_int('tap-ms'),
+        };
+    }
+
+    _reconfigure() {
+        const o = this._machineOptions();
+        this._machine.mode = o.mode;
+        this._machine.tapMs = o.tapMs;
+        this._mask = modifierMask(this._settings.get_strv('command-shortcut')[0] ?? '');
+    }
+
+    // -- entry point -----------------------------------------------------------
+
+    // Start the LLM when the commands are switched on, so the first open
+    // request does not wait for it. Only when the LLM is on; the helper
+    // idles out by itself.
+    warmUp() {
+        if (this._settings.get_boolean('command-llm'))
+            this._engine.prepare();
+    }
+
+    shortcut() {
+        if (this._busy)
+            return;
+        this._run(this._machine.shortcut(GLib.get_monotonic_time() / 1000));
+    }
+
+    // Listening, thinking, confirming or running: the dictation shortcut is
+    // ignored meanwhile.
+    get active() {
+        return this._machine.state !== IDLE || !!this._session || this._busy;
+    }
+
+    // A dictation is starting: a result still on screen makes room for its
+    // pill (both hang from the same place).
+    dismiss() {
+        if (!this.active)
+            this._hud.hideNow();
+    }
+
+    // For the indicator's menu: the last requests, newest first, as
+    // [{label, entry}]; `entry` is what recall() takes. Never starts the
+    // helper: an empty list when it is not running.
+    recent() {
+        const exit = code => this._(' (exit %d)').format(code);
+        return commandHistory(RECENT).then(entries => entries.map(entry => ({label: recentLabel(entry, exit), entry})));
+    }
+
+    get _live() {
+        return !!this._session && !this._session.ending;
+    }
+
+    _run(actions) {
+        for (const [kind] of actions) {
+            if (kind === 'start')
+                this._start();
+            else if (kind === 'stop')
+                this._stop();
+            else if (kind === 'cancel')
+                this._cancel();
+            else if (kind === 'watch')
+                this._startWatch();
+            else if (kind === 'unwatch')
+                this._stopWatch();
+        }
+        if (this._machine.state === TOGGLE && this._live) {
+            this._hud.status(this._listeningHint(), 'listening');
+            this._armSilence();
+        }
+    }
+
+    // -- session --------------------------------------------------------------
+
+    _start() {
+        if (this._session)
+            return;
+        const session = {ending: false, texts: [], window: global.display.focus_window};
+        this._session = session;
+        this._voice.stopSpeaking();
+        if (this._settings.get_boolean('show-hud'))
+            this._hud.show(this._('Starting…'), 'loading');
+        if (this._settings.get_boolean('command-llm'))
+            this._engine.prepare();
+        const options = {
+            'silence-stop-s': 0,
+            'polish': false,
+            'source': this._settings.get_string('microphone'),
+        };
+        this._voice.start(options).then(err => {
+            if (!err || this._session !== session || session.ending)
+                return;
+            this._run(this._machine.external('engine'));
+            this._endSession();
+            this._showVoiceError(err);
+        });
+    }
+
+    _stop() {
+        const session = this._session;
+        if (!session || session.ending)
+            return;
+        session.ending = true;
+        this._stopSilence();
+        this._hud.status('…', 'listening');
+        this._voice.stop().then(err => {
+            if (this._session !== session)
+                return;
+            if (err) {
+                this._showVoiceError(err);
+                this._onStopped('error');
+                return;
+            }
+            this._armGuard(session);
+        });
+    }
+
+    _cancel() {
+        const session = this._session;
+        if (!session)
+            return;
+        this._stopSilence();
+        this._hud.hideNow();
+        if (session.ending)
+            return;
+        session.ending = true;
+        session.cancelled = true;
+        this._voice.cancel().then(err => {
+            if (this._session !== session)
+                return;
+            if (err)
+                this._onStopped('cancel');
+            else
+                this._armGuard(session);
+        });
+    }
+
+    _endSession() {
+        this._cancelGuard();
+        this._stopSilence();
+        this._session = null;
+    }
+
+    _armGuard(session) {
+        this._cancelGuard();
+        this._guardId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, END_GUARD_MS, () => {
+            this._guardId = 0;
+            if (this._session === session)
+                this._onStopped('error');
+            return GLib.SOURCE_REMOVE;
+        });
+    }
+
+    _cancelGuard() {
+        if (this._guardId) {
+            GLib.source_remove(this._guardId);
+            this._guardId = 0;
+        }
+    }
+
+    // -- modifier polling / silence --------------------------------------------
+
+    _startWatch() {
+        this._stopWatch();
+        if (!this._mask) {
+            this._run(this._machine.modifier(GLib.get_monotonic_time() / 1000, false));
+            return;
+        }
+        this._watchId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, WATCH_MS, () => {
+            const [, , mods] = global.get_pointer();
+            // Every modifier of the shortcut: letting go of one is letting go.
+            const held = (mods & this._mask) === this._mask;
+            this._run(this._machine.modifier(GLib.get_monotonic_time() / 1000, held));
+            return this._watchId ? GLib.SOURCE_CONTINUE : GLib.SOURCE_REMOVE;
+        });
+    }
+
+    _stopWatch() {
+        if (this._watchId) {
+            GLib.source_remove(this._watchId);
+            this._watchId = 0;
+        }
+    }
+
+    _armSilence() {
+        this._stopSilence();
+        const s = this._settings.get_double('silence-stop-s');
+        if (s <= 0 || this._machine.state !== TOGGLE)
+            return;
+        this._silenceId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, Math.round(s * 1000), () => {
+            this._silenceId = 0;
+            this._run(this._machine.external('silence'));
+            return GLib.SOURCE_REMOVE;
+        });
+    }
+
+    _stopSilence() {
+        if (this._silenceId) {
+            GLib.source_remove(this._silenceId);
+            this._silenceId = 0;
+        }
+    }
+
+    // -- voice events -------------------------------------------------------------
+
+    _listeningHint() {
+        return this._machine.state === TOGGLE
+            ? this._('Listening — press again or Esc to stop')
+            : this._('Listening — release to run');
+    }
+
+    _onVoiceOwner(hasOwner) {
+        if (hasOwner || !this._session)
+            return;
+        this._hud.error(this._('Engine stopped unexpectedly'));
+        this._onStopped('error');
+    }
+
+    _onState(state) {
+        if (!this._live)
+            return;
+        if (state === 'loading')
+            this._hud.status(this._('Loading the model… speak, nothing is lost'), 'loading');
+        else if (state === 'listening')
+            this._hud.status(this._listeningHint(), 'listening');
+        else if (state === 'decoding')
+            this._hud.status('…', 'listening');
+    }
+
+    _onSpeech(speaking) {
+        if (!this._live)
+            return;
+        if (speaking)
+            this._stopSilence();
+        else
+            this._armSilence();
+    }
+
+    _onFinal(text) {
+        if (!this._session)
+            return;
+        const t = text.trim();
+        if (!t)
+            return;
+        this._session.texts.push(t);
+        this._hud.live(this._session.texts.join(' '));
+    }
+
+    _onStopped(reason) {
+        const session = this._session;
+        if (!session)
+            return;
+        const wasEnding = session.ending;
+        this._endSession();
+        if (!wasEnding)
+            this._run(this._machine.external('engine'));
+        if (session.cancelled || reason === 'cancel') {
+            this._hud.hideNow();
+            return;
+        }
+        const text = session.texts.join(' ').trim();
+        if (reason === 'error') {
+            this._hud.hide(2500);
+            return;
+        }
+        if (!text) {
+            this._hud.status(this._('Nothing heard'), '');
+            this._hud.hide(1500);
+            return;
+        }
+        this._interpret(text, session.window);
+    }
+
+    _onVoiceError(message) {
+        if (!this._session)
+            return;                       // a dictation's error, shown by its own pill
+        if (message === 'models-missing')
+            this._showVoiceError('models-missing');
+        else
+            this._hud.error(message.startsWith('audio') ? this._('Microphone unavailable') : message);
+        this._armGuard(this._session);
+    }
+
+    _showVoiceError(code) {
+        const texts = {
+            'not-installed': this._('Speech engine not installed — see the extension settings'),
+            'spawn-failed': this._('Engine failed to start — see the extension settings'),
+            'models-missing': this._('Speech models missing — see the extension settings'),
+            'timeout': this._('Engine did not answer'),
+            'busy': this._('Engine busy — try again'),
+            'no-proxy': this._('D-Bus unavailable'),
+        };
+        if (code === 'cancelled')
+            return;
+        this._hud.error(texts[code] ?? code);
+    }
+
+    // -- understanding and execution ------------------------------------------
+
+    async _interpret(text, window) {
+        this._busy = true;
+        this._hud.status(this._('Thinking…'), 'loading');
+        const options = {
+            'llm': this._settings.get_boolean('command-llm'),
+            'work-dir': this._settings.get_string('command-work-dir'),
+        };
+        try {
+            const res = await this._engine.interpret(text, options);
+            if (this._gone)
+                return;
+            if (!res.ok) {
+                this._showEngineError(res.error);
+                return;
+            }
+            await this._execute(res.value, text, window);
+        } catch (e) {
+            logError(e, 'voice-hold: interpret');
+            this._hud?.error(e.message);
+        } finally {
+            this._busy = false;
+        }
+    }
+
+    // destroy() ran while a call was awaited (the commands were switched
+    // off, the extension disabled): nothing more may be touched.
+    get _gone() {
+        return !this._hud;
+    }
+
+    async _execute(intent, text, window) {
+        const result = await dispatch(intent, this._actions);
+        if (this._gone)
+            return;
+        const id = intent.id ?? '';
+        switch (result.kind) {
+        case 'done': {
+            const say = result.say || this._('Done');
+            this._hud.status(say, 'listening');
+            this._hud.hide(SHOW_RESULT_MS);
+            this._engine.note(id, say);
+            this._speak(say);
+            return;
+        }
+        case 'answer':
+            this._showText(text, result.text, SHOW_ANSWER_MS);
+            this._engine.note(id, result.text);
+            this._speak(result.text);
+            return;
+        case 'refused':
+            this._hud.error(this._('Refused: %s').format(result.reason));
+            this._engine.note(id, this._('Refused: %s').format(result.reason));
+            return;
+        case 'error':
+            this._hud.error(result.reason);
+            this._engine.note(id, result.reason);
+            return;
+        case 'unknown':
+            this._hud.error(this._unknownText(result.reason, text));
+            this._engine.note(id, this._unknownText(result.reason, text));
+            return;
+        case 'quiet':
+            await this._runQuiet(result.intent, text);
+            return;
+        case 'confirm':
+            break;
+        }
+        this._hud.hideNow();
+        const i = result.intent;
+        if (i.action === 'power') {
+            const names = {suspend: this._('Suspend'), reboot: this._('Restart'), shutdown: this._('Power off'), logout: this._('Log out')};
+            const ok = await confirm({
+                title: this._('Voice Hold heard: “%s”').format(text),
+                command: names[i.power_action] ?? i.power_action,
+                warning: '',
+                runLabel: names[i.power_action] ?? this._('Run'),
+                cancelLabel: this._('Cancel'),
+                onOpen: close => (this._closeDialog = close),
+            });
+            this._closeDialog = null;
+            if (ok && !this._gone)
+                this._actions.power(i.power_action);
+            return;
+        }
+        const ok = await confirm({
+            title: this._('Voice Hold heard: “%s”').format(text),
+            command: `$ ${i.command}`,
+            warning: i.warning ? this._('Warning: this %s.').format(i.warning) : '',
+            runLabel: this._('Run'),
+            cancelLabel: this._('Cancel'),
+            onOpen: close => (this._closeDialog = close),
+        });
+        this._closeDialog = null;
+        if (!ok || this._gone)
+            return;
+        this._hud.show(this._('Running…'), 'loading');
+        const run = await this._engine.run(i.command, i.cwd ?? '');
+        if (this._gone)
+            return;
+        if (!run.ok) {
+            this._showEngineError(run.error);
+            return;
+        }
+        this._jobs.set(run.value, {command: i.command, id});
+    }
+
+    // A read-only command: the engine runs it, the pill shows the output
+    // under the command, several lines, scrollable, until clicked away.
+    async _runQuiet(intent, text) {
+        this._hud.status(`$ ${intent.command}`, 'loading');
+        const run = await this._engine.runQuiet(intent.id ?? '', intent.command, intent.cwd ?? '');
+        if (this._gone)
+            return;
+        if (!run.ok) {
+            this._showEngineError(run.error);
+            return;
+        }
+        const {code, output} = run.value;
+        const header = code === 0 ? `$ ${intent.command}` : this._('$ %s — exit %d').format(intent.command, code);
+        this._showOutput(header, output || this._('(no output)'), code === 0 ? 'listening' : 'error');
+        if (!this._settings.get_boolean('command-speak') || !output || !this._settings.get_boolean('command-llm'))
+            return;
+        // Raw output is not for the ear: the LLM turns it into one sentence,
+        // which replaces the status line and is said aloud. Not awaited: the
+        // output is on screen, the shortcut is free again.
+        this._engine.summarize(text, intent.command, output).then(sum => {
+            if (this._gone || !sum.ok || !sum.value || !this._hud.showingResult)
+                return;
+            this._hud.header(sum.value, code === 0 ? 'listening' : 'error');
+            this._speak(sum.value);
+        });
+    }
+
+    // -- spoken answers ------------------------------------------------------------
+
+    _speakLang() {
+        const v = this._settings.get_string('command-voice');
+        if (v)
+            return v;
+        const lang = (GLib.get_language_names()[0] ?? '').toLowerCase();
+        return lang.startsWith('fr') ? 'fr' : 'en';
+    }
+
+    _speak(text) {
+        if (!this._settings.get_boolean('command-speak') || !text)
+            return;
+        this._voice.speak(text, this._speakLang()).then(err => {
+            if (!this._hud)
+                return;                   // destroyed meanwhile
+            if (err === 'voice-missing')
+                this._hud.error(this._('No voice installed — run: voice-hold-engine setup --tts'));
+            else if (err && err !== 'cancelled')
+                console.warn(`voice-hold: speak: ${err}`);
+        });
+    }
+
+    // One short answer stays on the status line; a long or multi-line one
+    // opens the result area.
+    _showText(heard, answer, delay) {
+        const long = answer.includes('\n') || answer.length > 72;
+        if (!long) {
+            this._hud.status(answer, 'listening');
+            this._hud.hide(delay);
+            return;
+        }
+        this._hud.result(this._('“%s”').format(heard), answer, {onDismiss: () => this._hud.hideNow()});
+        this._hud.hide(SHOW_OUTPUT_MS);
+    }
+
+    _showOutput(header, output, pseudo) {
+        this._hud.result(header, output, {pseudo, monospace: true, onDismiss: () => this._hud.hideNow()});
+        this._hud.hide(SHOW_OUTPUT_MS);
+    }
+
+    // From the indicator's menu: show a past request again, with what it
+    // produced.
+    recall(entry) {
+        if (this._busy || this._session)
+            return;
+        const heard = this._('“%s”').format(entry.transcript ?? '');
+        if (entry.command) {
+            const header = entry.exit === 0 || entry.exit === null
+                ? `${heard}  $ ${entry.command}` : this._('%s  $ %s — exit %d').format(heard, entry.command, entry.exit);
+            this._hud.result(header, entry.result || entry.say || this._('(no output)'),
+                {pseudo: entry.exit ? 'error' : 'listening', monospace: !!entry.result, onDismiss: () => this._hud.hideNow()});
+        } else {
+            this._hud.result(heard, entry.result || entry.say || this._('(nothing)'), {onDismiss: () => this._hud.hideNow()});
+        }
+        this._hud.hide(SHOW_RECALL_MS);
+    }
+
+    _unknownText(reason, text) {
+        if (reason === 'llm-off')
+            return this._('Not a GNOME action, and the local LLM is off — “%s”').format(text);
+        if (reason === 'llm-unavailable')
+            return this._('Not a GNOME action, and the local LLM is not available — “%s”').format(text);
+        if (reason === 'llm-timeout')
+            return this._('Not a GNOME action, and the local LLM took too long — “%s”').format(text);
+        if (reason === 'nothing to do')
+            return this._('OK');
+        return this._('Not understood: “%s”').format(text);
+    }
+
+    _onEngineOwner(hasOwner) {
+        if (hasOwner)
+            return;
+        if (this._busy)
+            this._hud.error(this._('Command helper stopped unexpectedly'));
+        for (const id of this._jobs.keys())
+            this._jobs.delete(id);
+    }
+
+    _onJob(id, state, code, tail) {
+        if (!this._jobs.has(id))
+            return;
+        if (state === 'running') {
+            this._hud.show(this._('Running…'), 'loading');
+            return;
+        }
+        const job = this._jobs.get(id);
+        this._jobs.delete(id);
+        const detail = tail ? ` — ${tail}` : '';
+        const text = state === 'done'
+            ? this._('Done ✓%s').format(detail)
+            : this._('Failed ✗ (exit %d)%s').format(code, detail);
+        this._hud.show(text, state === 'done' ? 'listening' : 'error');
+        this._hud.hide(SHOW_JOB_MS);
+        this._engine.note(job?.id ?? '', text, code);
+    }
+
+    _showEngineError(code) {
+        const texts = {
+            'not-installed': this._('Command helper not installed — see the extension settings'),
+            'spawn-failed': this._('Command helper failed to start — see the extension settings'),
+            'no-terminal': this._('No terminal found (install Ptyxis or GNOME Terminal)'),
+            'timeout': this._('Command helper did not answer'),
+            'no-proxy': this._('D-Bus unavailable'),
+        };
+        if (code === 'cancelled')
+            return;
+        if (code.startsWith('refused: ')) {
+            this._hud.error(this._('Refused: %s').format(code.slice(9)));
+            return;
+        }
+        this._hud.error(texts[code] ?? code);
+    }
+
+    // -- Escape inside text fields (hands-free mode) ----------------------------
+
+    _filterKey(keyval, state) {
+        if (!this._machine || this._machine.state === IDLE)
+            return false;
+        if (keyval !== Clutter.KEY_Escape)
+            return false;
+        if ((state & IBus.ModifierType.RELEASE_MASK) === 0)
+            this._run(this._machine.escape());
+        return true;
+    }
+}

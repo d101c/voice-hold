@@ -1,5 +1,7 @@
 /* The capsule (.voice-hud-capsule) is animated and paints the background;
-   the content box (.voice-hud) carries the padding and spacing. */
+   the content box (.voice-hud) carries the padding and spacing. The font
+   family and size come from the system's interface font, set inline on the
+   capsule (systemFont.js): sizes below are relative to it. */
 .voice-hud-capsule { color: #fff; }
 .voice-hud { padding: 8px 12px; spacing: 10px; }
 
@@ -16,6 +18,7 @@
     background-color: #000;
     border-radius: 0 0 22px 22px;
     box-shadow: 0 5px 16px rgba(0,0,0,0.45);
+    transition-duration: 260ms;
 }
 .voice-hud-content-island { padding: 10px 20px 11px 20px; spacing: 12px; }
 
@@ -48,7 +51,6 @@
 /* A long sentence is cut at its start by the label (hud.js): the pill keeps
    one steady width instead of following every word. */
 .voice-hud-text {
-    font-size: 14px;
     color: #ddd;
     max-width: 480px;
 }
@@ -56,6 +58,61 @@
     color: #fff;
 }
 .voice-hud-text:hint {
-    font-size: 12px;
+    font-size: 0.86em;
     color: #aaa;
+}
+
+/* -- Voice commands (optional, commands/commandHud.js) ----------------------
+   The same island as the dictation's pill, with a result area under the
+   status line. Its own classes: the two pills never share a rule. */
+.voice-cmd-hud { color: #fff; }
+.voice-cmd-hud-content { padding: 8px 12px; spacing: 8px; }
+.voice-cmd-hud-row { spacing: 10px; }
+
+.voice-cmd-hud-cursor {
+    background-color: rgba(40,40,40,0.95);
+    border-radius: 12px;
+}
+.voice-cmd-hud-island {
+    background-color: #000;
+    border-radius: 0 0 22px 22px;
+    box-shadow: 0 5px 16px rgba(0,0,0,0.45);
+    transition-duration: 260ms;
+}
+.voice-cmd-hud-content-island { padding: 10px 20px 11px 20px; }
+.voice-cmd-hud-content-island .voice-cmd-hud-row { spacing: 12px; }
+
+.voice-cmd-hud-icon { icon-size: 16px; color: #ddd; }
+.voice-cmd-hud-icon:loading { color: #999; }
+.voice-cmd-hud-icon:listening { color: #3584e4; }
+.voice-cmd-hud-icon:error { color: #e01b24; }
+.voice-cmd-hud-bars { spacing: 3px; height: 20px; }
+.voice-cmd-hud-bar { width: 4px; border-radius: 2px; background-color: #3584e4; }
+.voice-cmd-hud-bar:quiet { background-color: rgba(255,255,255,0.25); }
+.voice-cmd-hud-text { color: #ddd; max-width: 520px; }
+.voice-cmd-hud-text:live { color: #fff; }
+.voice-cmd-hud-text:hint { font-size: 0.86em; color: #aaa; }
+
+/* The result under the status line: wraps, scrolls past max-height. */
+.voice-cmd-hud-result { max-height: 320px; max-width: 760px; }
+.voice-cmd-hud-result-text { font-size: 0.93em; color: #eee; max-width: 760px; }
+.voice-cmd-hud-result-text:mono { font-family: monospace; font-size: 0.86em; }
+
+/* The confirmation before a shell command or a power action. */
+.voice-cmd-dialog-content { spacing: 12px; min-width: 420px; max-width: 720px; }
+.voice-cmd-dialog-title { font-size: 13px; color: #aaa; }
+.voice-cmd-dialog-command {
+    font-family: monospace;
+    font-size: 14px;
+    color: #fff;
+    background-color: rgba(0,0,0,0.35);
+    border-radius: 8px;
+    padding: 10px 12px;
+}
+.voice-cmd-dialog-warning { font-size: 12px; color: #f8e45c; }
+
+/* The "glow" effect (hudEffects.js): a halo in the accent colour while the
+   island opens and closes. After the island rules so that it wins. */
+.voice-hud-glow {
+    box-shadow: 0 2px 30px 4px rgba(53,132,228,0.9);
 }

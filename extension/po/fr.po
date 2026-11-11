@@ -166,17 +166,11 @@ msgstr "Mode mains libres seulement. 0 = jamais."
 msgid "Optional: polish with a local LLM"
 msgstr "Option : polir avec un LLM local"
 
-msgid "Off by default. When on, each finished block is sent to Ollama on this computer to fix punctuation and casing. Falls back to the raw text if Ollama does not answer within 2.5 s."
-msgstr "Éteint par défaut. Si activé, chaque bloc terminé est envoyé à Ollama sur cet ordinateur pour corriger ponctuation et majuscules. Le texte brut est gardé si Ollama ne répond pas en 2,5 s."
+msgid "Off by default. When on, each finished block is sent to the local LLM (the one the voice commands install) to fix punctuation and casing. Falls back to the raw text if it does not answer within 4 s."
+msgstr "Éteint par défaut. Si activé, chaque bloc terminé est envoyé au LLM local (celui qu'installent les commandes vocales) pour corriger ponctuation et majuscules. Le texte brut est gardé s'il ne répond pas en 4 s."
 
-msgid "Polish with Ollama"
-msgstr "Polir avec Ollama"
-
-msgid "Model"
-msgstr "Modèle"
-
-msgid "Ollama URL"
-msgstr "URL d'Ollama"
+msgid "Polish each block"
+msgstr "Polir chaque bloc"
 
 msgid "Appearance"
 msgstr "Apparence"
@@ -342,3 +336,299 @@ msgstr "Installé. Fermez puis rouvrez votre session une fois pour que GNOME voi
 
 msgid "Ready: hold %s and speak. Try it in the field below."
 msgstr "Prêt : maintenez %s et parlez. Essayez dans le champ ci-dessous."
+
+# -- Voice commands (optional) -------------------------------------------------
+
+msgid "Recent commands"
+msgstr "Commandes récentes"
+
+msgid "Nothing yet"
+msgstr "Rien pour l'instant"
+
+msgid "No application \"%s\""
+msgstr "Aucune application « %s »"
+
+msgid "Opening %s"
+msgstr "Ouverture de %s"
+
+msgid "No window to close"
+msgstr "Aucune fenêtre à fermer"
+
+msgid "Closing %s"
+msgstr "Fermeture de %s"
+
+msgid "Closing %d windows"
+msgstr "Fermeture de %d fenêtres"
+
+msgid "No sound output"
+msgstr "Aucune sortie son"
+
+msgid "Which volume?"
+msgstr "Quel volume ?"
+
+msgid "Sound muted"
+msgstr "Son coupé"
+
+msgid "Volume %d%%"
+msgstr "Volume %d %%"
+
+msgid "Brightness is not adjustable on this screen"
+msgstr "Luminosité non réglable sur cet écran"
+
+msgid "Which brightness?"
+msgstr "Quelle luminosité ?"
+
+msgid "Brightness %d%%"
+msgstr "Luminosité %d %%"
+
+msgid "Dark mode on"
+msgstr "Mode sombre activé"
+
+msgid "Light mode on"
+msgstr "Mode clair activé"
+
+msgid "Do not disturb on"
+msgstr "Ne pas déranger activé"
+
+msgid "Notifications back on"
+msgstr "Notifications réactivées"
+
+msgid "Wi‑Fi on"
+msgstr "Wi‑Fi activé"
+
+msgid "Wi‑Fi off"
+msgstr "Wi‑Fi coupé"
+
+msgid "Bluetooth on"
+msgstr "Bluetooth activé"
+
+msgid "Bluetooth off"
+msgstr "Bluetooth coupé"
+
+msgid "No such workspace"
+msgstr "Cet espace de travail n'existe pas"
+
+msgid "Workspace %d"
+msgstr "Espace de travail %d"
+
+msgid "Select an area"
+msgstr "Sélectionnez une zone"
+
+msgid "Saved %s"
+msgstr "Enregistré : %s"
+
+msgid "Locking"
+msgstr "Verrouillage"
+
+msgid "Unknown power action"
+msgstr "Action d'alimentation inconnue"
+
+msgid " (exit %d)"
+msgstr " (code %d)"
+
+msgid "Listening — press again or Esc to stop"
+msgstr "À l'écoute — appuyez encore ou Échap pour arrêter"
+
+msgid "Listening — release to run"
+msgstr "À l'écoute — relâchez pour exécuter"
+
+msgid "Nothing heard"
+msgstr "Rien entendu"
+
+msgid "Speech engine not installed — see the extension settings"
+msgstr "Moteur vocal non installé — voyez les réglages de l'extension"
+
+msgid "Speech models missing — see the extension settings"
+msgstr "Modèles vocaux manquants — voyez les réglages de l'extension"
+
+msgid "Thinking…"
+msgstr "Réflexion…"
+
+msgid "Refused: %s"
+msgstr "Refusé : %s"
+
+msgid "Suspend"
+msgstr "Mettre en veille"
+
+msgid "Restart"
+msgstr "Redémarrer"
+
+msgid "Power off"
+msgstr "Éteindre"
+
+msgid "Log out"
+msgstr "Fermer la session"
+
+msgid "Voice Hold heard: “%s”"
+msgstr "Voice Hold a entendu : « %s »"
+
+msgid "Run"
+msgstr "Exécuter"
+
+msgid "Warning: this %s."
+msgstr "Attention : cette commande %s."
+
+msgid "Running…"
+msgstr "En cours…"
+
+msgid "$ %s — exit %d"
+msgstr "$ %s — code %d"
+
+msgid "(no output)"
+msgstr "(pas de sortie)"
+
+msgid "No voice installed — run: voice-hold-engine setup --tts"
+msgstr "Aucune voix installée — lancez : voice-hold-engine setup --tts"
+
+msgid "“%s”"
+msgstr "« %s »"
+
+msgid "%s  $ %s — exit %d"
+msgstr "%s  $ %s — code %d"
+
+msgid "(nothing)"
+msgstr "(rien)"
+
+msgid "Not a GNOME action, and the local LLM is off — “%s”"
+msgstr "Pas une action GNOME, et le LLM local est éteint — « %s »"
+
+msgid "Not a GNOME action, and the local LLM is not available — “%s”"
+msgstr "Pas une action GNOME, et le LLM local n'est pas disponible — « %s »"
+
+msgid "Not a GNOME action, and the local LLM took too long — “%s”"
+msgstr "Pas une action GNOME, et le LLM local a mis trop de temps — « %s »"
+
+msgid "OK"
+msgstr "OK"
+
+msgid "Not understood: “%s”"
+msgstr "Pas compris : « %s »"
+
+msgid "Command helper stopped unexpectedly"
+msgstr "L'assistant de commandes s'est arrêté brutalement"
+
+msgid "Done ✓%s"
+msgstr "Terminé ✓%s"
+
+msgid "Failed ✗ (exit %d)%s"
+msgstr "Échec ✗ (code %d)%s"
+
+msgid "Command helper not installed — see the extension settings"
+msgstr "Assistant de commandes non installé — voyez les réglages de l'extension"
+
+msgid "Command helper failed to start — see the extension settings"
+msgstr "L'assistant de commandes n'a pas démarré — voyez les réglages de l'extension"
+
+msgid "No terminal found (install Ptyxis or GNOME Terminal)"
+msgstr "Aucun terminal trouvé (installez Ptyxis ou GNOME Terminal)"
+
+msgid "Command helper did not answer"
+msgstr "L'assistant de commandes ne répond pas"
+
+msgid "Commands"
+msgstr "Commandes"
+
+msgid "Voice commands"
+msgstr "Commandes vocales"
+
+msgid "Optional. A second shortcut: hold it, say what to do, release. Opening an application, the volume, dark mode, a workspace… are done at once; a shell command is shown first and only runs once you confirm it. Everything stays on this computer."
+msgstr "Facultatif. Un second raccourci : maintenez-le, dites quoi faire, relâchez. Ouvrir une application, le volume, le mode sombre, un espace de travail… se font aussitôt ; une commande shell est d'abord affichée et ne s'exécute qu'après votre confirmation. Tout reste sur cet ordinateur."
+
+msgid "Enable voice commands"
+msgstr "Activer les commandes vocales"
+
+msgid "Off: the extension only dictates."
+msgstr "Désactivé : l'extension ne fait que la dictée."
+
+msgid "Command helper"
+msgstr "Assistant de commandes"
+
+msgid "The commands are understood by a helper of the speech engine, with a small language model that runs on this computer (llama.cpp). It is a separate download; the Install button fetches it, the command below does the same by hand."
+msgstr "Les commandes sont comprises par un assistant du moteur vocal, avec un petit modèle de langage qui tourne sur cet ordinateur (llama.cpp). C'est un téléchargement à part ; le bouton Installer s'en charge, la commande ci-dessous fait la même chose à la main."
+
+msgid "Open requests"
+msgstr "Demandes ouvertes"
+
+msgid "GNOME actions are recognised by rules, instantly. Anything else (shell commands, questions) goes to the local language model. Every command is shown and confirmed before it runs, in a visible terminal."
+msgstr "Les actions GNOME sont reconnues par des règles, instantanément. Tout le reste (commandes shell, questions) passe par le modèle de langage local. Chaque commande est affichée et confirmée avant de s'exécuter, dans un terminal visible."
+
+msgid "Use the local LLM"
+msgstr "Utiliser le LLM local"
+
+msgid "Off: only the built-in GNOME actions."
+msgstr "Désactivé : seulement les actions GNOME intégrées."
+
+msgid "Working folder for commands (empty = home)"
+msgstr "Dossier de travail des commandes (vide = dossier personnel)"
+
+msgid "Spoken answers"
+msgstr "Réponses parlées"
+
+msgid "The result is said aloud by the speech engine. Voices (French, English, about 65 MB each) are installed with: voice-hold-engine setup --tts"
+msgstr "Le résultat est lu à voix haute par le moteur vocal. Les voix (français, anglais, environ 65 Mo chacune) s'installent avec : voice-hold-engine setup --tts"
+
+msgid "Say the answers"
+msgstr "Lire les réponses"
+
+msgid "A command's output is summarised by the local LLM first."
+msgstr "La sortie d'une commande est d'abord résumée par le LLM local."
+
+msgid "Voice"
+msgstr "Voix"
+
+msgid "Follow the session language"
+msgstr "Suivre la langue de la session"
+
+msgid "French"
+msgstr "Français"
+
+msgid "English"
+msgstr "Anglais"
+
+msgid "Not installed"
+msgstr "Non installé"
+
+msgid "Ready — helper %s, language model %s"
+msgstr "Prêt — assistant %s, modèle de langage %s"
+
+msgid "installed"
+msgstr "installé"
+
+msgid "Helper %s ready, language model not installed: GNOME actions only"
+msgstr "Assistant %s prêt, modèle de langage non installé : actions GNOME uniquement"
+
+msgid "terminal: %s"
+msgstr "terminal : %s"
+
+msgid "no terminal found (install Ptyxis or GNOME Terminal)"
+msgstr "aucun terminal trouvé (installez Ptyxis ou GNOME Terminal)"
+
+msgid "Installed — switch the voice commands on to use it"
+msgstr "Installé — activez les commandes vocales pour vous en servir"
+
+msgid "see the command below"
+msgstr "voyez la commande ci-dessous"
+
+msgid "Install the speech engine first (Installation page), then come back here."
+msgstr "Installez d'abord le moteur vocal (page Installation), puis revenez ici."
+
+msgid "Animation"
+msgstr "Animation"
+
+msgid "How the pill appears and disappears."
+msgstr "Comment la pastille apparaît et disparaît."
+
+msgid "Swell (quiet)"
+msgstr "Gonflement (discret)"
+
+msgid "Drop"
+msgstr "Goutte"
+
+msgid "Spring"
+msgstr "Ressort"
+
+msgid "Halo"
+msgstr "Halo"
+
+msgid "Preview"
+msgstr "Aperçu"

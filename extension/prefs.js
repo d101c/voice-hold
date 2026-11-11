@@ -6,6 +6,7 @@ import Gtk from 'gi://Gtk';
 import Pango from 'gi://Pango';
 
 import {ExtensionPreferences, gettext as _} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
+import {buildCommandsPage} from './commands/prefsPage.js';
 import {listSources} from './engine.js';
 import {buildSetupPage} from './setupPage.js';
 
@@ -38,6 +39,9 @@ export default class VoiceHoldPreferences extends ExtensionPreferences {
             picture: `${this.path}/icons/pill.png`,
         });
         window.add(setup);
+        // Optional voice commands: their own page, after the two of the
+        // dictation.
+        window.add(buildCommandsPage(window, settings, _, (s, key) => this._shortcutRow(s, key)));
         this._engineStatus().then(s => {
             if (!s.installed)
                 window.set_visible_page(setup);
@@ -171,15 +175,16 @@ export default class VoiceHoldPreferences extends ExtensionPreferences {
         settings.bind('silence-stop-s', silenceRow, 'value', Gio.SettingsBindFlags.DEFAULT);
     }
 
-    _shortcutRow(settings) {
+    // The editor of a shortcut stored as a strv under `key`.
+    _shortcutRow(settings, key = 'dictation-shortcut') {
         const row = new Adw.ActionRow({title: _('Shortcut'), activatable: true});
         const label = new Gtk.ShortcutLabel({
             disabled_text: _('Not set'),
-            accelerator: settings.get_strv('dictation-shortcut')[0] ?? '',
+            accelerator: settings.get_strv(key)[0] ?? '',
             valign: Gtk.Align.CENTER,
         });
         row.add_suffix(label);
-        settings.connect('changed::dictation-shortcut', () => label.set_accelerator(settings.get_strv('dictation-shortcut')[0] ?? ''));
+        settings.connect(`changed::${key}`, () => label.set_accelerator(settings.get_strv(key)[0] ?? ''));
 
         row.connect('activated', () => {
             const dialog = new Adw.Window({
@@ -192,7 +197,7 @@ export default class VoiceHoldPreferences extends ExtensionPreferences {
             });
             const box = new Gtk.Box({orientation: Gtk.Orientation.VERTICAL, spacing: 12, margin_top: 24, margin_bottom: 24, margin_start: 24, margin_end: 24, valign: Gtk.Align.CENTER});
             box.append(new Gtk.Label({label: _('Press the new shortcut, with a modifier (Super, Ctrl, Alt).\nEscape cancels, Backspace clears.'), justify: Gtk.Justification.CENTER, wrap: true}));
-            const current = new Gtk.ShortcutLabel({accelerator: settings.get_strv('dictation-shortcut')[0] ?? '', halign: Gtk.Align.CENTER});
+            const current = new Gtk.ShortcutLabel({accelerator: settings.get_strv(key)[0] ?? '', halign: Gtk.Align.CENTER});
             box.append(current);
             dialog.set_content(box);
 
@@ -204,13 +209,13 @@ export default class VoiceHoldPreferences extends ExtensionPreferences {
                     return Gdk.EVENT_STOP;
                 }
                 if (keyval === Gdk.KEY_BackSpace) {
-                    settings.set_strv('dictation-shortcut', []);
+                    settings.set_strv(key, []);
                     dialog.close();
                     return Gdk.EVENT_STOP;
                 }
                 if (!mask || !Gtk.accelerator_valid(keyval, mask))
                     return Gdk.EVENT_STOP;
-                settings.set_strv('dictation-shortcut', [Gtk.accelerator_name(keyval, mask)]);
+                settings.set_strv(key, [Gtk.accelerator_name(keyval, mask)]);
                 dialog.close();
                 return Gdk.EVENT_STOP;
             });
@@ -275,23 +280,13 @@ export default class VoiceHoldPreferences extends ExtensionPreferences {
     _buildPolishGroup(page, settings) {
         const group = new Adw.PreferencesGroup({
             title: _('Optional: polish with a local LLM'),
-            description: _('Off by default. When on, each finished block is sent to Ollama on this computer to fix punctuation and casing. Falls back to the raw text if Ollama does not answer within 2.5 s.'),
+            description: _('Off by default. When on, each finished block is sent to the local LLM (the one the voice commands install) to fix punctuation and casing. Falls back to the raw text if it does not answer within 4 s.'),
         });
         page.add(group);
 
-        const sw = new Adw.SwitchRow({title: _('Polish with Ollama')});
+        const sw = new Adw.SwitchRow({title: _('Polish each block')});
         group.add(sw);
         settings.bind('polish', sw, 'active', Gio.SettingsBindFlags.DEFAULT);
-
-        const model = new Adw.EntryRow({title: _('Model')});
-        group.add(model);
-        settings.bind('polish-model', model, 'text', Gio.SettingsBindFlags.DEFAULT);
-        settings.bind('polish', model, 'sensitive', Gio.SettingsBindFlags.GET);
-
-        const url = new Adw.EntryRow({title: _('Ollama URL')});
-        group.add(url);
-        settings.bind('polish-url', url, 'text', Gio.SettingsBindFlags.DEFAULT);
-        settings.bind('polish', url, 'sensitive', Gio.SettingsBindFlags.GET);
     }
 
     // -- appearance -------------------------------------------------------
@@ -320,6 +315,27 @@ export default class VoiceHoldPreferences extends ExtensionPreferences {
                 settings.set_string('hud-position', value);
         });
         group.add(position);
+
+        const effects = ['swell', 'drop', 'spring', 'glow'];
+        const effect = new Adw.ComboRow({
+            title: _('Animation'),
+            subtitle: _('How the pill appears and disappears.'),
+            model: Gtk.StringList.new([_('Swell (quiet)'), _('Drop'), _('Spring'), _('Halo')]),
+        });
+        effect.set_selected(Math.max(0, effects.indexOf(settings.get_string('hud-effect'))));
+        const preview = () => settings.set_int('hud-preview', settings.get_int('hud-preview') + 1);
+        effect.connect('notify::selected', () => {
+            const value = effects[effect.get_selected()];
+            if (settings.get_string('hud-effect') !== value) {
+                settings.set_string('hud-effect', value);
+                preview();
+            }
+        });
+        const play = new Gtk.Button({icon_name: 'media-playback-start-symbolic', valign: Gtk.Align.CENTER, tooltip_text: _('Preview')});
+        play.add_css_class('flat');
+        play.connect('clicked', preview);
+        effect.add_suffix(play);
+        group.add(effect);
 
         const ind = new Adw.SwitchRow({title: _('Top-bar indicator')});
         group.add(ind);

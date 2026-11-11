@@ -15,12 +15,20 @@ Press-and-hold dictation for GNOME, fully offline.
   level and the words, and goes back into it when you stop. Always in the
   same place; it can follow the text cursor instead (settings).
 - **Offline.** French, English and 23 other European languages, with
-  punctuation and capitals, recognised on your CPU by Parakeet TDT 0.6B v3
-  (via sherpa-onnx). No account, no network, no cloud. It works on a plane.
+  punctuation and capitals, recognised on your CPU by Parakeet TDT 0.6B
+  "Ultra" (via sherpa-onnx). No account, no network, no cloud. It works on a plane.
 - Say *nouvelle ligne* / *new line* / *new paragraph* for a line break: on
   its own, or at the end of a phrase ("see you tomorrow, new line"). Inside
   a sentence it stays text ("the new line of products").
-- Optional: a local LLM (Ollama) can polish each block. Off by default.
+- Optional: the local LLM of the voice commands can polish each block. Off
+  by default.
+- Optional: **voice commands**, off by default (settings, *Commands* page).
+  A second shortcut (Ctrl+Alt+Space): hold it, say what to do, release. Opening an
+  application, the volume, dark mode, a workspace… are done at once; a
+  shell command is shown first and only runs once you confirm it. Requests
+  the rules do not know go to a small language model that the engine runs
+  on your computer (llama.cpp); it is a separate download
+  (`voice-hold-engine setup --commands`, or the Install button of that page).
 - Nothing runs when you are not dictating; the model leaves memory after
   5 minutes of inactivity.
 
@@ -95,7 +103,7 @@ the pipx environment, whose path does not change. `voice-hold-engine status
 ## Settings
 
 Shortcut, gesture (hold / tap / both), tap threshold, silence timeout,
-optional Ollama polish (model, URL), pill (on or off, under the top bar or
+optional polish by the local LLM, pill (on or off, under the top bar or
 next to the text cursor) and top-bar indicator. The settings page also shows
 the engine status and the install command. The engine's `Speak` method
 (text, language) is there for other programs on the session bus;
@@ -148,7 +156,9 @@ What the engine uses:
 
 | Component | Licence | Notes |
 |---|---|---|
-| [Parakeet TDT 0.6B v3](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3) (int8 export by sherpa-onnx) | CC-BY-4.0, NVIDIA | Downloaded by you at `setup` from the sherpa-onnx releases; not redistributed here. Attribution: NVIDIA NeMo. |
+| [Parakeet Ultra](https://huggingface.co/moondream/parakeet-ultra) (int8 export by sherpa-onnx) | CC-BY-4.0, Moondream, post-trained from NVIDIA's [Parakeet TDT 0.6B v3](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3) | Downloaded by you at `setup` from the sherpa-onnx releases; not redistributed here. Attribution: Moondream, NVIDIA NeMo. |
+| [llama.cpp](https://github.com/ggml-org/llama.cpp) (release b12284) | MIT | Optional, voice commands and polish: the server binary is downloaded by you at `setup --commands`; not redistributed here. |
+| [Qwen3.5-2B](https://huggingface.co/unsloth/Qwen3.5-2B-GGUF) (Q4_K_M GGUF) | Apache-2.0, Alibaba Cloud | Optional, same download; not redistributed here. |
 | [Silero VAD](https://github.com/snakers4/silero-vad) | MIT | Downloaded by you at `setup`; not redistributed here. |
 | [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) | Apache-2.0 | Speech recognition and VAD runtime. |
 | [onnxruntime](https://github.com/microsoft/onnxruntime) | MIT | Through sherpa-onnx. |

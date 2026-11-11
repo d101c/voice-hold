@@ -1,16 +1,12 @@
-"""Optional clean-up of a final block by a local LLM (Ollama). Off by default;
-on any failure the raw text is used.
+"""Optional clean-up of a final block by the local LLM (llama.cpp server,
+see llamacpp.py). Off by default; on any failure the raw text is used.
 
-The instruction goes in the `system` field and the dictated text alone in
-the prompt, so a sentence that sounds like an instruction ("ignore the
-above and...") is still treated as text to fix. The answer is used only if
-it looks like a light edit of the input: no new line breaks, similar
+The instruction goes in the system message and the dictated text alone in
+the user message, so a sentence that sounds like an instruction ("ignore
+the above and...") is still treated as text to fix. The answer is used only
+if it looks like a light edit of the input: no new line breaks, similar
 length."""
-import json
-import urllib.request
-
-DEFAULT_URL = 'http://127.0.0.1:11434'
-DEFAULT_MODEL = 'qwen2.5:1.5b'
+from . import llamacpp
 
 SYSTEM = (
     'You fix dictated text. Correct punctuation, capitalisation and obvious '
@@ -32,26 +28,21 @@ def acceptable(text, out):
     return True
 
 
-def polish(text, url=DEFAULT_URL, model=DEFAULT_MODEL, timeout=2.5):
+def polish(text, timeout=4.0, opener=None):
     if not text.strip():
         return text
-    body = json.dumps({
-        'model': model,
-        'system': SYSTEM,
-        'prompt': text,
-        'stream': False,
-        'options': {'temperature': 0, 'num_predict': max(32, len(text) // 2 + 16)},
-    }).encode()
-    req = urllib.request.Request(url.rstrip('/') + '/api/generate', data=body,
-                                 headers={'Content-Type': 'application/json'})
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            out = json.loads(resp.read().decode()).get('response', '')
+        out = llamacpp.chat([{'role': 'system', 'content': SYSTEM}, {'role': 'user', 'content': text}],
+                            max_tokens=max(32, len(text) // 2 + 16), timeout=timeout, opener=opener)
     except Exception:
-        return text
-    if not isinstance(out, str):
         return text
     out = out.strip()
     if len(out) >= 2 and out[0] == out[-1] and out[0] in '"“”':
         out = out[1:-1].strip()
     return out if acceptable(text, out) else text
+
+
+def prepare():
+    """Start the server (a few seconds) so the first block is not lost to
+    its start-up. Meant for a worker thread."""
+    return llamacpp.ensure()
