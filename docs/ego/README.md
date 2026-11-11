@@ -90,3 +90,28 @@ après fusion des PR.
 > org.freedesktop.DBus.ReloadConfig so no logout is needed. The default
 > shortcut is now Ctrl+Space. No new prototype patch, no subprocess. I used AI assistance to write and review
 > this code and can explain every line.
+
+## 6. Voice Hold 0.5 (envoyé le 11 novembre 2026)
+
+- Zip : `./pack.sh` sur `master` ; icône `docs/icon/voice-hold-256.png`
+  (source `voice-hold-ego.svg`) ; capture `docs/ego/voice-hold-screenshot.png`
+  (deux vraies images du banc headless, légendées).
+- Commentaire auteur, en anglais :
+
+> 0.5 adds optional voice commands, off by default (`commands-enabled`), on a
+> second keybinding (Ctrl+Alt+Space). Their code lives in `commands/` and is
+> imported lazily, only when the setting is on. What a reviewer may ask about:
+> (1) the extension itself never runs a shell command: it sends the transcript
+> to a second D-Bus service of the same separate helper
+> (`org.griffit.VoiceHold.Commands`), which classifies it; GNOME actions
+> (volume, dark mode, workspace, launching an app through `Shell.AppSystem`)
+> are done in the extension, and a shell command is only run by the helper, in
+> a visible terminal, after the user confirmed it in a modal dialog;
+> (2) the Commands page of the preferences has one Install button that spawns
+> the already-installed helper with `setup --commands` (`Gio.Subprocess`, from
+> prefs.js only, never from the Shell process) to download a local language
+> model; nothing is downloaded without that click; (3) the pill reads
+> `org.gnome.desktop.interface font-name` to use the system font, and has four
+> entrance animations done with `ease()`. The speech model changed (Parakeet
+> "Ultra"); there is no Ollama dependency any more. No new prototype patch.
+> I used AI assistance to write and review this code and can explain every line.

@@ -489,14 +489,14 @@ msgstr "%s  $ %s — code %d"
 msgid "(nothing)"
 msgstr "(rien)"
 
-msgid "Not a GNOME action, and the local LLM is off — “%s”"
-msgstr "Pas une action GNOME, et le LLM local est éteint — « %s »"
+msgid "“%s” — not a known action, and the language model is off"
+msgstr "« %s » — action inconnue, et le modèle de langage est éteint"
 
-msgid "Not a GNOME action, and the local LLM is not available — “%s”"
-msgstr "Pas une action GNOME, et le LLM local n'est pas disponible — « %s »"
+msgid "“%s” — not a known action, and the language model is not available"
+msgstr "« %s » — action inconnue, et le modèle de langage est indisponible"
 
-msgid "Not a GNOME action, and the local LLM took too long — “%s”"
-msgstr "Pas une action GNOME, et le LLM local a mis trop de temps — « %s »"
+msgid "“%s” — the language model took too long"
+msgstr "« %s » — le modèle de langage a mis trop de temps"
 
 msgid "OK"
 msgstr "OK"

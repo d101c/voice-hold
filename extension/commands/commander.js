@@ -583,17 +583,18 @@ export class Commander {
         this._hud.hide(SHOW_RECALL_MS);
     }
 
+    // The pill shows one line and cuts its start: the reason goes last.
     _unknownText(reason, text) {
         if (reason === 'llm-off')
-            return this._('Not a GNOME action, and the local LLM is off — “%s”').format(text);
+            return this._('“%s” — not a known action, and the language model is off').format(text);
         if (reason === 'llm-not-installed')
             return this._('Language model not installed — settings, Commands page');
         if (llmLowMemory(reason))
             return llmLowMemory(reason, this._);
         if (reason === 'llm-unavailable')
-            return this._('Not a GNOME action, and the local LLM is not available — “%s”').format(text);
+            return this._('“%s” — not a known action, and the language model is not available').format(text);
         if (reason === 'llm-timeout')
-            return this._('Not a GNOME action, and the local LLM took too long — “%s”').format(text);
+            return this._('“%s” — the language model took too long').format(text);
         if (reason === 'nothing to do')
             return this._('OK');
         return this._('Not understood: “%s”').format(text);

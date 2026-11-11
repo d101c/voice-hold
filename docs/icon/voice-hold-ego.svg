@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4a9bf5"/>
+      <stop offset="1" stop-color="#1a5fb4"/>
+    </linearGradient>
+    <linearGradient id="mic" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#dfeaf8"/>
+    </linearGradient>
+    <clipPath id="tile"><rect x="16" y="16" width="224" height="224" rx="52"/></clipPath>
+  </defs>
+  <!-- tile -->
+  <rect x="16" y="16" width="224" height="224" rx="52" fill="url(#bg)"/>
+  <g clip-path="url(#tile)">
+    <!-- the top bar and the island that hangs from it -->
+    <rect x="16" y="16" width="224" height="26" fill="#0b0b0f"/>
+    <path d="M76 40 h104 v14 a18 18 0 0 1 -18 18 h-68 a18 18 0 0 1 -18 -18 z" fill="#0b0b0f"/>
+    <!-- level bars in the island -->
+    <g fill="#62a0ea">
+      <rect x="101" y="50" width="6" height="8" rx="3"/>
+      <rect x="113" y="46" width="6" height="16" rx="3"/>
+      <rect x="125" y="43" width="6" height="22" rx="3"/>
+      <rect x="137" y="46" width="6" height="16" rx="3"/>
+      <rect x="149" y="50" width="6" height="8" rx="3"/>
+    </g>
+  </g>
+  <!-- microphone -->
+  <rect x="104" y="92" width="48" height="78" rx="24" fill="url(#mic)"/>
+  <path d="M84 138 a44 44 0 0 0 88 0" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round"/>
+  <path d="M128 184 v22 M104 208 h48" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round"/>
+</svg>
