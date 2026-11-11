@@ -535,3 +535,18 @@ async def _speak_scenario(monkeypatch):
     eng.stop_speaking()
     assert eng.status()['speaking'].value is False
     eng._speak_task.cancel()
+
+
+def test_low_memory_refuses_to_load_the_speech_model(fake, speech_wav, monkeypatch):
+    from voice_hold_engine import memory
+    monkeypatch.setenv('VOICE_HOLD_MEM_AVAILABLE_MB', '640')
+
+    async def main():
+        h = Harness(asyncio.get_running_loop())
+        await h.engine.start({'audio-file': speech_wav, 'realtime': False})
+        await h.wait_stopped()
+        return h
+    h = run(main())
+    assert h.of('Error') == [f'low-memory:640:{memory.ASR_NEED_MB}']
+    assert h.events[-1] == ('Stopped', 'error')
+    assert h.engine._recognizer is None, 'nothing was loaded'

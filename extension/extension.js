@@ -178,7 +178,6 @@ export default class VoiceHoldExtension extends Extension {
             this._dictation.setElsewhere(() => !!this._commander?.active);
             this._bindCommand();
             this._indicator?.setCommands(this._commandsMenu());
-            this._commander.warmUp();
         }).catch(e => {
             if (this._commandsLoad === load)
                 this._commandsLoad = null;

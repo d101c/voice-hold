@@ -183,6 +183,14 @@ class Engine:
         if miss:
             self._fail('models-missing')
             return
+        if self._recognizer is None or not self._recognizer.loaded:
+            # Not enough free memory for the speech model: say so instead
+            # of pushing the whole desktop into swap.
+            from . import memory
+            short = memory.shortage(memory.ASR_NEED_MB)
+            if short:
+                self._fail(f'low-memory:{short}')
+                return
         self._gen += 1
         gen = self._gen
         self._opts = {

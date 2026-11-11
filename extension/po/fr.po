@@ -632,3 +632,18 @@ msgstr "Halo"
 
 msgid "Preview"
 msgstr "Aperçu"
+
+msgid "%d MB"
+msgstr "%d Mo"
+
+msgid "%s GB"
+msgstr "%s Go"
+
+msgid "Not enough memory: %s free, %s needed"
+msgstr "Mémoire insuffisante : %s libres, %s requis"
+
+msgid "Language model: not enough memory (%s free, %s needed)"
+msgstr "Modèle de langage : mémoire insuffisante (%s libres, %s requis)"
+
+msgid "Language model not installed — settings, Commands page"
+msgstr "Modèle de langage non installé — réglages, page Commandes"

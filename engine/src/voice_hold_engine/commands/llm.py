@@ -81,6 +81,11 @@ class Timeout(Exception):
     """The server was reached but did not answer in time."""
 
 
+class Unavailable(Exception):
+    """The model cannot be used right now; str() is the reason the pill
+    shows: 'llm-not-installed' or 'llm-low-memory:<free MB>:<needed MB>'."""
+
+
 def _messages(text):
     return [{'role': 'system', 'content': SYSTEM}, {'role': 'user', 'content': text}]
 
@@ -94,7 +99,13 @@ def _timed_out(e):
 
 def interpret(text, *, timeout=None, opener=None):
     """Return the parsed intent dict, or None when the server is unreachable
-    or answers garbage. Raises Timeout when it is reached but too slow."""
+    or answers garbage. Raises Timeout when it is reached but too slow, and
+    Unavailable when it is not installed or there is no memory to load it."""
+    if opener is None:
+        why = llamacpp.blocked()
+        if why:
+            raise Unavailable(why)
+        llamacpp.ensure()        # after a crash, or a start that was refused for lack of memory
     try:
         content = llamacpp.chat(_messages(text), schema=SCHEMA,
                                 timeout=TIMEOUT_S if timeout is None else timeout, opener=opener)

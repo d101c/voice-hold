@@ -6,6 +6,7 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import {EngineClient} from './engine.js';
 import {HoldMachine, IDLE, TOGGLE} from './holdMachine.js';
 import {Hud} from './hud.js';
+import {speechLowMemory} from './memoryText.js';
 import {installKeyHook} from './keyHook.js';
 import {TextSink} from './textSink.js';
 
@@ -24,7 +25,7 @@ const END_GUARD_MS = 3000;
 const START_WAIT_MS = 3000;
 
 // Engine errors after which no further signal is to be expected.
-const FATAL_ERRORS = ['models-missing', 'audio:', 'model:'];
+const FATAL_ERRORS = ['models-missing', 'low-memory:', 'audio:', 'model:'];
 
 // Modifier masks named in an accelerator string such as '<Control>space'.
 export function modifierMask(accel) {
@@ -461,8 +462,14 @@ export class Dictation {
         if (!this._session && this._elsewhere?.())
             return;
         const fatal = FATAL_ERRORS.some(p => message.startsWith(p));
+        const lowMemory = speechLowMemory(message, this._);
         if (message === 'models-missing') {
             this._showEngineError('models-missing');
+        } else if (lowMemory) {
+            // No room to load the speech model: the engine refused rather
+            // than freeze the desktop. Left on screen long enough to read.
+            this._hud.error(lowMemory);
+            this._hud.hide(7000);
         } else if (!fatal && this._live && this._hud.visible) {
             // One block failed, the dictation goes on: say so in the pill
             // without closing it under a session that is still listening.

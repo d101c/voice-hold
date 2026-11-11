@@ -18,7 +18,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-from . import models
+from . import memory, models
 
 SERVER_NAME = 'llama-b12284'
 SERVER_ARCHIVE = SERVER_NAME + '-bin-ubuntu-x64.tar.gz'
@@ -123,6 +123,30 @@ def healthy(timeout=1.0, opener=None):
         return False
 
 
+def sleeping(timeout=1.0, opener=None):
+    """True when the server answers but has unloaded the model (idle): the
+    next request reads the weights again."""
+    try:
+        with (opener or urllib.request.urlopen)(f'{URL}/props', timeout=timeout) as f:
+            return bool(json.loads(f.read().decode()).get('is_sleeping'))
+    except (urllib.error.URLError, OSError, ValueError):
+        return False
+
+
+def blocked(base=None):
+    """Why the model cannot be used right now, '' when it can:
+    'llm-not-installed', or 'llm-low-memory:<free MB>:<needed MB>' when the
+    weights are not in memory and there is no room to load them."""
+    up = healthy()
+    if not up and not installed(base):
+        return 'llm-not-installed'
+    if not up or sleeping():
+        short = memory.shortage(memory.LLM_NEED_MB)
+        if short:
+            return f'llm-low-memory:{short}'
+    return ''
+
+
 def command(base=None, threads=None):
     threads = threads or min(4, os.cpu_count() or 2)
     return [str(server_binary(base)), '-m', str(model_path(base)), '--alias', MODEL_NAME,
@@ -145,7 +169,7 @@ def ensure(wait_s=60.0, base=None, spawn=subprocess.Popen):
     _started[:] = [p for p in _started if p.poll() is None]     # no zombies
     if healthy():
         return True
-    if not installed(base):
+    if not installed(base) or memory.shortage(memory.LLM_NEED_MB):
         return False
     binary = server_binary(base)
     env = dict(os.environ)

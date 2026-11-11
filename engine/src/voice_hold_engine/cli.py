@@ -23,7 +23,18 @@ def service_exec():
     first in PATH: with pipx or uv that is the venv's python, and
     `pipx reinstall` keeps the same path. Never resolve() it: a venv's
     python is a symlink to the system interpreter, which cannot import us."""
-    return f'{sys.executable} -m voice_hold_engine serve'
+    return f'{launcher()} -m voice_hold_engine serve'
+
+
+def launcher():
+    """How to start this install's Python from a D-Bus service file. The
+    extension's Installation page unpacks the engine beside the system
+    Python and runs it through PYTHONPATH: a service file written from such
+    a run must carry it, or the service could not import us."""
+    path = os.environ.get('PYTHONPATH', '')
+    if path and all(c not in path for c in ' \t\n"\'\\'):
+        return f'/usr/bin/env PYTHONPATH={path} {sys.executable}'
+    return sys.executable
 
 
 def install_service(log=print):
@@ -42,7 +53,7 @@ def install_commands_service(log=print):
     d.mkdir(parents=True, exist_ok=True)
     path = d / COMMANDS_SERVICE_FILE
     path.write_text(f'[D-BUS Service]\nName={COMMANDS_BUS_NAME}\n'
-                    f'Exec={sys.executable} -m voice_hold_engine commands-serve\n')
+                    f'Exec={launcher()} -m voice_hold_engine commands-serve\n')
     log(f'D-Bus service installed: {path}')
     return path
 

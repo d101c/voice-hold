@@ -7,6 +7,7 @@ import {modifierMask} from '../dictation.js';
 import {EngineClient} from '../engine.js';
 import {HoldMachine, IDLE, TOGGLE} from '../holdMachine.js';
 import {installKeyHook} from '../keyHook.js';
+import {llmLowMemory, speechLowMemory} from '../memoryText.js';
 import {Actions} from './actions.js';
 import {CommandEngineClient, commandHistory} from './commandEngine.js';
 import {CommandHud} from './commandHud.js';
@@ -110,14 +111,6 @@ export class Commander {
     }
 
     // -- entry point -----------------------------------------------------------
-
-    // Start the LLM when the commands are switched on, so the first open
-    // request does not wait for it. Only when the LLM is on; the helper
-    // idles out by itself.
-    warmUp() {
-        if (this._settings.get_boolean('command-llm'))
-            this._engine.prepare();
-    }
 
     shortcut() {
         if (this._busy)
@@ -373,8 +366,11 @@ export class Commander {
     _onVoiceError(message) {
         if (!this._session)
             return;                       // a dictation's error, shown by its own pill
+        const lowMemory = speechLowMemory(message, this._);
         if (message === 'models-missing')
             this._showVoiceError('models-missing');
+        else if (lowMemory)
+            this._hud.error(lowMemory);
         else
             this._hud.error(message.startsWith('audio') ? this._('Microphone unavailable') : message);
         this._armGuard(this._session);
@@ -590,6 +586,10 @@ export class Commander {
     _unknownText(reason, text) {
         if (reason === 'llm-off')
             return this._('Not a GNOME action, and the local LLM is off — “%s”').format(text);
+        if (reason === 'llm-not-installed')
+            return this._('Language model not installed — settings, Commands page');
+        if (llmLowMemory(reason))
+            return llmLowMemory(reason, this._);
         if (reason === 'llm-unavailable')
             return this._('Not a GNOME action, and the local LLM is not available — “%s”').format(text);
         if (reason === 'llm-timeout')
