@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
 import Adw from 'gi://Adw';
 import GLib from 'gi://GLib';
 import Gtk from 'gi://Gtk';
@@ -11,7 +13,7 @@ import * as Setup from './setup.js';
 // components: 'voice' is the only one; the page stays written per component.
 
 export function buildSetupPage(window, gettext, {components = ['voice'], title = null, shortcut = null, accelerator = null, picture = null} = {}) {
-    const _ = gettext || (s => s);
+    const _ = gettext;
     const page = new Adw.PreferencesPage({title: title ?? _('Installation'), icon_name: 'system-software-install-symbolic'});
     const state = {manifest: null, detect: null, busy: null, changed: false, installer: null, needLogout: false};
 
@@ -112,7 +114,8 @@ export function buildSetupPage(window, gettext, {components = ['voice'], title =
                 return [_('Installed'), true];
             if (d.voice.service === 'assistant')
                 return [_('Engine present, models missing'), false];
-            return [labels.voice.what + ' ' + _('(%s)').format(Setup.formatSize(sizeOf('voice'))), false];
+            const size = sizeOf('voice');
+            return [size ? labels.voice.what + ' ' + _('(%s)').format(Setup.formatSize(size)) : labels.voice.what, false];
         }
         return ['', false];
     };
@@ -128,19 +131,19 @@ export function buildSetupPage(window, gettext, {components = ['voice'], title =
             r.done.visible = ok;
             r.button.visible = !ok;
             r.button.label = _('Install');
-            r.button.sensitive = !!state.manifest && !state.busy && !!state.detect?.python;
+            r.button.sensitive = !state.busy && !!state.detect?.python;
             r.cancel.visible = false;
             r.bar.visible = false;
         }
         const d = state.detect;
         const left = components.filter(k => !describe(k)[1]);
-        if (!state.manifest) {
-            banner.title = state.manifestError ?? _('Checking what is installed…');
-            banner.button_label = state.manifestError ? _('Try again') : null;
-        } else if (!d?.python) {
+        if (!d) {
+            banner.title = _('Checking what is installed…');
+            banner.button_label = null;
+        } else if (!d.python) {
             banner.title = _('Python 3 was not found on this computer (it comes with GNOME on every distribution).');
             banner.button_label = null;
-        } else if (!Setup.versionAtLeast(d.python.version, state.manifest.python?.min ?? '3.12') || !state.manifest.wheels?.[d.python.tag]) {
+        } else if (state.manifest && (!Setup.versionAtLeast(d.python.version, state.manifest.python?.min ?? '3.12') || !state.manifest.wheels?.[d.python.tag])) {
             banner.title = _('Your Python is %s; the engines need %s or newer.').format(d.python.version, state.manifest.python?.min ?? '3.12');
             banner.button_label = null;
         } else if (state.busy) {
@@ -159,7 +162,7 @@ export function buildSetupPage(window, gettext, {components = ['voice'], title =
             banner.title = _('Everything is installed.');
             banner.button_label = null;
         }
-        const ready = !!state.manifest && !left.length && !state.needLogout;
+        const ready = !!d && !left.length && !state.needLogout;
         tryRow.sensitive = ready;
         if (ready && state.changed && !state.focused) {
             state.focused = true;
@@ -167,23 +170,11 @@ export function buildSetupPage(window, gettext, {components = ['voice'], title =
         }
     };
 
-    banner.connect('button-clicked', () => {
-        if (!state.manifest)
-            load();
-        else
-            Setup.logout();
-    });
+    banner.connect('button-clicked', () => Setup.logout());
 
-    const load = async () => {
-        state.manifestError = null;
-        refreshRows();
-        try {
-            state.manifest = await Setup.fetchManifest();
-        } catch (e) {
-            state.manifestError = _('Could not fetch the installation list (offline?): %s').format(e.message);
-            refreshRows();
-            return;
-        }
+    // No network here: what is installed is read from the disk. The manifest
+    // is only fetched when Install is clicked.
+    const load = () => {
         state.detect = Setup.detect(state.manifest);
         refreshRows();
     };
@@ -206,7 +197,7 @@ export function buildSetupPage(window, gettext, {components = ['voice'], title =
     };
 
     const install = async key => {
-        if (state.busy || !state.manifest)
+        if (state.busy)
             return;
         state.busy = key;
         const r = rows[key];
@@ -224,9 +215,20 @@ export function buildSetupPage(window, gettext, {components = ['voice'], title =
             const detail = ev.total ? ` ${Setup.formatSize(ev.done)} / ${Setup.formatSize(ev.total)}` : '';
             r.bar.text = `${names[ev.step] ?? ev.step} ${ev.label}${detail}`;
         };
-        const installer = new Setup.Installer(state.manifest, {progress});
-        state.installer = installer;
         try {
+            if (!state.manifest) {
+                try {
+                    state.manifest = await Setup.fetchManifest();
+                } catch (e) {
+                    throw new Error(_('Could not fetch the installation list (offline?): %s').format(e.message));
+                }
+                state.detect = Setup.detect(state.manifest);
+                const min = state.manifest.python?.min ?? '3.12';
+                if (!state.detect.python || !Setup.versionAtLeast(state.detect.python.version, min) || !state.manifest.wheels?.[state.detect.python.tag])
+                    throw new Error(_('Your Python is %s; the engines need %s or newer.').format(state.detect.python?.version ?? '?', min));
+            }
+            const installer = new Setup.Installer(state.manifest, {progress});
+            state.installer = installer;
             if (key === 'voice')
                 await installer.installVoice();
             state.changed = true;
