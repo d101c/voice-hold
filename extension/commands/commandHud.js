@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
@@ -34,7 +36,7 @@ export class CommandHud {
     // hudEffects.EFFECTS, both read each time the pill opens.
     constructor(iconPath, gettext, getPosition = () => 'island', getEffect = () => effects.DEFAULT_EFFECT) {
         this._getEffect = getEffect;
-        this._ = gettext || (s => s);
+        this._ = gettext;
         this._iconPath = iconPath;
         this._getPosition = getPosition;
         this._island = true;
@@ -486,14 +488,14 @@ export class CommandHud {
 
     _stopDecay() {
         if (this._decayId) {
-            GLib.source_remove(this._decayId);
+            GLib.Source.remove(this._decayId);
             this._decayId = 0;
         }
     }
 
     _cancelHide() {
         if (this._hideId) {
-            GLib.source_remove(this._hideId);
+            GLib.Source.remove(this._hideId);
             this._hideId = 0;
         }
         this._pausedHide = 0;

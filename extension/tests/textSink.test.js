@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
 // Run: gjs -m extension/tests/textSink.test.js
 import {joinBlock, surroundingChar, TextSink} from '../textSink.js';
 

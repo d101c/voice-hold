@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
 import Clutter from 'gi://Clutter';
 import Pango from 'gi://Pango';
 import St from 'gi://St';
@@ -31,17 +33,23 @@ export function confirm({title, command, warning, runLabel, cancelLabel, onOpen 
             if (decided)
                 return;
             decided = true;
-            dialog.close();
             resolve(ok);
+            dialog.close();
         };
         dialog.setButtons([
             {label: cancelLabel, action: () => finish(false), key: Clutter.KEY_Escape},
             {label: runLabel, action: () => finish(true), default: true},
         ]);
-        dialog.connect('closed', () => finish(false));
-        if (!dialog.open())
+        // Destroyed once the closing animation is over, not before.
+        dialog.connectObject('closed', () => {
             finish(false);
-        else
+            dialog.destroy();
+        }, dialog);
+        if (!dialog.open()) {
+            finish(false);
+            dialog.destroy();
+        } else {
             onOpen?.(() => finish(false));
+        }
     });
 }

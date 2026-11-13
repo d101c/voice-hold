@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
 import Gio from 'gi://Gio';
 import GObject from 'gi://GObject';
 import St from 'gi://St';
@@ -14,7 +16,7 @@ import {listSources} from './engine.js';
 export const VoiceHoldIndicator = GObject.registerClass(
 class VoiceHoldIndicator extends PanelMenu.Button {
     _init(settings, iconPath, openPreferences, gettext) {
-        const _ = gettext || (s => s);
+        const _ = gettext;
         super._init(0.0, _('Voice Hold'));
 
         this._settings = settings;

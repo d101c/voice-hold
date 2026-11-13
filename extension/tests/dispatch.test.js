@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
 import {dispatch, clampPercent, parseWorkspace} from '../commands/dispatch.js';
 
 let pass = 0, fail = 0;

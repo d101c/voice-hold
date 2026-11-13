@@ -34,15 +34,18 @@ après fusion des PR.
 - Upload du zip sur https://extensions.gnome.org/upload/ (mêmes deux cases).
 - Sur la fiche créée : icône `docs/icon/voice-hold-128.png`, capture
   `docs/ego/voice-hold-screenshot.png`.
-- Description : celle de `extension/metadata.json` (déjà sans « macOS »,
-  déclare le moteur séparé GPL, le presse-papiers du bouton Copier, Wayland).
+- Description : celle de `extension/metadata.json` (sans « macOS »,
+  déclare le moteur séparé GPL, le presse-papiers des boutons Copier, le réseau,
+  les fichiers écrits et l'absence de bouton de désinstallation ; Wayland).
 - Commentaire auteur à poster dès la première revue, en anglais :
 
 > Voice Hold needs a separate helper (`voice-hold-engine`, Python, GPL-2.0-or-later,
 > same repository) that does the speech recognition offline with sherpa-onnx.
 > The extension only talks to it over the session bus (`org.griffit.VoiceHold`,
-> D-Bus activation) and shows the install command in its preferences; it never
-> spawns anything itself. Two points a reviewer may ask about: (1) it wraps
+> D-Bus activation) and shows the install command in its preferences. (Since
+> 0.5 the preferences, and only on a click, spawn the installed helper once
+> with `setup --commands` through `Gio.Subprocess`; the shell process spawns
+> nothing.) Two points a reviewer may ask about: (1) it wraps
 > `IBus.InputContext.prototype.process_key_event_async` while a hands-free
 > session is running, to catch Escape, and restores it only if the wrapper is
 > still its own; (2) it reads `Main.inputMethod._cursorRect` to place the pill
@@ -115,3 +118,32 @@ après fusion des PR.
 > entrance animations done with `ease()`. The speech model changed (Parakeet
 > "Ultra"); there is no Ollama dependency any more. No new prototype patch.
 > I used AI assistance to write and review this code and can explain every line.
+
+## 7. Voice Hold 0.6 (préparé le 13 novembre 2026, branche `ego-0.6`, pas encore envoyé)
+
+- Avant l'upload : créer le tag `v0.6` sur `d101c/hold-setup` (le manifeste y
+  est lu : `setup.js`, constante `MANIFEST_URL`), puis `./pack.sh`.
+- La description déclare maintenant : réseau seulement après un clic sur
+  Installer, fichiers écrits (`~/.local/share/hold`, `voice-hold`,
+  `dbus-1/services/org.griffit.VoiceHold.service`), sous-processus (prefs,
+  sur clic), presse-papiers (boutons Copier, jamais lu), et l'absence de
+  bouton de désinstallation (les commandes de retrait sont données).
+- Commentaire auteur, en anglais :
+
+> 0.6 is a cleanup after the review of 0.5. Changes: the preferences no longer
+> touch the network when opened; the manifest of the installer is fetched only
+> after a click on Install, and it is pinned to the `v0.6` tag of the
+> `hold-setup` repository, not to a branch; files are still checked against its
+> SHA-256 before being unpacked. The description now lists the network use,
+> the files written under `~/.local/share`, the clipboard (Copy buttons, write
+> only) and says honestly that there is no uninstall button. The only
+> subprocess is `Gio.Subprocess` for `setup --commands`, in prefs.js, on a
+> click; the shell process spawns nothing. Signals use connectObject /
+> disconnectObject, the confirmation `ModalDialog` is destroyed after it
+> closed, dead code and redundant fallbacks were removed, and the package now
+> carries the LICENSE file and SPDX headers. As in 0.4 and 0.5, the wrapper of
+> `IBus.InputContext.prototype.process_key_event_async` is installed in
+> `enable()`, passes every key through unless a hands-free session is live
+> (it then swallows only Escape), and is restored in `disable()` only if the
+> prototype still holds our wrapper; the voice commands are off by default. I used AI assistance to write
+> and review this code and can explain every line.

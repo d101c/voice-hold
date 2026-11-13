@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
 // Run: gjs -m extension/tests/keyHook.test.js
 //
 // Two extensions wrapping the same prototype method (Accent Hold and Voice

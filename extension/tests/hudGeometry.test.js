@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
 // Run: gjs -m extension/tests/hudGeometry.test.js
 import {
     CURSOR_GAP, ISLAND_OVERLAP, POINTER_GAP,

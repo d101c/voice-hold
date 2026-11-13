@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Soup from 'gi://Soup?version=3.0';
@@ -16,7 +18,9 @@ import Soup from 'gi://Soup?version=3.0';
 //   voice-hold/models/     speech models (where voice-hold-engine looks)
 //   dbus-1/services/       org.griffit.VoiceHold.service
 
-export const MANIFEST_URL = 'https://raw.githubusercontent.com/d101c/hold-setup/master/manifest.json';
+// Pinned on a release tag of hold-setup, never on a moving branch. Read only
+// after a click on Install.
+export const MANIFEST_URL = 'https://raw.githubusercontent.com/d101c/hold-setup/v0.6/manifest.json';
 const CHUNK = 256 * 1024;
 
 export function dataDir() {
@@ -100,13 +104,26 @@ function modelsPresent(p, manifest) {
     return true;
 }
 
+// Without the manifest the file names are unknown: the folder only has to hold
+// something. The complete check runs once the manifest is fetched.
+function modelsDirUsed(p) {
+    try {
+        const e = Gio.File.new_for_path(p.models).enumerate_children('standard::name', 0, null);
+        const any = e.next_file(null) !== null;
+        e.close(null);
+        return any;
+    } catch {
+        return false;
+    }
+}
+
 // Synchronous, cheap: what is installed where.
 export function detect(manifest, base = dataDir()) {
     const p = paths(base);
     const voice = serviceState(p, manifest?.voice?.bus_name ?? 'org.griffit.VoiceHold', manifest?.voice?.module ?? 'voice_hold_engine');
     return {
         python: systemPython(),
-        voice: {service: voice, models: manifest ? modelsPresent(p, manifest) : null},
+        voice: {service: voice, models: manifest ? modelsPresent(p, manifest) : modelsDirUsed(p)},
     };
 }
 

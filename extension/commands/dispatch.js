@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
 // Pure routing of an intent (the dict the helper returns) to the actions
 // object of the extension. No Shell import: testable with plain gjs.
 //

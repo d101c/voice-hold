@@ -1,4 +1,6 @@
-import Clutter from 'gi://Clutter';
+// SPDX-License-Identifier: GPL-2.0-or-later
+
+import 'gi://Clutter';     // Meta.MotionDirection needs the Clutter typelib loaded
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Gvc from 'gi://Gvc';
@@ -17,7 +19,7 @@ const POWER_PATH = '/org/gnome/SettingsDaemon/Power';
 
 export class Actions {
     constructor(gettext) {
-        this._ = gettext || (s => s);
+        this._ = gettext;
         this._mixer = null;
         this._nm = null;
         this._bt = null;
@@ -25,6 +27,7 @@ export class Actions {
 
     destroy() {
         if (this._mixer) {
+            this._mixer.disconnectObject(this);
             this._mixer.close();
             this._mixer = null;
         }
@@ -79,12 +82,12 @@ export class Actions {
                 ready();
                 return;
             }
-            const id = this._mixer.connect('state-changed', (c, state) => {
+            this._mixer.connectObject('state-changed', (c, state) => {
                 if (state === Gvc.MixerControlState.READY || state === Gvc.MixerControlState.FAILED) {
-                    this._mixer.disconnect(id);
+                    this._mixer.disconnectObject(this);
                     ready();
                 }
-            });
+            }, this);
         });
     }
 
@@ -247,6 +250,3 @@ export class Actions {
         return '';
     }
 }
-
-// Keep Clutter referenced: Meta.MotionDirection needs the Clutter typelib loaded.
-void Clutter;
