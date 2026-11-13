@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
 import Gio from 'gi://Gio';
 import Meta from 'gi://Meta';
 import Shell from 'gi://Shell';
@@ -71,6 +73,7 @@ export default class VoiceHoldExtension extends Extension {
         this._settings.disconnectObject(this);
         this._welcomeCancel?.cancel();
         this._welcomeCancel = null;
+        this._welcomeSource?.disconnectObject(this);
         this._welcomeSource?.destroy();
         this._welcomeSource = null;
         if (this._dictation) {
@@ -99,7 +102,7 @@ export default class VoiceHoldExtension extends Extension {
                 iconName: 'audio-input-microphone-symbolic',
                 onActivate: () => this.openPreferences(),
             });
-            this._welcomeSource.connect('destroy', () => (this._welcomeSource = null));
+            this._welcomeSource.connectObject('destroy', () => (this._welcomeSource = null), this);
         });
     }
 

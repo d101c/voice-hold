@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
 // Wrap `IBus.InputContext.prototype.process_key_event_async` so that a key
 // typed into a text field can be swallowed before the application sees it.
 //
@@ -30,7 +32,7 @@ export function installKeyHook(proto, filter) {
 
     const process = function (...args) {
         const callback = args[args.length - 1];
-        if (active && typeof callback === 'function' && safeFilter(filter, args[0], args[2])) {
+        if (active && safeFilter(filter, args[0], args[2])) {
             callback(this, CONSUMED);
             return undefined;
         }

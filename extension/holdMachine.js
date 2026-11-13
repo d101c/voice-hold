@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
 // Dictation gesture state machine, free of Shell imports so it can be tested
 // with plain gjs. Same spirit as Accent Hold's holdMachine.js.
 //

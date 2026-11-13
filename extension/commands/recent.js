@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
 // The line of a past request in the indicator's menu: "what was heard → what
 // came of it". Free of Shell imports so it can be tested with plain gjs.
 

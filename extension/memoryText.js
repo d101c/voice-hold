@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
 // "Not enough memory" errors of the engines, turned into words. Pure, so it
 // runs under plain gjs. The engines send '<prefix>:<free MB>:<needed MB>'
 // ('low-memory:640:1200' from the speech engine, 'llm-low-memory:900:2300'

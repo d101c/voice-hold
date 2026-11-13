@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
 // How the pill comes and goes. Shared by the dictation pill (hud.js) and the
 // command pill (commands/commandHud.js): both hand over the same parts.
 //
@@ -38,7 +40,7 @@ function later(parts, ms, fn) {
 
 export function cancel(parts) {
     for (const id of parts?.fx ?? [])
-        GLib.source_remove(id);
+        GLib.Source.remove(id);
     parts?.fx?.clear();
 }
 

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
 import Clutter from 'gi://Clutter';
 import GLib from 'gi://GLib';
 import IBus from 'gi://IBus';
@@ -46,7 +48,7 @@ export class Dictation {
     constructor(settings, iconPath, gettext, openSetup = null) {
         this._settings = settings;
         this._openSetup = openSetup;
-        this._ = gettext || (s => s);
+        this._ = gettext;
         this._machine = new HoldMachine(this._machineOptions());
         this._hud = new Hud(iconPath, this._, () => settings.get_string('hud-position'),
             () => settings.get_string('hud-effect'));
@@ -57,7 +59,6 @@ export class Dictation {
         this._engine = new EngineClient({
             Owner: has => this._onOwner(has),
             State: s => this._onState(s),
-            Source: d => this._onSource(d),
             Level: v => this._hud.level(v),
             Speech: b => this._onSpeech(b),
             Partial: t => this._onPartial(t),
@@ -131,8 +132,6 @@ export class Dictation {
         return !!this._session && !this._session.ending;
     }
 
-    // Dictating, or finishing a dictation: the voice commands, when they
-    // are switched on, leave the microphone alone meanwhile (extension.js).
     _preview() {
         if (this.active || this._hud.visible)
             return;
@@ -140,6 +139,8 @@ export class Dictation {
         this._hud.hide(1800);
     }
 
+    // Dictating, or finishing a dictation: the voice commands, when they
+    // are switched on, leave the microphone alone meanwhile (extension.js).
     get active() {
         return this._machine.state !== IDLE || !!this._session || this._startQueued;
     }
@@ -173,7 +174,7 @@ export class Dictation {
     // Entering hands-free mode: say so, and arm the silence timer.
     _afterTransition() {
         if (this._machine.state === TOGGLE && this._live) {
-            this._hud.status(this._listeningHint(), 'listening');
+            this._hud.status('', 'listening');
             this._armSilence();
         }
     }
@@ -188,7 +189,7 @@ export class Dictation {
                 this._startWaitId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, START_WAIT_MS, () => {
                     this._startWaitId = 0;
                     if (this._session)
-                        this._finishLocally('error');
+                        this._onStopped('error');
                     else if (this._startQueued)
                         this._startNow();
                     return GLib.SOURCE_REMOVE;
@@ -243,7 +244,7 @@ export class Dictation {
                 return;                   // Stopped already arrived
             if (err) {
                 this._showEngineError(err);
-                this._finishLocally('error');
+                this._onStopped('error');
                 return;
             }
             this._armGuard(session);
@@ -268,7 +269,7 @@ export class Dictation {
             if (this._session !== session)
                 return;
             if (err)
-                this._finishLocally('cancel');
+                this._onStopped('cancel');
             else
                 this._armGuard(session);
         });
@@ -277,7 +278,7 @@ export class Dictation {
     _dropQueuedStart() {
         this._startQueued = false;
         if (this._startWaitId) {
-            GLib.source_remove(this._startWaitId);
+            GLib.Source.remove(this._startWaitId);
             this._startWaitId = 0;
         }
     }
@@ -298,7 +299,7 @@ export class Dictation {
             this._guardId = 0;
             if (this._session === session) {
                 console.warn('voice-hold: no Stopped from the engine, ending the session locally');
-                this._finishLocally('error');
+                this._onStopped('error');
             }
             return GLib.SOURCE_REMOVE;
         });
@@ -306,13 +307,9 @@ export class Dictation {
 
     _cancelGuard() {
         if (this._guardId) {
-            GLib.source_remove(this._guardId);
+            GLib.Source.remove(this._guardId);
             this._guardId = 0;
         }
-    }
-
-    _finishLocally(reason) {
-        this._onStopped(reason);
     }
 
     // -- modifier polling (hold mode) --------------------------------------
@@ -338,7 +335,7 @@ export class Dictation {
 
     _stopWatch() {
         if (this._watchId) {
-            GLib.source_remove(this._watchId);
+            GLib.Source.remove(this._watchId);
             this._watchId = 0;
         }
     }
@@ -359,7 +356,7 @@ export class Dictation {
 
     _stopSilence() {
         if (this._silenceId) {
-            GLib.source_remove(this._silenceId);
+            GLib.Source.remove(this._silenceId);
             this._silenceId = 0;
         }
     }
@@ -382,20 +379,12 @@ export class Dictation {
 
     // -- engine events -----------------------------------------------------
 
-    // While listening the pill is the microphone and its level, nothing
-    // else: words appear when there are words.
-    _listeningHint() {
-        return '';
-    }
-
     _onOwner(hasOwner) {
         if (hasOwner || !this._session)
             return;
         this._hud.error(this._('Engine stopped unexpectedly'));
-        this._finishLocally('error');
+        this._onStopped('error');
     }
-
-    _onSource(_description) {}
 
     _onState(state) {
         if (!this._live)
@@ -403,7 +392,7 @@ export class Dictation {
         if (state === 'loading')
             this._hud.status(this._('Loading the model… speak, nothing is lost'), 'loading');
         else if (state === 'listening')
-            this._hud.status(this._listeningHint(), 'listening');
+            this._hud.status('', 'listening');
         else if (state === 'decoding')
             this._hud.pending();
     }

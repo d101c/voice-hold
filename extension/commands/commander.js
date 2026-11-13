@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
 import Clutter from 'gi://Clutter';
 import GLib from 'gi://GLib';
 import IBus from 'gi://IBus';
@@ -38,7 +40,7 @@ const SHOW_RECALL_MS = 30000;     // a history entry recalled from the menu
 export class Commander {
     constructor(settings, iconPath, gettext) {
         this._settings = settings;
-        this._ = gettext || (s => s);
+        this._ = gettext;
         this._machine = new HoldMachine(this._machineOptions());
         this._hud = new CommandHud(iconPath, this._, () => this._settings.get_string('hud-position'),
             () => this._settings.get_string('hud-effect'));
@@ -245,7 +247,7 @@ export class Commander {
 
     _cancelGuard() {
         if (this._guardId) {
-            GLib.source_remove(this._guardId);
+            GLib.Source.remove(this._guardId);
             this._guardId = 0;
         }
     }
@@ -269,7 +271,7 @@ export class Commander {
 
     _stopWatch() {
         if (this._watchId) {
-            GLib.source_remove(this._watchId);
+            GLib.Source.remove(this._watchId);
             this._watchId = 0;
         }
     }
@@ -288,7 +290,7 @@ export class Commander {
 
     _stopSilence() {
         if (this._silenceId) {
-            GLib.source_remove(this._silenceId);
+            GLib.Source.remove(this._silenceId);
             this._silenceId = 0;
         }
     }

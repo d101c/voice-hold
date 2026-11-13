@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
 // Where the pill goes, free of Shell imports so it can be tested with plain
 // gjs (same spirit as holdMachine.js). Rectangles are plain objects with
 // x, y, width and height, in stage coordinates.

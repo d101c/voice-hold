@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
 // Run: gjs -m extension/tests/commandsPure.test.js
 // The pure helpers of the voice commands: the menu line of a past request
 // (commands/recent.js) and the installer's command line

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
@@ -39,7 +41,7 @@ export function notifySetup({title, body, action, iconName, onActivate}) {
         source = new MessageTray.Source({title: 'Voice Hold', iconName});
         Main.messageTray.add(source);
         notification = new MessageTray.Notification({source, title, body, urgency: MessageTray.Urgency.CRITICAL});
-        notification.connect('activated', onActivate);
+        notification.connectObject('activated', onActivate, source);
         notification.addAction(action, onActivate);
         source.addNotification(notification);
     } else {
@@ -47,7 +49,7 @@ export function notifySetup({title, body, action, iconName, onActivate}) {
         Main.messageTray.add(source);
         notification = new MessageTray.Notification(source, title, body);
         notification.setUrgency(MessageTray.Urgency.CRITICAL);
-        notification.connect('activated', onActivate);
+        notification.connectObject('activated', onActivate, source);
         notification.addAction(action, onActivate);
         source.showNotification(notification);
     }

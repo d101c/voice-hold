@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
 // The pill is written in the system's interface font (Settings, or Tweaks:
 // org.gnome.desktop.interface font-name), at its size: the Shell's own theme
 // may use another family. Free of Shell imports, so it runs under plain gjs.

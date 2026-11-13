@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
 import Adw from 'gi://Adw';
 import Gdk from 'gi://Gdk';
 import Gio from 'gi://Gio';
@@ -17,7 +19,7 @@ import {MANUAL_COMMAND, installedSetupArgv, lastLine} from './installCommand.js'
 // shortcutRow(settings, key) builds the shortcut editor (the dictation's).
 
 export function buildCommandsPage(window, settings, gettext, shortcutRow) {
-    const _ = gettext || (s => s);
+    const _ = gettext;
     const page = new Adw.PreferencesPage({title: _('Commands'), icon_name: 'utilities-terminal-symbolic'});
 
     // -- on / off, shortcut ---------------------------------------------------

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
 import GLib from 'gi://GLib';
 
 // How to run `voice-hold-engine setup --commands` (the command helper and

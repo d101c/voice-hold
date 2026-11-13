@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
 // Where the words go: GNOME Shell's input method (Main.inputMethod), the same
 // object Accent Hold's press-and-hold uses. Partial text is shown as preedit
 // (the application underlines it), finished blocks are committed.
@@ -112,7 +114,9 @@ export class TextSink {
             // An empty string, not null: with null GTK keeps drawing the
             // previous preedit until the next key.
             this._im.set_preedit_text('', 0, 0, this._clutter.PreeditResetMode.CLEAR);
-        } catch {}
+        } catch {
+            // the input context is gone: nothing left to clear
+        }
     }
 
     commit(text) {

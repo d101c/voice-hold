@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
 // Run: gjs -m extension/tests/holdMachine.test.js
 import {HoldMachine, IDLE, PENDING, HOLD, TOGGLE} from '../holdMachine.js';
 
