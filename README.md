@@ -139,6 +139,17 @@ tools/headless/run.sh            # end-to-end in a headless GNOME Shell, with a 
 (text-to-speech) and recorded by us for the tests and the demo; it contains
 no one's voice.
 
+## Roadmap and issues
+
+Bugs, ideas, planned work and things still to test are tracked in the
+[GitHub issues](https://github.com/d101c/voice-hold/issues); what is planned for
+the next version is grouped in a milestone.
+
+- **Report a bug:** open an issue with your distribution, GNOME Shell version,
+  what you did, what you expected and what happened, plus any error shown by
+  `journalctl -b /usr/bin/gnome-shell`.
+- **Suggest an idea:** open an issue that describes what you want to do.
+
 ## Transparency
 
 Written with an AI coding assistant (Claude), designed, reviewed and tested

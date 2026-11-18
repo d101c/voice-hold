@@ -132,6 +132,18 @@ disque et rien ne quitte la machine, mais un autre processus local pourrait
 lancer une dictée ou lire le texte reconnu ; le bus de session n'offre pas
 de contrôle d'accès plus fin.
 
+## Feuille de route et tickets
+
+Défauts, idées, travail prévu et essais encore à faire sont suivis dans les
+[tickets GitHub](https://github.com/d101c/voice-hold/issues) ; ce qui est
+prévu pour la prochaine version est regroupé dans un jalon (milestone).
+
+- **Signaler un défaut :** ouvrez un ticket avec votre distribution, votre
+  version de GNOME Shell, ce que vous avez fait, ce que vous attendiez et ce
+  qui s'est passé, avec les erreurs affichées par
+  `journalctl -b /usr/bin/gnome-shell`.
+- **Proposer une idée :** ouvrez un ticket qui décrit ce que vous voulez faire.
+
 ## Transparence
 
 Écrit avec un assistant de code IA (Claude), conçu, relu et testé à la main
