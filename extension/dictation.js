@@ -90,6 +90,7 @@ export class Dictation {
         this._session = null;        // {ending, window, focus}
         this._startQueued = false;
         this._elsewhere = null;      // see setElsewhere()
+        this._onIdle = null;         // see setOnIdle()
 
         settings.connectObject(
             'changed::mode', () => this._reconfigure(),
@@ -134,13 +135,49 @@ export class Dictation {
 
     // -- entry points ------------------------------------------------------
 
-    shortcut() {
-        if (this._machine.state === IDLE && !this._sink.available) {
-            this._hud.show(this._('Click in a text field first'), 'error');
-            this._hud.hide(1800);
-            return;
+    // `beforeStart` runs when this press starts a dictation (not when it
+    // stops one, nor when there is no text field): the voice commands give
+    // way then (extension.js).
+    shortcut(beforeStart = null) {
+        if (this._machine.state === IDLE) {
+            if (!this._sink.available) {
+                this._hud.show(this._('Click in a text field first'), 'error');
+                this._hud.hide(1800);
+                return;
+            }
+            beforeStart?.();
         }
         this._run(this._machine.shortcut(GLib.get_monotonic_time() / 1000));
+    }
+
+    // The microphone is ours, or about to be.
+    get usesVoice() {
+        return !!this._session || this._startQueued;
+    }
+
+    // The command shortcut was pressed: finish (the last block is still
+    // written), or drop a start that was waiting.
+    yieldTo() {
+        if (this._machine.state === IDLE && this._startQueued && !this._session) {
+            this._dropQueuedStart();
+            this._hud.hide(0);
+            return;
+        }
+        if (this._live)
+            this._session.yielding = true;
+        this._run(this._machine.external('stop'));
+    }
+
+    // Called once a session is over: the commands may start.
+    setOnIdle(fn) {
+        this._onIdle = fn;
+    }
+
+    // The commands let go of the microphone: a start that waited for them
+    // goes ahead.
+    kick() {
+        if (this._startQueued && !this._session && !this._elsewhere?.())
+            this._startNow();
     }
 
     // A session that is listening (not ending).
@@ -228,24 +265,38 @@ export class Dictation {
     }
 
     _start() {
+        if (!this._session && this._elsewhere?.()) {
+            // A voice command is giving the microphone back (yieldTo):
+            // kick() starts this one then. Shown at once, so the press
+            // is seen to have worked.
+            this._startQueued = true;
+            if (this._settings.get_boolean('show-hud'))
+                this._hud.show(this._('Starting…'), 'loading');
+            this._armStartWait();
+            return;
+        }
         if (this._session) {
             // The previous session is still ending: wait for its Stopped so
             // its last block lands before the sink is reset, at most
             // START_WAIT_MS, then end it locally and go on.
             this._startQueued = true;
-            if (!this._startWaitId) {
-                this._startWaitId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, START_WAIT_MS, () => {
-                    this._startWaitId = 0;
-                    if (this._session)
-                        this._onStopped('error');
-                    else if (this._startQueued)
-                        this._startNow();
-                    return GLib.SOURCE_REMOVE;
-                });
-            }
+            this._armStartWait();
             return;
         }
         this._startNow();
+    }
+
+    _armStartWait() {
+        if (this._startWaitId)
+            return;
+        this._startWaitId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, START_WAIT_MS, () => {
+            this._startWaitId = 0;
+            if (this._session)
+                this._onStopped('error');
+            else if (this._startQueued)
+                this._startNow();
+            return GLib.SOURCE_REMOVE;
+        });
     }
 
     _startNow() {
@@ -284,7 +335,11 @@ export class Dictation {
 
     _stop() {
         if (this._startQueued) {
-            this._dropQueuedStart();      // never started: nothing to stop
+            // Never started (its own session still ending, or a voice
+            // command still giving the microphone back): nothing to stop.
+            this._dropQueuedStart();
+            if (!this._session)
+                this._hud.hide(0);
             return;
         }
         const session = this._session;
@@ -308,7 +363,11 @@ export class Dictation {
 
     _cancel() {
         if (this._startQueued) {
+            // Never started (its own session still ending, or a voice
+            // command still giving the microphone back): nothing to stop.
             this._dropQueuedStart();
+            if (!this._session)
+                this._hud.hide(0);
             return;
         }
         const session = this._session;
@@ -346,8 +405,11 @@ export class Dictation {
         this._stopSilence();
         this._clearHint();
         this._engineState = '';
+        const had = !!this._session;
         this._session = null;
         this._sink.end();
+        if (had && !this._startQueued)
+            this._onIdle?.();
     }
 
     _armGuard(session) {
@@ -537,6 +599,8 @@ export class Dictation {
             this._run(this._machine.external('engine'));
         if (reason === 'error')
             this._hud.hide(2500);
+        else if (session.yielding)
+            this._hud.hideNow();          // the command's pill takes its place
         else
             this._hud.hide();
         if (this._startQueued)

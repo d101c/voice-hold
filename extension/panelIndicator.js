@@ -63,6 +63,14 @@ class VoiceHoldIndicator extends PanelMenu.Button {
             },
         });
 
+        // The Shell may dispose of the bar without calling destroy() (at
+        // exit): stop listening to the engine then too.
+        this.connect('destroy', () => {
+            this._engine?.destroy();
+            this._engine = null;
+            this._icon = null;
+        });
+
         this._statusItem = new PopupMenu.PopupMenuItem('', {reactive: false});
         this.menu.addMenuItem(this._statusItem);
         this._modelItem = new PopupMenu.PopupMenuItem('');

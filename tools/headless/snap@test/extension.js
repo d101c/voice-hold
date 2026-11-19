@@ -35,8 +35,17 @@ export default class Snap {
         const indicator = Main.panel.statusArea['voice-hold@griffit.gmail.com'];
         indicator?.menu.toggle();
     }
+    // $SNAP_DIR/load: the menu's "Load now" / "Release the memory".
+    _load() {
+        const req = `${this._dir}/load`;
+        if (!GLib.file_test(req, GLib.FileTest.EXISTS))
+            return;
+        GLib.unlink(req);
+        Main.panel.statusArea['voice-hold@griffit.gmail.com']?._modelItem.activate(null);
+    }
     _tick() {
         this._menu();
+        this._load();
         this._full();
         const go = GLib.file_test(`${this._dir}/go`, GLib.FileTest.EXISTS);
         const stop = GLib.file_test(`${this._dir}/stop`, GLib.FileTest.EXISTS);

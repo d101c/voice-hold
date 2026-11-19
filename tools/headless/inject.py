@@ -10,7 +10,7 @@ import time
 
 from gi.repository import Gio, GLib
 
-CODES = {'meta': 125, 'ctrl': 29, 'x': 45, 'r': 19, 'esc': 1, 'bksp': 14, 'sp': 57, 'ret': 28, 'a': 16, 'e': 18}
+CODES = {'meta': 125, 'ctrl': 29, 'x': 45, 'r': 19, 'esc': 1, 'bksp': 14, 'sp': 57, 'alt': 56, 'ret': 28, 'a': 16, 'e': 18}
 bus = Gio.bus_get_sync(Gio.BusType.SESSION)
 
 

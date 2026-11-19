@@ -14,9 +14,17 @@ gnome-extensions enable voice-hold@griffit.gmail.com
 # HUD=cursor: the pill next to the text cursor instead of the island.
 [ -n "${HUD:-}" ] && gsettings --schemadir "$T/data/gnome-shell/extensions/voice-hold@griffit.gmail.com/schemas" \
     set org.gnome.shell.extensions.voice-hold hud-position "$HUD"
+# COMMANDS=1: the voice commands switched on (Ctrl+Alt+Space).
+[ "${COMMANDS:-0}" = 1 ] && gsettings --schemadir "$T/data/gnome-shell/extensions/voice-hold@griffit.gmail.com/schemas" \
+    set org.gnome.shell.extensions.voice-hold commands-enabled true
 [ "${SNAP:-0}" = 1 ] && gnome-extensions enable snap@test
 sleep 1
-WAYLAND_DISPLAY=wayland-t GDK_BACKEND=wayland python3 "$S/client.py" "$T/client.log" > "$T/client.err" 2>&1 &
+# APP="libreoffice --writer": that application instead of the test client.
+if [ -n "${APP:-}" ]; then
+    WAYLAND_DISPLAY=wayland-t GDK_BACKEND=wayland bash -c "$APP" > "$T/client.err" 2>&1 &
+else
+    WAYLAND_DISPLAY=wayland-t GDK_BACKEND=wayland GTK_A11Y=none NO_AT_BRIDGE=1 python3 "$S/client.py" "$T/client.log" > "$T/client.err" 2>&1 &
+fi
 sleep 3
 echo "dconf=$(ls "$XDG_CONFIG_HOME/dconf" 2>/dev/null) bus=$DBUS_SESSION_BUS_ADDRESS" >&2
 # PREFS=1: open the preferences window instead (its errors go to prefs.err).

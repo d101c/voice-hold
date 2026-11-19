@@ -67,6 +67,10 @@ export class Commander {
         this._mask = modifierMask(settings.get_strv('command-shortcut')[0] ?? '');
         this._session = null;   // {ending, texts: [], window}
         this._busy = false;     // interpreting / confirming / executing
+        this._epoch = 0;        // bumped when a request is dropped (yieldTo)
+        this._queued = false;   // a start waiting for the dictation to finish
+        this._elsewhere = null; // () => the dictation has the microphone
+        this._onIdle = null;    // called once our session is over
         this._closeDialog = null;   // closes the confirmation that is open
         this._jobs = new Map(); // job id -> {command, id: history id}
 
@@ -120,10 +124,47 @@ export class Commander {
         this._run(this._machine.shortcut(GLib.get_monotonic_time() / 1000));
     }
 
-    // Listening, thinking, confirming or running: the dictation shortcut is
-    // ignored meanwhile.
+    // Listening, thinking, confirming or running.
     get active() {
-        return this._machine.state !== IDLE || !!this._session || this._busy;
+        return this._machine.state !== IDLE || !!this._session || this._busy || this._queued;
+    }
+
+    // The microphone is ours, or about to be.
+    get usesVoice() {
+        return !!this._session || this._queued;
+    }
+
+    setElsewhere(fn) {
+        this._elsewhere = fn;
+    }
+
+    setOnIdle(fn) {
+        this._onIdle = fn;
+    }
+
+    // The dictation shortcut was pressed: drop what is under way. The words
+    // heard so far were meant for a command, not for the text field. A
+    // command already started in a terminal goes on; only its pill goes.
+    yieldTo() {
+        this._queued = false;
+        if (this._session || this._machine.state !== IDLE)
+            this._run(this._machine.external('cancel'));
+        if (this._busy) {
+            this._epoch++;
+            this._busy = false;
+            this._closeDialog?.();
+            this._closeDialog = null;
+        }
+        this._hud.hideNow();
+    }
+
+    // The dictation let go of the microphone: a start that waited for it
+    // goes ahead.
+    kick() {
+        if (this._queued && !this._elsewhere?.()) {
+            this._queued = false;
+            this._start();
+        }
     }
 
     // A dictation is starting: a result still on screen makes room for its
@@ -169,6 +210,12 @@ export class Commander {
     _start() {
         if (this._session)
             return;
+        if (this._elsewhere?.()) {
+            // The dictation is finishing its last block (yieldTo), its pill
+            // still up: kick() starts this one, and shows its pill, then.
+            this._queued = true;
+            return;
+        }
         const session = {ending: false, texts: [], window: global.display.focus_window};
         this._session = session;
         this._voice.stopSpeaking();
@@ -191,6 +238,11 @@ export class Commander {
     }
 
     _stop() {
+        if (this._queued) {
+            this._queued = false;         // released before it could start
+            this._hud.hideNow();
+            return;
+        }
         const session = this._session;
         if (!session || session.ending)
             return;
@@ -210,6 +262,11 @@ export class Commander {
     }
 
     _cancel() {
+        if (this._queued) {
+            this._queued = false;
+            this._hud.hideNow();
+            return;
+        }
         const session = this._session;
         if (!session)
             return;
@@ -232,7 +289,10 @@ export class Commander {
     _endSession() {
         this._cancelGuard();
         this._stopSilence();
+        const had = !!this._session;
         this._session = null;
+        if (had)
+            this._onIdle?.();
     }
 
     _armGuard(session) {
@@ -395,6 +455,7 @@ export class Commander {
     // -- understanding and execution ------------------------------------------
 
     async _interpret(text, window) {
+        const epoch = this._epoch;
         this._busy = true;
         this._hud.status(this._('Thinking…'), 'loading');
         const options = {
@@ -403,30 +464,36 @@ export class Commander {
         };
         try {
             const res = await this._engine.interpret(text, options);
-            if (this._gone)
-                return;
+            if (this._gone || epoch !== this._epoch)
+                return;                   // dropped for a dictation meanwhile
             if (!res.ok) {
                 this._showEngineError(res.error);
                 return;
             }
-            await this._execute(res.value, text, window);
+            await this._execute(res.value, text, window, epoch);
         } catch (e) {
             logError(e, 'voice-hold: interpret');
             this._hud?.error(e.message);
         } finally {
-            this._busy = false;
+            if (epoch === this._epoch)
+                this._busy = false;
         }
     }
 
     // destroy() ran while a call was awaited (the commands were switched
     // off, the extension disabled): nothing more may be touched.
+    // Gone, or dropped for a dictation (yieldTo) since `epoch`.
+    _stale(epoch) {
+        return this._gone || epoch !== this._epoch;
+    }
+
     get _gone() {
         return !this._hud;
     }
 
-    async _execute(intent, text, window) {
+    async _execute(intent, text, window, epoch = this._epoch) {
         const result = await dispatch(intent, this._actions);
-        if (this._gone)
+        if (this._stale(epoch))
             return;
         const id = intent.id ?? '';
         switch (result.kind) {
@@ -456,7 +523,7 @@ export class Commander {
             this._engine.note(id, this._unknownText(result.reason, text));
             return;
         case 'quiet':
-            await this._runQuiet(result.intent, text);
+            await this._runQuiet(result.intent, text, epoch);
             return;
         case 'confirm':
             break;
@@ -474,7 +541,7 @@ export class Commander {
                 onOpen: close => (this._closeDialog = close),
             });
             this._closeDialog = null;
-            if (ok && !this._gone)
+            if (ok && !this._stale(epoch))
                 this._actions.power(i.power_action);
             return;
         }
@@ -487,11 +554,11 @@ export class Commander {
             onOpen: close => (this._closeDialog = close),
         });
         this._closeDialog = null;
-        if (!ok || this._gone)
+        if (!ok || this._stale(epoch))
             return;
         this._hud.show(this._('Running…'), 'loading');
         const run = await this._engine.run(i.command, i.cwd ?? '');
-        if (this._gone)
+        if (this._stale(epoch))
             return;
         if (!run.ok) {
             this._showEngineError(run.error);
@@ -502,10 +569,10 @@ export class Commander {
 
     // A read-only command: the engine runs it, the pill shows the output
     // under the command, several lines, scrollable, until clicked away.
-    async _runQuiet(intent, text) {
+    async _runQuiet(intent, text, epoch = this._epoch) {
         this._hud.status(`$ ${intent.command}`, 'loading');
         const run = await this._engine.runQuiet(intent.id ?? '', intent.command, intent.cwd ?? '');
-        if (this._gone)
+        if (this._stale(epoch))
             return;
         if (!run.ok) {
             this._showEngineError(run.error);
@@ -520,7 +587,7 @@ export class Commander {
         // which replaces the status line and is said aloud. Not awaited: the
         // output is on screen, the shortcut is free again.
         this._engine.summarize(text, intent.command, output).then(sum => {
-            if (this._gone || !sum.ok || !sum.value || !this._hud.showingResult)
+            if (this._stale(epoch) || !sum.ok || !sum.value || !this._hud.showingResult)
                 return;
             this._hud.header(sum.value, code === 0 ? 'listening' : 'error');
             this._speak(sum.value);
@@ -614,7 +681,11 @@ export class Commander {
     _onJob(id, state, code, tail) {
         if (!this._jobs.has(id))
             return;
+        // Not over a dictation's pill: they hang from the same place.
+        const quiet = !!this._elsewhere?.();
         if (state === 'running') {
+            if (quiet)
+                return;
             this._hud.show(this._('Running…'), 'loading');
             return;
         }
@@ -624,9 +695,11 @@ export class Commander {
         const text = state === 'done'
             ? this._('Done ✓%s').format(detail)
             : this._('Failed ✗ (exit %d)%s').format(code, detail);
+        this._engine.note(job?.id ?? '', text, code);
+        if (quiet)
+            return;
         this._hud.show(text, state === 'done' ? 'listening' : 'error');
         this._hud.hide(SHOW_JOB_MS);
-        this._engine.note(job?.id ?? '', text, code);
     }
 
     _showEngineError(code) {

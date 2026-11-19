@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 import Gio from 'gi://Gio';
+import GLib from 'gi://GLib';
 import Meta from 'gi://Meta';
 import Shell from 'gi://Shell';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
@@ -66,6 +67,10 @@ export default class VoiceHoldExtension extends Extension {
     }
 
     disable() {
+        if (this._laterId) {
+            GLib.Source.remove(this._laterId);
+            this._laterId = 0;
+        }
         this._unbind();
         this._dropCommands();
         this._removeIndicator();
@@ -80,6 +85,19 @@ export default class VoiceHoldExtension extends Extension {
             this._dictation = null;
         }
         this._settings = null;
+    }
+
+    // Run `fn` from the main loop, outside the engine signal that ended a
+    // session: the next start must not run inside the previous one's
+    // handler.
+    _later(fn) {
+        if (this._laterId)
+            GLib.Source.remove(this._laterId);
+        this._laterId = GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+            this._laterId = 0;
+            fn();
+            return GLib.SOURCE_REMOVE;
+        });
     }
 
     // Once, right after the first install: the speech engine is a separate
@@ -137,13 +155,15 @@ export default class VoiceHoldExtension extends Extension {
             Meta.KeyBindingFlags.IGNORE_AUTOREPEAT,
             Shell.ActionMode.NORMAL,
             () => {
-                // One gesture at a time: not while a command is being
-                // listened to or run. (No commander unless the commands are
-                // switched on.)
-                if (this._commander?.active)
-                    return;
-                this._commander?.dismiss();
-                this._dictation?.shortcut();
+                // A command under way gives way to the dictation: it is
+                // dropped, and the dictation starts once the microphone is
+                // free. (No commander unless the commands are switched on.)
+                this._dictation?.shortcut(() => {
+                    if (this._commander?.active)
+                        this._commander.yieldTo();
+                    else
+                        this._commander?.dismiss();
+                });
             },
         );
         this._bound = true;
@@ -177,7 +197,11 @@ export default class VoiceHoldExtension extends Extension {
                 `${this.path}/icons/voice-hold-command-symbolic.svg`,
                 _,
             );
-            this._dictation.setElsewhere(() => !!this._commander?.active);
+            this._dictation.setElsewhere(() => !!this._commander?.usesVoice);
+            this._commander.setElsewhere(() => !!this._dictation?.usesVoice);
+            // Whoever finishes hands the microphone to a start that waited.
+            this._dictation.setOnIdle(() => this._later(() => this._commander?.kick()));
+            this._commander.setOnIdle(() => this._later(() => this._dictation?.kick()));
             this._bindCommand();
             this._indicator?.setCommands(this._commandsMenu());
         }).catch(e => {
@@ -193,6 +217,7 @@ export default class VoiceHoldExtension extends Extension {
         this._unbindCommand();
         this._indicator?.setCommands(null);
         this._dictation?.setElsewhere(null);
+        this._dictation?.setOnIdle(null);
         if (this._commander) {
             this._commander.destroy();
             this._commander = null;
@@ -224,9 +249,11 @@ export default class VoiceHoldExtension extends Extension {
             Meta.KeyBindingFlags.IGNORE_AUTOREPEAT,
             Shell.ActionMode.NORMAL,
             () => {
-                // Not while dictating: the microphone is taken.
-                if (!this._dictation?.active)
-                    this._commander?.shortcut();
+                // A dictation under way finishes (its last block is still
+                // written), then the command starts.
+                if (this._dictation?.active && !this._commander?.active)
+                    this._dictation.yieldTo();
+                this._commander?.shortcut();
             },
         );
         this._commandBound = true;
