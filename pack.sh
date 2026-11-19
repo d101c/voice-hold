@@ -18,6 +18,8 @@ PODIR=()
 gnome-extensions pack "$SRC" \
   --extra-source=accelLabel.js \
   --extra-source=accentColor.js \
+  --extra-source=apiKeys.js \
+  --extra-source=cloudPage.js \
   --extra-source=dictation.js \
   --extra-source=engine.js \
   --extra-source=holdMachine.js \

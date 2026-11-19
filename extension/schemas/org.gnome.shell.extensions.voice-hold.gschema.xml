@@ -49,6 +49,26 @@
       <summary>Self-corrections with the local LLM</summary>
       <description>Send each finished block through the local LLM (llama.cpp, installed with the voice commands) to keep only the corrected version when the speaker corrects themselves ("Monday, no, Tuesday"). Slow (seconds per block) and approximate; the text is kept as it is when the answer does not look like a clean-up.</description>
     </key>
+    <key name="cloud-enabled" type="b">
+      <default>false</default>
+      <summary>Use a cloud model</summary>
+      <description>Off: everything stays on this computer. On: the text of a request may be sent to the chosen provider, with the API key stored in the GNOME keyring. Speech is always recognised locally.</description>
+    </key>
+    <key name="cloud-provider" type="s">
+      <choices>
+        <choice value="anthropic"/>
+        <choice value="openai"/>
+        <choice value="gemini"/>
+      </choices>
+      <default>'anthropic'</default>
+      <summary>Cloud provider</summary>
+      <description>Which provider's model is used when cloud-enabled is on.</description>
+    </key>
+    <key name="cloud-model" type="s">
+      <default>'claude-sonnet-5-5'</default>
+      <summary>Cloud model</summary>
+      <description>Model of the chosen provider used by the voice commands when cloud-enabled is on.</description>
+    </key>
     <key name="keep-loaded-min" type="i">
       <default>30</default>
       <range min="1" max="480"/>

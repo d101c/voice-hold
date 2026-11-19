@@ -8,6 +8,7 @@ import Gtk from 'gi://Gtk';
 import Pango from 'gi://Pango';
 
 import {ExtensionPreferences, gettext as _} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
+import {buildCloudPage} from './cloudPage.js';
 import {buildCommandsPage} from './commands/prefsPage.js';
 import {listSources} from './engine.js';
 import {buildSetupPage} from './setupPage.js';
@@ -44,6 +45,7 @@ export default class VoiceHoldPreferences extends ExtensionPreferences {
         // Optional voice commands: their own page, after the two of the
         // dictation.
         window.add(buildCommandsPage(window, settings, _, (s, key) => this._shortcutRow(s, key)));
+        window.add(buildCloudPage(window, settings, _));
         this._engineStatus().then(s => {
             if (!s.installed)
                 window.set_visible_page(setup);

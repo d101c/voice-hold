@@ -698,3 +698,109 @@ msgstr "Modèle de langage : mémoire insuffisante (%s libres, %s requis)"
 
 msgid "Language model not installed — settings, Commands page"
 msgstr "Modèle de langage non installé — réglages, page Commandes"
+
+msgid "Cloud"
+msgstr "Cloud"
+
+msgid "Optional: a cloud model"
+msgstr "Option : un modèle dans le cloud"
+
+msgid "Off by default: Voice Hold works offline. Your voice is always recognised on this computer and never sent. When on, the voice commands ask the chosen model what you meant: the text of the request is sent, with the facts it asks for (disk space, battery, firewall…). Changes are always shown to you first. Keys are kept in the GNOME keyring."
+msgstr "Désactivé par défaut : Voice Hold fonctionne hors ligne. Votre voix est toujours reconnue sur cet ordinateur et n'est jamais envoyée. Si c'est activé, les commandes vocales demandent au modèle choisi ce que vous vouliez dire : le texte de la demande part, avec les informations qu'il demande (place disque, batterie, pare-feu…). Toute modification vous est d'abord montrée. Les clés sont rangées dans le trousseau GNOME."
+
+msgid "Use a cloud model"
+msgstr "Utiliser un modèle dans le cloud"
+
+msgid "Provider"
+msgstr "Fournisseur"
+
+msgid "API keys"
+msgstr "Clés API"
+
+msgid "Paste a key and press Enter: it is checked with the provider, then stored."
+msgstr "Collez une clé et appuyez sur Entrée : elle est vérifiée auprès du fournisseur, puis rangée."
+
+msgid "No key"
+msgstr "Aucune clé"
+
+msgid "API key"
+msgstr "Clé API"
+
+msgid "Where to get a key"
+msgstr "Où obtenir une clé"
+
+msgid "Open"
+msgstr "Ouvrir"
+
+msgid "Test"
+msgstr "Tester"
+
+msgid "Remove the key"
+msgstr "Supprimer la clé"
+
+msgid "Key stored: %s"
+msgstr "Clé rangée : %s"
+
+
+msgid "%s refused this key"
+msgstr "%s refuse cette clé"
+
+msgid "Could not check the key: %s"
+msgstr "Impossible de vérifier la clé : %s"
+
+msgid "Keyring unavailable: %s"
+msgstr "Trousseau indisponible : %s"
+
+msgid "%s key works and is stored"
+msgstr "Clé %s valide et rangée"
+
+msgid "Keyring error: %s"
+msgstr "Erreur du trousseau : %s"
+
+msgid "%s key works"
+msgstr "Clé %s valide"
+
+msgid "%s key removed"
+msgstr "Clé %s supprimée"
+
+msgid "Model"
+msgstr "Modèle"
+
+msgid "recommended: checks before acting, about 4 s"
+msgstr "recommandé : vérifie avant d'agir, environ 4 s"
+
+msgid "the most careful, slower and about twice the price"
+msgstr "le plus rigoureux, plus lent et environ deux fois plus cher"
+
+msgid "the fastest and cheapest, more often wrong"
+msgstr "le plus rapide et le moins cher, se trompe plus souvent"
+
+msgid "Not supported by the voice commands yet: only Anthropic for now"
+msgstr "Pas encore pris en charge par les commandes vocales : seulement Anthropic pour l'instant"
+
+msgid "No API key for the cloud model — settings, Cloud page"
+msgstr "Pas de clé API pour le modèle cloud — réglages, page Cloud"
+
+msgid "The cloud provider refused the API key — settings, Cloud page"
+msgstr "Le fournisseur refuse la clé API — réglages, page Cloud"
+
+msgid "The cloud provider asks to slow down — try again in a moment"
+msgstr "Le fournisseur demande de ralentir — réessayez dans un instant"
+
+msgid "The cloud model took too long"
+msgstr "Le modèle cloud a mis trop de temps"
+
+msgid "The cloud model cannot be reached"
+msgstr "Le modèle cloud est injoignable"
+
+msgid "Cloud support is not installed in the speech engine"
+msgstr "La prise en charge du cloud n'est pas installée dans le moteur"
+
+msgid "This cloud provider is not supported yet — choose Anthropic"
+msgstr "Ce fournisseur n'est pas encore pris en charge — choisissez Anthropic"
+
+msgid "The cloud model declined this request"
+msgstr "Le modèle cloud a refusé cette demande"
+
+msgid "Cloud model error (%s)"
+msgstr "Erreur du modèle cloud (%s)"
