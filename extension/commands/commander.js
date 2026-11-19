@@ -221,7 +221,9 @@ export class Commander {
         this._voice.stopSpeaking();
         if (this._settings.get_boolean('show-hud'))
             this._hud.show(this._('Starting…'), 'loading');
-        if (this._settings.get_boolean('command-llm'))
+        // The local model is warmed up only when it is the one that answers:
+        // with the cloud on, it is a fallback for when the network is down.
+        if (this._settings.get_boolean('command-llm') && !this._settings.get_boolean('cloud-enabled'))
             this._engine.prepare();
         const options = {
             'silence-stop-s': 0,
@@ -461,6 +463,10 @@ export class Commander {
         const options = {
             'llm': this._settings.get_boolean('command-llm'),
             'work-dir': this._settings.get_string('command-work-dir'),
+            // The optional cloud assistant (Cloud page); its key is in the keyring.
+            'cloud': this._settings.get_boolean('cloud-enabled'),
+            'cloud-provider': this._settings.get_string('cloud-provider'),
+            'cloud-model': this._settings.get_string('cloud-model'),
         };
         try {
             const res = await this._engine.interpret(text, options);
@@ -498,7 +504,7 @@ export class Commander {
         const id = intent.id ?? '';
         switch (result.kind) {
         case 'done': {
-            const say = result.say || this._('Done');
+            const say = intent.say || result.say || this._('Done');
             this._hud.status(say, 'listening');
             this._hud.hide(SHOW_RESULT_MS);
             this._engine.note(id, say);
@@ -547,6 +553,7 @@ export class Commander {
         }
         const ok = await confirm({
             title: this._('Voice Hold heard: “%s”').format(text),
+            summary: i.summary ?? '',
             command: `$ ${i.command}`,
             warning: i.warning ? this._('Warning: this %s.').format(i.warning) : '',
             runLabel: this._('Run'),
@@ -654,6 +661,20 @@ export class Commander {
 
     // The pill shows one line and cuts its start: the reason goes last.
     _unknownText(reason, text) {
+        const cloud = {
+            'cloud-no-key': this._('No API key for the cloud model — settings, Cloud page'),
+            'cloud-key-rejected': this._('The cloud provider refused the API key — settings, Cloud page'),
+            'cloud-rate-limited': this._('The cloud provider asks to slow down — try again in a moment'),
+            'cloud-timeout': this._('The cloud model took too long'),
+            'cloud-unreachable': this._('The cloud model cannot be reached'),
+            'cloud-sdk-missing': this._('Cloud support is not installed in the speech engine'),
+            'cloud-provider-unsupported': this._('This cloud provider is not supported yet — choose Anthropic'),
+            'cloud-refused': this._('The cloud model declined this request'),
+        }[reason];
+        if (cloud)
+            return cloud;
+        if (reason?.startsWith('cloud-error'))
+            return this._('Cloud model error (%s)').format(reason.slice(13) || '?');
         if (reason === 'llm-off')
             return this._('“%s” — not a known action, and the language model is off').format(text);
         if (reason === 'llm-not-installed')

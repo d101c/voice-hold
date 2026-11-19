@@ -14,6 +14,8 @@ dependencies = [
 
 [project.optional-dependencies]
 test = ["pytest>=8", "pytest-asyncio>=0.24"]
+# The optional cloud assistant of the voice commands (Anthropic API).
+cloud = ["anthropic>=2.10"]
 
 [project.scripts]
 voice-hold-engine = "voice_hold_engine.cli:main"

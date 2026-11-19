@@ -10,7 +10,8 @@ import * as ModalDialog from 'resource:///org/gnome/shell/ui/modalDialog.js';
 // Resolves to true (run) or false. `onOpen(close)` hands out a function
 // that closes the dialog as a refusal (the extension is being disabled).
 
-export function confirm({title, command, warning, runLabel, cancelLabel, onOpen = null}) {
+// `summary`: what the command does, in a sentence (from the cloud assistant).
+export function confirm({title, summary = '', command, warning, runLabel, cancelLabel, onOpen = null}) {
     return new Promise(resolve => {
         let decided = false;
         const dialog = new ModalDialog.ModalDialog({styleClass: 'voice-cmd-dialog'});
@@ -21,6 +22,11 @@ export function confirm({title, command, warning, runLabel, cancelLabel, onOpen 
         else
             box.vertical = true;
         box.add_child(new St.Label({text: title, style_class: 'voice-cmd-dialog-title'}));
+        if (summary) {
+            const what = new St.Label({text: summary, style_class: 'voice-cmd-dialog-summary'});
+            what.clutter_text.line_wrap = true;
+            box.add_child(what);
+        }
         const cmd = new St.Label({text: command, style_class: 'voice-cmd-dialog-command'});
         cmd.clutter_text.line_wrap = true;
         cmd.clutter_text.line_wrap_mode = Pango.WrapMode.WORD_CHAR;

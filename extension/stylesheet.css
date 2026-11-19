@@ -108,6 +108,7 @@
 /* The confirmation before a shell command or a power action. */
 .voice-cmd-dialog-content { spacing: 12px; min-width: 420px; max-width: 720px; }
 .voice-cmd-dialog-title { font-size: 13px; color: #aaa; }
+.voice-cmd-dialog-summary { font-size: 15px; color: #fff; }
 .voice-cmd-dialog-command {
     font-family: monospace;
     font-size: 14px;

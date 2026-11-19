@@ -12,7 +12,7 @@ from dbus_fast import DBusError, Variant
 from dbus_fast.service import ServiceInterface, method, signal
 
 from .. import __version__, llamacpp
-from . import INTERFACE, jobs as jobsmod, llm, quick, safety
+from . import INTERFACE, cloud, jobs as jobsmod, llm, quick, safety
 from .history import History
 from .interpreter import Interpreter
 
@@ -39,6 +39,8 @@ def to_variants(intent):
             out[k] = Variant('d', v)
         elif v is None:
             continue
+        elif isinstance(v, (list, tuple)):
+            out[k] = Variant('s', ', '.join(map(str, v)))
         else:
             out[k] = Variant('s', str(v))
     return out
@@ -115,6 +117,13 @@ class CommandsInterface(ServiceInterface):
         self._touch()
         self._interpreter.use_llm = bool(_opt(options, 'llm', True))
         self._interpreter.work_dir = str(_opt(options, 'work-dir', ''))
+        if bool(_opt(options, 'cloud', False)):
+            self._interpreter.cloud = {
+                'provider': str(_opt(options, 'cloud-provider', 'anthropic')),
+                'model': str(_opt(options, 'cloud-model', '')) or cloud.DEFAULT_MODEL,
+            }
+        else:
+            self._interpreter.cloud = None
         intent = await self._loop.run_in_executor(self._executor, self._interpreter.interpret, text)
         intent['id'] = self._history.add(text, intent.get('action', 'unknown'),
                                          command=str(intent.get('command', '')),

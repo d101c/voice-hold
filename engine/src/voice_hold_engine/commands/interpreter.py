@@ -1,8 +1,10 @@
-"""Rules first, then the local LLM, then the guard rails. Produces the intent
-dict the extension executes, with a short `say` line for the pill."""
+"""Rules first, then the cloud assistant when it is switched on (cloud.py),
+else the local LLM, then the guard rails. Produces the intent dict the
+extension executes, with a short `say` line for the pill. When the cloud
+cannot be reached the local LLM answers instead: offline still works."""
 import time
 
-from . import llm, rules, safety
+from . import cloud, llm, rules, safety
 
 CLOSED = {
     'open_app', 'close_window', 'close_all_windows', 'set_volume', 'change_volume',
@@ -12,9 +14,12 @@ CLOSED = {
 
 
 class Interpreter:
-    def __init__(self, *, use_llm=True, llm_fn=None, apps=None, work_dir=''):
+    def __init__(self, *, use_llm=True, llm_fn=None, apps=None, work_dir='', cloud_fn=None):
         self.use_llm = use_llm
         self._llm_fn = llm_fn or llm.interpret
+        self._cloud_fn = cloud_fn or cloud.interpret
+        # {'provider', 'model'} while the cloud is switched on, else None.
+        self.cloud = None
         self._rules = rules.RuleParser(apps)
         self.work_dir = work_dir
 
@@ -25,6 +30,28 @@ class Interpreter:
         t0 = time.perf_counter()
         intent = self._rules.parse(text)
         source = 'rules'
+        why = ''
+        # With the cloud on, the rules keep only what they do instantly and
+        # surely (desktop actions, apps, the time); a shell command they would
+        # guess ("fais de la place" -> df) is the assistant's to work out.
+        if self.cloud and intent is not None and intent.get('action') == 'run_shell':
+            intent = None
+        if intent is None and self.cloud:
+            try:
+                intent = self._cloud_fn(text, **self.cloud)
+                source = 'cloud'
+            except cloud.CloudError as e:
+                why = str(e)
+                # Offline, or the provider is down: the local model answers.
+                if why not in ('cloud-unreachable', 'cloud-timeout') or not self.use_llm:
+                    intent = {'action': 'unknown', 'reason': why}
+                    source = 'none'
+            if intent is not None and intent.get('action') == 'open_app' and 'app_id' not in intent:
+                app, _ = self._rules.index.lookup(intent.get('name', ''))
+                if app:
+                    intent = {**intent, 'app_id': app['id'], 'name': app.get('name_fr') or app['name']}
+                else:
+                    intent = {'action': 'unknown', 'reason': f"no app named {intent.get('name', '')!r}"}
         if intent is None:
             if self.use_llm:
                 try:
