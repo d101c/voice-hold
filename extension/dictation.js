@@ -5,6 +5,7 @@ import GLib from 'gi://GLib';
 import IBus from 'gi://IBus';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
+import {accelLabel} from './accelLabel.js';
 import {EngineClient} from './engine.js';
 import {HoldMachine, IDLE, TOGGLE} from './holdMachine.js';
 import {Hud} from './hud.js';
@@ -25,6 +26,13 @@ import {TextSink} from './textSink.js';
 const WATCH_MS = 50;
 const END_GUARD_MS = 3000;
 const START_WAIT_MS = 3000;
+// Until a load has been timed in this session of the Shell.
+const DEFAULT_LOAD_MS = 5000;
+// How long the hands-free hint stays before the pill goes back to words only.
+const HINT_MS = 2500;
+// In hands-free mode, the last seconds before the silence stop are counted.
+const COUNTDOWN_MS = 3000;
+const SILENCE_TICK_MS = 250;
 
 // Engine errors after which no further signal is to be expected.
 const FATAL_ERRORS = ['models-missing', 'low-memory:', 'audio:', 'model:'];
@@ -45,12 +53,12 @@ export function modifierMask(accel) {
 }
 
 export class Dictation {
-    constructor(settings, iconPath, gettext, openSetup = null) {
+    constructor(settings, gettext, openSetup = null) {
         this._settings = settings;
         this._openSetup = openSetup;
         this._ = gettext;
         this._machine = new HoldMachine(this._machineOptions());
-        this._hud = new Hud(iconPath, this._, () => settings.get_string('hud-position'),
+        this._hud = new Hud(this._, () => settings.get_string('hud-position'),
             () => settings.get_string('hud-effect'));
         // The preferences' Preview button: show the pill once, as it would
         // look while listening.
@@ -68,6 +76,14 @@ export class Dictation {
         });
         this._watchId = 0;
         this._silenceId = 0;
+        this._silenceDeadline = 0;
+        this._countdown = 0;         // seconds shown, 0 = none
+        this._hintId = 0;
+        this._hint = false;          // a status hint is up, no words yet
+        this._handsFreeShown = false;
+        this._engineState = '';      // '' | 'loading' | 'listening' for this session
+        this._loadStartedAt = 0;
+        this._loadMs = DEFAULT_LOAD_MS;
         this._guardId = 0;
         this._startWaitId = 0;
         this._mask = modifierMask(settings.get_strv('dictation-shortcut')[0] ?? '');
@@ -171,11 +187,43 @@ export class Dictation {
         this._afterTransition();
     }
 
-    // Entering hands-free mode: say so, and arm the silence timer.
+    // Entering hands-free mode: the lock, how to finish (once the model
+    // is there: a loading pill keeps its hint and bar), and the silence
+    // timer.
     _afterTransition() {
-        if (this._machine.state === TOGGLE && this._live) {
-            this._hud.status('', 'listening');
-            this._armSilence();
+        if (this._machine.state !== TOGGLE || !this._live || this._handsFreeShown)
+            return;
+        this._handsFreeShown = true;
+        this._hud.setLocked(true);
+        if (this._engineState !== 'loading')
+            this._showHint(this._handsFreeHint(), 'listening');
+        this._armSilence();
+    }
+
+    _handsFreeHint() {
+        const accel = accelLabel(this._settings.get_strv('dictation-shortcut')[0] ?? '', this._);
+        return this._('Hands-free — %s to finish').format(accel);
+    }
+
+    // A hint in the pill until the first words, or HINT_MS.
+    _showHint(text, pseudo) {
+        this._clearHint();
+        this._hud.status(text, pseudo);
+        this._hint = true;
+        this._hintId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, HINT_MS, () => {
+            this._hintId = 0;
+            if (this._hint && this._live && !this._countdown)
+                this._hud.status('', 'listening');
+            this._hint = false;
+            return GLib.SOURCE_REMOVE;
+        });
+    }
+
+    _clearHint() {
+        this._hint = false;
+        if (this._hintId) {
+            GLib.Source.remove(this._hintId);
+            this._hintId = 0;
         }
     }
 
@@ -208,12 +256,19 @@ export class Dictation {
             focus: Main.inputMethod.currentFocus,
         };
         this._session = session;
+        this._engineState = '';
+        this._handsFreeShown = false;
+        this._clearHint();
         this._sink.begin();
-        if (this._settings.get_boolean('show-hud'))
+        if (this._settings.get_boolean('show-hud')) {
             this._hud.show(this._('Starting…'), 'loading');
+            this._hud.setLocked(false);
+        }
         const options = {
             'silence-stop-s': 0,
             'polish': this._settings.get_boolean('polish'),
+            'tidy': this._settings.get_boolean('tidy'),
+            'keep-loaded-s': this._settings.get_int('keep-loaded-min') * 60,
             'source': this._settings.get_string('microphone'),
         };
         this._engine.start(options).then(err => {
@@ -289,6 +344,8 @@ export class Dictation {
     _endSession() {
         this._cancelGuard();
         this._stopSilence();
+        this._clearHint();
+        this._engineState = '';
         this._session = null;
         this._sink.end();
     }
@@ -342,15 +399,30 @@ export class Dictation {
 
     // -- silence timer (toggle mode) ---------------------------------------
 
+    // The last COUNTDOWN_MS are counted down in the pill, so the stop
+    // never comes as a surprise.
     _armSilence() {
         this._stopSilence();
         const s = this._settings.get_double('silence-stop-s');
-        if (s <= 0 || this._machine.state !== TOGGLE)
+        // Not before the model is there: what is said while it loads is
+        // not silence, it just cannot be heard yet.
+        if (s <= 0 || this._machine.state !== TOGGLE || this._engineState !== 'listening')
             return;
-        this._silenceId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, Math.round(s * 1000), () => {
-            this._silenceId = 0;
-            this._run(this._machine.external('silence'));
-            return GLib.SOURCE_REMOVE;
+        this._silenceDeadline = GLib.get_monotonic_time() / 1000 + s * 1000;
+        this._silenceId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, SILENCE_TICK_MS, () => {
+            const left = this._silenceDeadline - GLib.get_monotonic_time() / 1000;
+            if (left <= 0) {
+                this._silenceId = 0;
+                this._countdown = 0;
+                this._run(this._machine.external('silence'));
+                return GLib.SOURCE_REMOVE;
+            }
+            const n = Math.ceil(left / 1000);
+            if (left <= COUNTDOWN_MS && n !== this._countdown) {
+                this._countdown = n;
+                this._hud.status(this._('Stopping in %d s — speak to go on').format(n), 'listening');
+            }
+            return GLib.SOURCE_CONTINUE;
         });
     }
 
@@ -358,6 +430,11 @@ export class Dictation {
         if (this._silenceId) {
             GLib.Source.remove(this._silenceId);
             this._silenceId = 0;
+        }
+        if (this._countdown) {
+            this._countdown = 0;
+            if (this._live)
+                this._hud.status('', 'listening');
         }
     }
 
@@ -386,15 +463,32 @@ export class Dictation {
         this._onStopped('error');
     }
 
+    // The model loads after a few minutes idle (keep-loaded-min): a bar
+    // that fills over the last load's time, then a clear "ready". What is
+    // said meanwhile is recorded and transcribed once the model is there.
     _onState(state) {
         if (!this._live)
             return;
-        if (state === 'loading')
-            this._hud.status(this._('Loading the model… speak, nothing is lost'), 'loading');
-        else if (state === 'listening')
-            this._hud.status('', 'listening');
-        else if (state === 'decoding')
+        const now = GLib.get_monotonic_time() / 1000;
+        if (state === 'loading') {
+            this._engineState = 'loading';
+            this._loadStartedAt = now;
+            this._hud.loading(this._('Loading the model… speak, nothing is lost'), this._loadMs);
+        } else if (state === 'listening') {
+            const wasLoading = this._engineState === 'loading';
+            this._engineState = 'listening';
+            if (wasLoading) {
+                this._loadMs = Math.round(now - this._loadStartedAt);
+                this._hud.ready('');
+                this._showHint(this._machine.state === TOGGLE ? this._handsFreeHint() : this._('Ready'),
+                    'listening');
+            } else if (!this._hint) {
+                this._hud.status('', 'listening');
+            }
+            this._armSilence();
+        } else if (state === 'decoding') {
             this._hud.pending();
+        }
     }
 
     _onSpeech(speaking) {
@@ -413,6 +507,7 @@ export class Dictation {
             this._run(this._machine.external('cancel'));
             return;
         }
+        this._clearHint();
         this._hud.live(text);
     }
 
@@ -425,6 +520,7 @@ export class Dictation {
                 this._run(this._machine.external('cancel'));
             return;
         }
+        this._clearHint();
         this._hud.live(text);
     }
 

@@ -23,7 +23,6 @@ export default class VoiceHoldExtension extends Extension {
         this._bound = false;
         this._dictation = new Dictation(
             this._settings,
-            `${this.path}/icons/voice-hold-symbolic.svg`,
             _,
             () => {
                 this._welcomeSource?.destroy();

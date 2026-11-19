@@ -16,6 +16,8 @@ PODIR=()
 [ -d "$SRC/po" ] && PODIR=(--podir=po --gettext-domain="$DOMAIN")
 
 gnome-extensions pack "$SRC" \
+  --extra-source=accelLabel.js \
+  --extra-source=accentColor.js \
   --extra-source=dictation.js \
   --extra-source=engine.js \
   --extra-source=holdMachine.js \
@@ -25,6 +27,7 @@ gnome-extensions pack "$SRC" \
   --extra-source=systemFont.js \
   --extra-source=keyHook.js \
   --extra-source=memoryText.js \
+  --extra-source=modelState.js \
   --extra-source=panelIndicator.js \
   --extra-source=setup.js \
   --extra-source=setupPage.js \

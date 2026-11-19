@@ -5,6 +5,8 @@ S="$(cd "$(dirname "$0")" && pwd)"; T="$S/env"
 gsettings set org.gnome.shell disable-user-extensions false
 gsettings set org.gnome.desktop.input-sources sources "[('xkb','fr')]"
 gsettings set org.gnome.desktop.interface color-scheme prefer-dark
+# ACCENT=slate: the system accent colour the pills take.
+[ -n "${ACCENT:-}" ] && gsettings set org.gnome.desktop.interface accent-color "$ACCENT"
 gnome-shell --headless --wayland --no-x11 --virtual-monitor 1280x800 --wayland-display=wayland-t > "$T/shell.log" 2>&1 &
 SH=$!
 sleep 6

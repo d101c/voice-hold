@@ -65,3 +65,17 @@ export function trailing(text, max) {
     const chars = Array.from(text);
     return chars.length > max ? `…${chars.slice(-max).join('')}` : text;
 }
+
+// The engine's Level (its RMS times 4, 0..1) on a decibel scale, so that a
+// whisper still moves the bars and normal speech does not pin them:
+// -55 dBFS and below is nothing, -14 dBFS and above is full.
+const LEVEL_FLOOR_DB = -55;
+const LEVEL_TOP_DB = -14;
+
+export function levelCurve(v) {
+    const rms = Math.max(0, Number(v) || 0) / 4;
+    if (rms <= 0)
+        return 0;
+    const db = 20 * Math.log10(rms);
+    return Math.max(0, Math.min(1, (db - LEVEL_FLOOR_DB) / (LEVEL_TOP_DB - LEVEL_FLOOR_DB)));
+}

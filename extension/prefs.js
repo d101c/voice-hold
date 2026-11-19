@@ -175,6 +175,14 @@ export default class VoiceHoldPreferences extends ExtensionPreferences {
         });
         group.add(silenceRow);
         settings.bind('silence-stop-s', silenceRow, 'value', Gio.SettingsBindFlags.DEFAULT);
+
+        const keepRow = new Adw.SpinRow({
+            title: _('Keep the model loaded (min)'),
+            subtitle: _('About 1 GB of memory. After that, the next dictation waits a few seconds for it to load.'),
+            adjustment: new Gtk.Adjustment({lower: 1, upper: 480, step_increment: 5}),
+        });
+        group.add(keepRow);
+        settings.bind('keep-loaded-min', keepRow, 'value', Gio.SettingsBindFlags.DEFAULT);
     }
 
     // The editor of a shortcut stored as a strv under `key`.
@@ -280,13 +288,20 @@ export default class VoiceHoldPreferences extends ExtensionPreferences {
     // -- polish -----------------------------------------------------------
 
     _buildPolishGroup(page, settings) {
-        const group = new Adw.PreferencesGroup({
-            title: _('Optional: polish with a local LLM'),
-            description: _('Off by default. When on, each finished block is sent to the local LLM (the one the voice commands install) to fix punctuation and casing. Falls back to the raw text if it does not answer within 4 s.'),
-        });
+        const group = new Adw.PreferencesGroup({title: _('Text clean-up')});
         page.add(group);
 
-        const sw = new Adw.SwitchRow({title: _('Polish each block')});
+        const tidy = new Adw.SwitchRow({
+            title: _('Remove hesitations'),
+            subtitle: _('“euh”, “uh”, “hum” and words said twice in a row. Instant.'),
+        });
+        group.add(tidy);
+        settings.bind('tidy', tidy, 'active', Gio.SettingsBindFlags.DEFAULT);
+
+        const sw = new Adw.SwitchRow({
+            title: _('Self-corrections with the local LLM'),
+            subtitle: _('“Monday, no, Tuesday” becomes “Tuesday”. Needs the language model of the voice commands. Slow on a laptop (2 to 6 s per sentence) and approximate: the text is kept as it is when the answer looks wrong.'),
+        });
         group.add(sw);
         settings.bind('polish', sw, 'active', Gio.SettingsBindFlags.DEFAULT);
     }

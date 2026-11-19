@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GObject from 'gi://GObject';
 import St from 'gi://St';
@@ -7,12 +8,27 @@ import St from 'gi://St';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
+import {getMixerControl} from 'resource:///org/gnome/shell/ui/status/volume.js';
 
-import {listSources} from './engine.js';
+import {accentColor} from './accentColor.js';
+import {EngineClient} from './engine.js';
+import {speechLowMemory} from './memoryText.js';
+import {modelState, statusLine} from './modelState.js';
 
-// Top-bar indicator: the microphone icon plus a menu with a toggle bound to
-// the `enabled` setting, the microphone choice and the preferences. When the
-// voice commands are switched on, their last requests too (setCommands).
+// Top-bar indicator. The icon tells the state of the speech model
+// (modelState.js): normal when it is in memory and the dictation starts at
+// once, dimmed when it is asleep and the first words will wait a few
+// seconds, breathing while it loads, crossed out while the shortcut is
+// switched off, in the accent colour while the microphone is in use.
+//
+// The menu: that state in words with "Load now" or "Release the memory",
+// the `enabled` toggle, the microphone (from GNOME's own mixer, so the list
+// is there whether the engine runs or not), the last voice commands when
+// they are switched on (setCommands), and the preferences.
+
+const ASLEEP_OPACITY = 105;
+const BREATHE_MS = 700;
+const BUSY_STATES = ['loading', 'listening', 'decoding'];
 export const VoiceHoldIndicator = GObject.registerClass(
 class VoiceHoldIndicator extends PanelMenu.Button {
     _init(settings, iconPath, openPreferences, gettext) {
@@ -24,13 +40,36 @@ class VoiceHoldIndicator extends PanelMenu.Button {
         this._gettext = _;
         this._commands = null;
         this._recentMenu = null;
+        this._gicon = Gio.icon_new_for_string(iconPath);
+        this._offIcon = Gio.ThemedIcon.new('microphone-disabled-symbolic');
+        this._model = '';            // the engine's Model, '' when unknown
+        this._inUse = false;         // a dictation or a command is listening
+        this._state = '';
+        this._unloadIn = -1;         // seconds before the model is released
 
-        this._icon = new St.Icon({
-            gicon: Gio.icon_new_for_string(iconPath),
-            style_class: 'system-status-icon',
-        });
+        this._icon = new St.Icon({gicon: this._gicon, style_class: 'system-status-icon'});
         this.add_child(this._icon);
-        this._syncIcon();
+
+        // Its own connection to the engine: signals only, never starts it.
+        this._engine = new EngineClient({
+            Owner: has => this._onOwner(has),
+            Model: m => {
+                this._model = m;
+                this._sync();
+            },
+            State: st => {
+                this._inUse = BUSY_STATES.includes(st);
+                this._sync();
+            },
+        });
+
+        this._statusItem = new PopupMenu.PopupMenuItem('', {reactive: false});
+        this.menu.addMenuItem(this._statusItem);
+        this._modelItem = new PopupMenu.PopupMenuItem('');
+        this._modelItem.connectObject('activate', () => this._toggleModel(), this);
+        this.menu.addMenuItem(this._modelItem);
+
+        this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
 
         this._toggle = new PopupMenu.PopupSwitchMenuItem(
             _('Enabled'), this._settings.get_boolean('enabled'));
@@ -47,6 +86,7 @@ class VoiceHoldIndicator extends PanelMenu.Button {
         this.menu.addMenuItem(this._micMenu);
         this.menu.connectObject('open-state-changed', (_m, open) => {
             if (open) {
+                this._refreshStatus();
                 this._fillMicrophones(_);
                 this._fillRecent();
             }
@@ -60,44 +100,112 @@ class VoiceHoldIndicator extends PanelMenu.Button {
 
         this._settings.connectObject('changed::enabled', () => {
             this._toggle.setToggleState(this._settings.get_boolean('enabled'));
-            this._syncIcon();
+            this._sync();
         }, this);
+        this._sync();
+        this._refreshStatus();
     }
 
-    // Dimmed while the shortcut is switched off, so the bar says why nothing
-    // happens.
-    _syncIcon() {
-        this._icon.opacity = this._settings.get_boolean('enabled') ? 255 : 110;
+    _onOwner(hasOwner) {
+        this._model = '';
+        this._unloadIn = -1;
+        this._inUse = false;
+        this._sync();
+        // Already running (an earlier dictation): ask where its model is.
+        if (hasOwner)
+            this._refreshStatus();
     }
 
-    // Opening the menu must not spawn the engine (NO_AUTO_START): when it is
-    // not running the list only offers the system default.
-    _fillMicrophones(_) {
-        listSources(null, {autoStart: false}).then(found => {
-            if (!this._micMenu || !this._settings)
+    _refreshStatus() {
+        this._engine?.status().then(st => {
+            if (!this._engine)
                 return;
-            const sources = found ?? [];
-            this._micMenu.menu.removeAll();
-            const current = this._settings.get_string('microphone');
-            const def = sources.find(s => s.default);
-            const entries = [{name: '', description: def ? _('System default (%s)').format(def.description) : _('System default')}];
-            for (const s of sources)
-                entries.push({name: s.name, description: s.description});
-            if (current && !entries.some(e => e.name === current))
-                entries.push({name: current, description: current});
-            if (found === null)
-                this._micMenu.label.text = _('Microphone (engine not started)');
-            else if (!sources.length)
-                this._micMenu.label.text = _('Microphone (engine not reachable)');
-            else
-                this._micMenu.label.text = _('Microphone');
-            for (const e of entries) {
-                const item = new PopupMenu.PopupMenuItem(e.description);
-                item.setOrnament(e.name === current ? PopupMenu.Ornament.DOT : PopupMenu.Ornament.NONE);
-                item.connectObject('activate', () => this._settings?.set_string('microphone', e.name), this);
-                this._micMenu.menu.addMenuItem(item);
-            }
+            this._model = st?.model ?? '';
+            this._unloadIn = st?.unload_in_s ?? -1;
+            this._sync();
         });
+    }
+
+    _sync() {
+        if (!this._icon)
+            return;
+        const state = modelState({
+            enabled: this._settings.get_boolean('enabled'),
+            running: this._engine?.running ?? false,
+            model: this._model,
+        });
+        const _ = this._gettext;
+        this._statusItem.label.text = statusLine(state, state === 'ready' ? this._unloadIn : -1, _);
+        this._modelItem.label.text = state === 'ready' ? _('Release the memory') : _('Load now');
+        this._modelItem.setSensitive(state === 'ready' ? !this._inUse : state === 'asleep');
+
+        const changed = state !== this._state;
+        this._state = state;
+        this._icon.gicon = state === 'disabled' ? this._offIcon : this._gicon;
+        this._icon.set_style(this._inUse && state !== 'disabled' ? `color: ${accentColor()};` : null);
+        if (!changed)
+            return;
+        this._icon.remove_all_transitions();
+        this._icon.opacity = state === 'asleep' ? ASLEEP_OPACITY : 255;
+        // One repeating transition (see hud.js): never a chain of them.
+        if (state === 'loading') {
+            this._icon.opacity = 255;
+            this._icon.ease({
+                opacity: 70,
+                duration: BREATHE_MS,
+                mode: Clutter.AnimationMode.EASE_IN_OUT_SINE,
+                repeatCount: -1,
+                autoReverse: true,
+            });
+        }
+    }
+
+    _toggleModel() {
+        const _ = this._gettext;
+        if (this._state === 'ready') {
+            this._engine.unload().then(released => {
+                if (released === false)
+                    Main.notify(_('Voice Hold'), _('The speech model is in use — try again after the dictation'));
+            });
+            return;
+        }
+        this._engine.load(this._settings.get_int('keep-loaded-min') * 60).then(err => {
+            if (!err || err === 'cancelled' || !this._settings)
+                return;
+            Main.notify(_('Voice Hold'), speechLowMemory(err, _) ?? _('The speech model could not be loaded: %s').format(err));
+        });
+    }
+
+    // From GNOME's mixer, as in its sound menu: the engine records from the
+    // same PipeWire nodes, by name. Monitors of outputs are left out.
+    _fillMicrophones(_) {
+        if (!this._micMenu || !this._settings)
+            return;
+        let sources = [];
+        let def = null;
+        try {
+            const control = getMixerControl();
+            def = control.get_default_source();
+            sources = control.get_sources()
+                .filter(s => s.get_name() && !s.get_name().endsWith('.monitor'))
+                .map(s => ({name: s.get_name(), description: s.get_description() || s.get_name()}));
+        } catch (e) {
+            logError(e, 'voice-hold: microphones');
+        }
+        this._micMenu.menu.removeAll();
+        const current = this._settings.get_string('microphone');
+        const entries = [{name: '', description: def ? _('System default (%s)').format(def.get_description()) : _('System default')}];
+        entries.push(...sources);
+        if (current && !entries.some(e => e.name === current))
+            entries.push({name: current, description: current});
+        const chosen = entries.find(e => e.name === current);
+        this._micMenu.label.text = current && chosen ? _('Microphone: %s').format(chosen.description) : _('Microphone');
+        for (const e of entries) {
+            const item = new PopupMenu.PopupMenuItem(e.description);
+            item.setOrnament(e.name === current ? PopupMenu.Ornament.DOT : PopupMenu.Ornament.NONE);
+            item.connectObject('activate', () => this._settings?.set_string('microphone', e.name), this);
+            this._micMenu.menu.addMenuItem(item);
+        }
     }
 
     // The voice commands' corner of the menu: a submenu of the last requests,
@@ -140,6 +248,9 @@ class VoiceHoldIndicator extends PanelMenu.Button {
     }
 
     destroy() {
+        this._engine?.destroy();
+        this._engine = null;
+        this._icon?.remove_all_transitions();
         this.menu.disconnectObject(this);
         this._commands = null;
         this._recentMenu = null;

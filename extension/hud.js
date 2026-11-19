@@ -1,17 +1,17 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 import Clutter from 'gi://Clutter';
-import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Pango from 'gi://Pango';
 import St from 'gi://St';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
+import {accentColor} from './accentColor.js';
 import * as effects from './hudEffects.js';
-import {cursorPosition, islandPosition, trailing, ISLAND_OVERLAP} from './hudGeometry.js';
+import {cursorPosition, islandPosition, levelCurve, trailing, ISLAND_OVERLAP} from './hudGeometry.js';
 import {systemFontCss} from './systemFont.js';
 
-// The pill: microphone icon, level bars, and a line of text (status, then the
+// The pill: level bars, and a line of text (status, then the
 // words as they come). It never takes focus and only exists while there is
 // something to show. Two placements:
 //
@@ -31,36 +31,46 @@ import {systemFontCss} from './systemFont.js';
 // the capsule opens over it: squeezed into a capsule that is still growing,
 // the text would flash an ellipsis at every new word.
 
-const BARS = 7;
-const BAR_WEIGHTS = [0.45, 0.7, 1.0, 0.8, 1.0, 0.7, 0.45];
-const BAR_MIN = 3;
-const BAR_MAX = 20;
+const BARS = 9;
+const BAR_WEIGHTS = [0.4, 0.6, 0.85, 1.0, 0.8, 1.0, 0.85, 0.6, 0.4];
+const BAR_MIN = 4;
+const BAR_MAX = 34;
 const HIDE_DELAY_MS = 450;
-// Longer than what fits in the label: Pango cuts the start at the label's
-// max-width, so a long sentence keeps the capsule at one steady width.
-const MAX_CHARS = 120;
+// The label wraps: the capsule widens with the words up to the label's
+// max-width (stylesheet.css), then grows downwards. Past this many
+// characters (about three lines) the start of the block gives way.
+const MAX_CHARS = 240;
 
 const RESIZE_MS = 220;
+// The model's progress bar fills to this share of its width over the
+// expected load time, then waits for the engine: never full before it is.
+const PROGRESS_CAP = 0.9;
+const PROGRESS_W = 52;
 const PANEL_OPAQUE_ALPHA = 200;   // below this the bar is see-through (Blur my Shell…): use black
 const MONITOR_MARGIN = 24;        // the capsule never comes closer than this to the monitor's edges
 
 export class Hud {
     // getPosition: () => 'island' | 'cursor' and getEffect: () => one of
     // hudEffects.EFFECTS, both read each time the pill opens.
-    constructor(iconPath, gettext, getPosition = () => 'island', getEffect = () => effects.DEFAULT_EFFECT) {
+    constructor(gettext, getPosition = () => 'island', getEffect = () => effects.DEFAULT_EFFECT) {
         this._getEffect = getEffect;
         this._ = gettext;
-        this._iconPath = iconPath;
         this._getPosition = getPosition;
         this._island = true;
         this._scale = 1;
         this._box = null;       // outer capsule
         this._clip = null;      // clipping box
         this._content = null;   // icon, bars, text
-        this._icon = null;
+        this._meter = null;     // the bars: they also carry the state
+        this._state = '';
         this._bars = [];
         this._heights = new Array(BARS).fill(BAR_MIN);
         this._label = null;
+        this._lock = null;
+        this._progress = null;
+        this._progressFill = null;
+        this._locked = false;
+        this._accent = '';
         this._hideId = 0;
         this._hideAt = 0;       // when the pending hide fires (monotonic ms)
         this._decayId = 0;
@@ -83,6 +93,8 @@ export class Hud {
         // Sizes set from here are in physical pixels; the stylesheet's are
         // scaled by St.
         this._scale = St.ThemeContext.get_for_stage(global.stage).scale_factor || 1;
+        // Read at each opening: a change in Settings shows at the next pill.
+        this._accent = accentColor();
 
         this._box = new St.Widget({
             style_class: `voice-hud-capsule ${this._island ? 'voice-hud-island' : 'voice-hud-cursor'}`,
@@ -111,14 +123,10 @@ export class Hud {
         }));
         this._clip.add_child(this._content);
 
-        this._icon = new St.Icon({
-            gicon: Gio.icon_new_for_string(this._iconPath),
-            style_class: 'voice-hud-icon',
-            y_align: Clutter.ActorAlign.CENTER,
-        });
-        this._content.add_child(this._icon);
-
+        // No icon: the level takes its room, and its state too (breathing
+        // while the model loads or the last words are decoded).
         const bars = new St.BoxLayout({style_class: 'voice-hud-bars', y_align: Clutter.ActorAlign.CENTER});
+        this._meter = bars;
         this._bars = [];
         for (let i = 0; i < BARS; i++) {
             const bar = new St.Widget({style_class: 'voice-hud-bar', y_align: Clutter.ActorAlign.CENTER});
@@ -129,10 +137,35 @@ export class Hud {
         }
         this._content.add_child(bars);
 
+        // Hands-free: a lock after the level, the dictation goes on without
+        // the keys held.
+        this._lock = new St.Icon({
+            icon_name: 'changes-prevent-symbolic',
+            style_class: 'voice-hud-lock',
+            y_align: Clutter.ActorAlign.CENTER,
+            visible: this._locked,
+        });
+        this._lock.set_style(`color: ${this._accent};`);
+        this._content.add_child(this._lock);
+
         this._label = new St.Label({style_class: 'voice-hud-text', y_align: Clutter.ActorAlign.CENTER});
-        this._label.clutter_text.set_ellipsize(Pango.EllipsizeMode.START);
-        this._label.clutter_text.set_single_line_mode(true);
+        const ct = this._label.clutter_text;
+        ct.set_single_line_mode(false);
+        ct.set_line_wrap(true);
+        ct.set_line_wrap_mode(Pango.WrapMode.WORD_CHAR);
+        ct.set_ellipsize(Pango.EllipsizeMode.NONE);
         this._content.add_child(this._label);
+
+        this._progress = new St.Widget({
+            style_class: 'voice-hud-progress',
+            layout_manager: new Clutter.FixedLayout(),
+            y_align: Clutter.ActorAlign.CENTER,
+            visible: false,
+        });
+        this._progressFill = new St.Widget({style_class: 'voice-hud-progress-fill'});
+        this._progressFill.set_style(`background-color: ${this._accent};`);
+        this._progress.add_child(this._progressFill);
+        this._content.add_child(this._progress);
 
         Main.layoutManager.uiGroup.add_child(this._box);
         // Above everything, but never grabbing anything.
@@ -147,8 +180,13 @@ export class Hud {
         }
         this._clip = null;
         this._content = null;
-        this._icon = null;
+        this._meter = null;
+        this._state = '';
         this._label = null;
+        this._lock = null;
+        this._progress = null;
+        this._progressFill = null;
+        this._locked = false;
         this._bars = [];
         this._heights.fill(BAR_MIN);
         this._level = 0;
@@ -171,14 +209,19 @@ export class Hud {
 
     // -- geometry --------------------------------------------------------
 
-    // Natural size of the capsule: that of its content.
+    // Natural size of the capsule: that of its content. The content is then
+    // given that size: left to the clip's FixedLayout, it would get the
+    // height of one line, and a wrapped second line would be cut off.
     _natural() {
         const monitor = Main.layoutManager.primaryMonitor;
         const maxW = monitor ? monitor.width - 2 * MONITOR_MARGIN * this._scale : 10000;
+        this._content.set_size(-1, -1);
         let [, w] = this._content.get_preferred_width(-1);
         w = Math.min(Math.ceil(w), maxW);
-        const [, h] = this._content.get_preferred_height(w);
-        return [w, Math.ceil(h) + (this._island ? ISLAND_OVERLAP : 0)];
+        let [, h] = this._content.get_preferred_height(w);
+        h = Math.ceil(h);
+        this._content.set_size(w, h);
+        return [w, h + (this._island ? ISLAND_OVERLAP : 0)];
     }
 
     // Where the capsule hangs from: centred under the primary monitor's bar,
@@ -238,7 +281,8 @@ export class Hud {
     // each time, so a change in the settings shows at the next pill.
     _parts() {
         this._fx ??= {};
-        return Object.assign(this._fx, {box: this._box, content: this._content, bars: this._bars, scale: this._scale});
+        return Object.assign(this._fx, {box: this._box, content: this._content, bars: this._bars, scale: this._scale,
+            accent: this._accent});
     }
 
     _enter() {
@@ -269,6 +313,7 @@ export class Hud {
         this._build();
         const fresh = this._box.opacity === 0;
         const leaving = this._leaving;
+        this._progress.visible = false;
         this._setIconState(pseudo);
         this._setText(status, 'hint');
         if (fresh || leaving) {
@@ -284,6 +329,8 @@ export class Hud {
     status(text, pseudo = '') {
         if (!this._box || this._leaving)
             return;
+        if (pseudo !== 'loading' && this._progress)
+            this._progress.visible = false;
         this._setIconState(pseudo);
         this._setText(text, 'hint');
         this._place(true);
@@ -292,6 +339,8 @@ export class Hud {
     live(text) {
         if (!this._box || this._leaving)
             return;
+        // Words: the model is there, whatever state the engine is in.
+        this._progress.visible = false;
         // Words again after a block that failed: the dictation goes on.
         if (this._showsError())
             this._setIconState('listening');
@@ -306,10 +355,57 @@ export class Hud {
         if (!this._box || this._leaving || this._showsError())
             return;                       // an error stays up until read
         this._setIconState('busy');
-        if (this._label.has_style_pseudo_class('hint')) {
+        // Still loading: the hint and the bar say more than an ellipsis.
+        if (this._label.has_style_pseudo_class('hint') && !this.loadingShown) {
             this._setText('…', 'hint');
             this._place(true);
         }
+    }
+
+    // The speech model is loading: the hint, and a bar that fills over the
+    // time the last load took (`expectMs`), short of full until ready().
+    loading(text, expectMs) {
+        if (!this._box || this._leaving)
+            return;
+        this.status(text, 'loading');
+        const fill = this._progressFill;
+        const width = Math.round(PROGRESS_W * this._scale);
+        this._progress.visible = true;
+        fill.remove_all_transitions();
+        fill.width = 0;
+        fill.ease({
+            width: Math.round(width * PROGRESS_CAP),
+            duration: Math.max(500, expectMs),
+            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+        });
+        this._place(true);
+    }
+
+    // The model is there: the bar completes and goes, the icon turns blue
+    // with a short pop, and `text` says so until the first words.
+    ready(text) {
+        if (!this._box || this._leaving)
+            return;
+        this._progress.visible = false;
+        this._progressFill.remove_all_transitions();
+        this.status(text, 'listening');
+        this._meter.set_pivot_point(0.5, 0.5);
+        this._meter.set_scale(1.35, 1.35);
+        this._meter.ease({scale_x: 1, scale_y: 1, duration: 320, mode: Clutter.AnimationMode.EASE_OUT_BACK});
+    }
+
+    get loadingShown() {
+        return !!this._progress?.visible;
+    }
+
+    // Hands-free (true) or held (false).
+    setLocked(locked) {
+        this._locked = locked;
+        if (!this._lock || this._lock.visible === locked)
+            return;
+        this._lock.visible = locked;
+        if (this._box && !this._leaving)
+            this._place(true);
     }
 
     error(text) {
@@ -320,7 +416,7 @@ export class Hud {
     level(v) {
         if (!this._box)
             return;
-        this._level = Math.max(0, Math.min(1, v));
+        this._level = levelCurve(v);
         this._paintBars();
         this._startDecay();
     }
@@ -356,7 +452,7 @@ export class Hud {
     // -- internals -------------------------------------------------------
 
     _showsError() {
-        return !!this._icon?.has_style_pseudo_class('error');
+        return this._state === 'error';
     }
 
     _close() {
@@ -365,23 +461,24 @@ export class Hud {
             this._leave(() => this._destroyBox());
     }
 
+    // '' | 'listening' | 'loading' | 'busy' | 'error'. Loading and busy:
+    // the bars breathe. Error: the text turns red.
     _setIconState(pseudo) {
-        if (!this._icon)
+        this._state = pseudo;
+        if (!this._meter)
             return;
-        for (const p of ['listening', 'loading', 'busy', 'error'])
-            this._icon.remove_style_pseudo_class(p);
-        if (pseudo)
-            this._icon.add_style_pseudo_class(pseudo);
-        // Grey and breathing until the engine says it listens, then solid
-        // blue, then blue and breathing while the last words are decoded.
-        // One repeating transition, not a chain of them: with
-        // animations off (or the actor off stage) an ease ends at once, and
-        // a chain would call itself for ever.
-        this._icon.remove_all_transitions();
-        this._icon.opacity = 255;
+        if (pseudo === 'error')
+            this._label.add_style_pseudo_class('error');
+        else
+            this._label.remove_style_pseudo_class('error');
+        // One repeating transition, not a chain of them: with animations
+        // off (or the actor off stage) an ease ends at once, and a chain
+        // would call itself for ever.
+        this._meter.remove_transition('opacity');
+        this._meter.opacity = 255;
         if (pseudo === 'loading' || pseudo === 'busy') {
-            this._icon.ease({
-                opacity: 90,
+            this._meter.ease({
+                opacity: 80,
                 duration: 600,
                 mode: Clutter.AnimationMode.EASE_IN_OUT_QUAD,
                 repeatCount: -1,
@@ -408,11 +505,16 @@ export class Hud {
             // Fast attack, slow release.
             const cur = this._heights[i];
             this._heights[i] = target > cur ? target : cur + (target - cur) * 0.35;
-            this._bars[i].set_height(Math.round(this._heights[i] * this._scale));
-            if (this._heights[i] > BAR_MIN + 1.5)
-                this._bars[i].remove_style_pseudo_class('quiet');
-            else
-                this._bars[i].add_style_pseudo_class('quiet');
+            const bar = this._bars[i];
+            bar.set_height(Math.round(this._heights[i] * this._scale));
+            const quiet = this._heights[i] <= BAR_MIN + 1.5;
+            if (quiet !== bar.has_style_pseudo_class('quiet')) {
+                if (quiet)
+                    bar.add_style_pseudo_class('quiet');
+                else
+                    bar.remove_style_pseudo_class('quiet');
+                bar.set_style(quiet ? null : `background-color: ${this._accent};`);
+            }
         }
     }
 

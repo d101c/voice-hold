@@ -40,11 +40,35 @@ msgstr "%s (non branché)"
 msgid "Engine not reachable — the system default will be used"
 msgstr "Moteur injoignable — le micro par défaut sera utilisé"
 
-msgid "Microphone (engine not reachable)"
-msgstr "Micro (moteur injoignable)"
+msgid "Microphone: %s"
+msgstr "Micro : %s"
 
-msgid "Microphone (engine not started)"
-msgstr "Micro (moteur non démarré)"
+msgid "Dictation switched off"
+msgstr "Dictée désactivée"
+
+msgid "Loading the speech model…"
+msgstr "Chargement du modèle vocal…"
+
+msgid "Speech model ready"
+msgstr "Modèle vocal prêt"
+
+msgid "Speech model ready — released in %d min"
+msgstr "Modèle vocal prêt — libéré dans %d min"
+
+msgid "Speech model asleep — a few seconds at the first word"
+msgstr "Modèle vocal en veille — quelques secondes au premier mot"
+
+msgid "Load now"
+msgstr "Charger maintenant"
+
+msgid "Release the memory"
+msgstr "Libérer la mémoire"
+
+msgid "The speech model is in use — try again after the dictation"
+msgstr "Le modèle vocal est utilisé — réessayez après la dictée"
+
+msgid "The speech model could not be loaded: %s"
+msgstr "Impossible de charger le modèle vocal : %s"
 
 msgid "Starting…"
 msgstr "Démarrage…"
@@ -163,14 +187,41 @@ msgstr "Arrêt après silence (s)"
 msgid "Hands-free mode only. 0 = never."
 msgstr "Mode mains libres seulement. 0 = jamais."
 
-msgid "Optional: polish with a local LLM"
-msgstr "Option : polir avec un LLM local"
+msgid "Keep the model loaded (min)"
+msgstr "Garder le modèle chargé (min)"
 
-msgid "Off by default. When on, each finished block is sent to the local LLM (the one the voice commands install) to fix punctuation and casing. Falls back to the raw text if it does not answer within 4 s."
-msgstr "Éteint par défaut. Si activé, chaque bloc terminé est envoyé au LLM local (celui qu'installent les commandes vocales) pour corriger ponctuation et majuscules. Le texte brut est gardé s'il ne répond pas en 4 s."
+msgid "About 1 GB of memory. After that, the next dictation waits a few seconds for it to load."
+msgstr "Environ 1 Go de mémoire. Passé ce délai, la dictée suivante attend quelques secondes qu'il se charge."
 
-msgid "Polish each block"
-msgstr "Polir chaque bloc"
+msgid "Text clean-up"
+msgstr "Nettoyage du texte"
+
+msgid "Remove hesitations"
+msgstr "Retirer les hésitations"
+
+msgid "“euh”, “uh”, “hum” and words said twice in a row. Instant."
+msgstr "« euh », « uh », « hum » et les mots dits deux fois de suite. Instantané."
+
+msgid "Self-corrections with the local LLM"
+msgstr "Autocorrections par le LLM local"
+
+msgid "“Monday, no, Tuesday” becomes “Tuesday”. Needs the language model of the voice commands. Slow on a laptop (2 to 6 s per sentence) and approximate: the text is kept as it is when the answer looks wrong."
+msgstr "« Lundi, non, mardi » devient « mardi ». Utilise le modèle de langue des commandes vocales. Lent sur un portable (2 à 6 s par phrase) et approximatif : le texte reste tel quel quand la réponse semble fausse."
+
+msgid "Hands-free — %s to finish"
+msgstr "Mains libres — %s pour finir"
+
+msgid "Stopping in %d s — speak to go on"
+msgstr "Arrêt dans %d s — parlez pour continuer"
+
+msgid "Ready"
+msgstr "Prêt"
+
+msgid "Space"
+msgstr "Espace"
+
+msgid "Shift"
+msgstr "Maj"
 
 msgid "Appearance"
 msgstr "Apparence"

@@ -7,6 +7,7 @@ import Pango from 'gi://Pango';
 import St from 'gi://St';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
+import {accentColor} from '../accentColor.js';
 import * as effects from '../hudEffects.js';
 import {cursorPosition, islandPosition, trailing, ISLAND_OVERLAP} from '../hudGeometry.js';
 import {systemFontCss} from '../systemFont.js';
@@ -75,6 +76,7 @@ export class CommandHud {
         // Sizes set from here are in physical pixels; the stylesheet's are
         // scaled by St.
         this._scale = St.ThemeContext.get_for_stage(global.stage).scale_factor || 1;
+        this._accent = accentColor();
 
         this._box = new St.Widget({
             style_class: `voice-cmd-hud ${this._island ? 'voice-cmd-hud-island' : 'voice-cmd-hud-cursor'}`,
@@ -267,7 +269,8 @@ export class CommandHud {
     // each time, so a change in the settings shows at the next pill.
     _parts() {
         this._fx ??= {};
-        return Object.assign(this._fx, {box: this._box, content: this._content, bars: this._bars, scale: this._scale});
+        return Object.assign(this._fx, {box: this._box, content: this._content, bars: this._bars, scale: this._scale,
+            accent: this._accent});
     }
 
     _enter() {
@@ -411,6 +414,7 @@ export class CommandHud {
             this._icon.remove_style_pseudo_class(p);
         if (pseudo)
             this._icon.add_style_pseudo_class(pseudo);
+        this._icon.set_style(pseudo === 'listening' ? `color: ${this._accent};` : null);
         // Grey and breathing while something is awaited (the engine, the
         // LLM, a command), solid otherwise. One repeating transition, not a
         // chain of them: with animations off (or the actor off stage) an
@@ -459,11 +463,16 @@ export class CommandHud {
             // Fast attack, slow release.
             const cur = this._heights[i];
             this._heights[i] = target > cur ? target : cur + (target - cur) * 0.35;
-            this._bars[i].set_height(Math.round(this._heights[i] * this._scale));
-            if (this._heights[i] > BAR_MIN + 1.5)
-                this._bars[i].remove_style_pseudo_class('quiet');
-            else
-                this._bars[i].add_style_pseudo_class('quiet');
+            const bar = this._bars[i];
+            bar.set_height(Math.round(this._heights[i] * this._scale));
+            const quiet = this._heights[i] <= BAR_MIN + 1.5;
+            if (quiet !== bar.has_style_pseudo_class('quiet')) {
+                if (quiet)
+                    bar.add_style_pseudo_class('quiet');
+                else
+                    bar.remove_style_pseudo_class('quiet');
+                bar.set_style(quiet ? null : `background-color: ${this._accent};`);
+            }
         }
     }
 
