@@ -25,6 +25,9 @@ from .segmenter import Segmenter, rms
 
 IDLE = 'idle'
 LOADING = 'loading'
+# The speech model, for the top-bar icon (signal Model).
+ASLEEP = 'asleep'
+READY = 'ready'
 LISTENING = 'listening'
 DECODING = 'decoding'
 
@@ -59,6 +62,7 @@ class Engine:
         self._recognizer = None
         self._vad = None
         self.state = IDLE
+        self.model = ASLEEP                   # the speech model: asleep | loading | ready
         self._gen = 0                         # session generation
         self._source = None
         self._segmenter = None
@@ -93,6 +97,17 @@ class Engine:
             self.state = state
             self._emit('State', state)
 
+    def _set_model(self, model):
+        if model != self.model:
+            self.model = model
+            self._emit('Model', model)
+
+    def _unload_in(self):
+        """Seconds until the model is let go, -1 when not scheduled."""
+        if self._idle_handle is None or self.model != READY:
+            return -1.0
+        return max(0.0, self._idle_handle.when() - self._loop.time())
+
     def status(self):
         miss = models.missing()
         return {
@@ -104,6 +119,8 @@ class Engine:
             'load_seconds': Variant('d', self._recognizer.load_seconds if self._recognizer else 0.0),
             'voices': Variant('as', models.voices_ready()),
             'speaking': Variant('b', bool(self._speaker and self._speaker.speaking)),
+            'model': Variant('s', self.model),
+            'unload_in_s': Variant('d', self._unload_in()),
         }
 
     # -- text-to-speech -------------------------------------------------------
@@ -195,11 +212,17 @@ class Engine:
         gen = self._gen
         self._opts = {
             'polish': bool(_opt(options, 'polish', False)),
+            'tidy': bool(_opt(options, 'tidy', True)),
             'silence_stop_s': float(_opt(options, 'silence-stop-s', 0.0)),
             'audio_file': str(_opt(options, 'audio-file', '')),
             'realtime': bool(_opt(options, 'realtime', True)),
             'source': str(_opt(options, 'source', '')),
         }
+        # How long the model stays loaded once idle: the client's setting,
+        # kept for the following sessions.
+        keep = float(_opt(options, 'keep-loaded-s', -1.0))
+        if keep >= 0:
+            self._idle_unload_s = keep
         if self._opts['polish']:
             # Start the LLM server while the user talks (a few seconds).
             from . import polish
@@ -246,6 +269,7 @@ class Engine:
 
         if not self._recognizer.loaded:
             self._set_state(LOADING)
+            self._set_model(LOADING)
             self._inflight += 1
             fut = self._loop.run_in_executor(self._executor, self._recognizer.load)
             self._pending.add(fut)
@@ -272,9 +296,11 @@ class Engine:
         try:
             fut.result()
         except Exception as e:
+            self._set_model(ASLEEP)
             self._emit('Error', f'model: {e}')
             self._finish('error')
             return
+        self._set_model(READY)
         if self.active and not self._stopping:
             self._set_state(LISTENING)
 
@@ -417,6 +443,8 @@ class Engine:
         except Exception as e:
             self._emit('Error', f'decode: {e}')
             return
+        if raw and self._opts['tidy']:
+            raw = textmod.tidy(raw)
         if final and raw and self._opts['polish']:
             from .polish import polish
             self._inflight += 1
@@ -472,6 +500,55 @@ class Engine:
         else:
             self.exit_event.set()
 
+    # -- model on demand (the top-bar menu) -------------------------------------
+
+    async def preload(self, options=None):
+        """Load the speech model now, so that the next dictation starts at
+        once. Returns '' or why not (as Error messages: 'models-missing',
+        'low-memory:…', 'model: …')."""
+        options = options or {}
+        self._cancel_idle()
+        keep = float(_opt(options, 'keep-loaded-s', -1.0))
+        if keep >= 0:
+            self._idle_unload_s = keep
+        try:
+            if self._recognizer is not None and self._recognizer.loaded:
+                return ''
+            if models.missing():
+                return 'models-missing'
+            from . import memory
+            short = memory.shortage(memory.ASR_NEED_MB)
+            if short:
+                return f'low-memory:{short}'
+            from .asr import Recognizer
+            if self._recognizer is None:
+                self._recognizer = Recognizer()
+            self._set_model(LOADING)
+            self._inflight += 1
+            try:
+                await self._loop.run_in_executor(self._executor, self._recognizer.load)
+            except Exception as e:
+                self._set_model(ASLEEP)
+                return f'model: {e}'
+            finally:
+                self._inflight -= 1
+            self._set_model(READY)
+            return ''
+        finally:
+            if not self.active:
+                self._schedule_idle()
+
+    def release(self):
+        """Give the model's memory back now, unless a dictation or a
+        decode is using it. True when released (or nothing was loaded)."""
+        if self.busy:
+            return False
+        if self._recognizer is not None and self._recognizer.loaded:
+            self.unload()
+            self._emit('State', IDLE)
+        self._schedule_idle()
+        return True
+
     def unload(self):
         from .asr import release_memory
         if self._recognizer is not None:
@@ -481,6 +558,7 @@ class Engine:
         self._vad = None
         gc.collect()
         release_memory()
+        self._set_model(ASLEEP)
 
 
 class VoiceHoldInterface(ServiceInterface):
@@ -507,6 +585,18 @@ class VoiceHoldInterface(ServiceInterface):
     @method()
     def Status(self) -> 'a{sv}':
         return self._engine.status()
+
+    @method()
+    async def Load(self, options: 'a{sv}') -> 's':
+        """Load the speech model now. options: keep-loaded-s. Returns ''
+        or why not."""
+        self._engine.exit_event.clear()
+        return await self._engine.preload(options)
+
+    @method()
+    def Unload(self) -> 'b':
+        """Release the speech model now; false while it is in use."""
+        return self._engine.release()
 
     @method()
     def Quit(self):
@@ -538,6 +628,10 @@ class VoiceHoldInterface(ServiceInterface):
     @signal()
     def State(self, state: 's') -> 's':
         return state
+
+    @signal()
+    def Model(self, model: 's') -> 's':
+        return model
 
     @signal()
     def Source(self, description: 's') -> 's':

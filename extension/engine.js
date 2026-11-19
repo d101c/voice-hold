@@ -20,6 +20,11 @@ const IFACE_XML = `
     <method name="Cancel"/>
     <method name="Status"><arg type="a{sv}" name="status" direction="out"/></method>
     <method name="Quit"/>
+    <method name="Load">
+      <arg type="a{sv}" name="options" direction="in"/>
+      <arg type="s" name="error" direction="out"/>
+    </method>
+    <method name="Unload"><arg type="b" name="released" direction="out"/></method>
     <method name="ListSources"><arg type="aa{sv}" name="sources" direction="out"/></method>
     <method name="Speak">
       <arg type="s" name="text" direction="in"/>
@@ -28,6 +33,7 @@ const IFACE_XML = `
     </method>
     <method name="StopSpeaking"/>
     <signal name="State"><arg type="s" name="state"/></signal>
+    <signal name="Model"><arg type="s" name="model"/></signal>
     <signal name="Source"><arg type="s" name="description"/></signal>
     <signal name="Level"><arg type="d" name="level"/></signal>
     <signal name="Speech"><arg type="b" name="speaking"/></signal>
@@ -47,7 +53,7 @@ const CALL_TIMEOUT_MS = 15000;
 const STOP_TIMEOUT_MS = 60000;
 
 export class EngineClient {
-    // handlers: {Owner, State, Source, Level, Speech, Partial, Final, Stopped, Error}
+    // handlers: {Owner, State, Model, Source, Level, Speech, Partial, Final, Stopped, Error}
     // `Owner(hasOwner)` is called when the engine appears on or leaves the bus.
     constructor(handlers) {
         this._handlers = handlers;
@@ -152,6 +158,65 @@ export class EngineClient {
                 (proxy, res) => {
                     try {
                         resolve(proxy.call_finish(res).deepUnpack()[0] ?? '');
+                    } catch (e) {
+                        resolve(classify(e));
+                    }
+                });
+        });
+    }
+
+    // Load the speech model now (the menu's "Load now"); starts the engine.
+    // Resolves to '' or why not (an engine error message or a code above).
+    load(keepLoadedS) {
+        return this._callFor('Load', new GLib.Variant('(a{sv})', [{
+            'keep-loaded-s': GLib.Variant.new_double(keepLoadedS),
+        }]), STOP_TIMEOUT_MS);
+    }
+
+    // Release it; never starts the engine. Resolves to true when released
+    // (or nothing to release), false while a dictation uses it.
+    unload() {
+        if (!this._proxy?.g_name_owner)
+            return Promise.resolve(true);
+        return this._callFor('Unload', null).then(r => r === true);
+    }
+
+    // The engine's Status as a plain object, or null when it is not
+    // running (never starts it).
+    status() {
+        return new Promise(resolve => {
+            if (!this._proxy?.g_name_owner) {
+                resolve(null);
+                return;
+            }
+            this._proxy.call('Status', null, Gio.DBusCallFlags.NO_AUTO_START, CALL_TIMEOUT_MS,
+                this._cancellable, (proxy, res) => {
+                    try {
+                        resolve(proxy.call_finish(res).recursiveUnpack()[0]);
+                    } catch (e) {
+                        resolve(null);
+                        classify(e, false);
+                    }
+                });
+        });
+    }
+
+    get running() {
+        return !!this._proxy?.g_name_owner;
+    }
+
+    // A call whose single return value is wanted: resolves to it, or to an
+    // error code.
+    _callFor(method, args, timeout = CALL_TIMEOUT_MS) {
+        return new Promise(resolve => {
+            if (!this._proxy) {
+                resolve('no-proxy');
+                return;
+            }
+            this._proxy.call(method, args, Gio.DBusCallFlags.NONE, timeout, this._cancellable,
+                (proxy, res) => {
+                    try {
+                        resolve(proxy.call_finish(res).deepUnpack()[0]);
                     } catch (e) {
                         resolve(classify(e));
                     }

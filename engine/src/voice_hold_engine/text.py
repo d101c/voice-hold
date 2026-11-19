@@ -61,3 +61,65 @@ def clean(text):
 def is_only_command(text):
     """True when the block was nothing but a command (e.g. just 'new line')."""
     return bool(_ONLY_RE.match(text.strip()))
+
+
+# -- tidy: hesitations and stutters ------------------------------------------
+#
+# Spoken hesitations ("euh", "uh", "hum") are dropped with the comma or
+# ellipsis the recogniser hangs on them, and a word or short phrase said
+# twice in a row ("assez assez", "le uh le contrôle") is kept once. Some
+# doublings are French or English as written ("nous nous voyons", "très
+# très", "non non") and stay. Nothing else is touched: rewording a sentence
+# is the LLM's job (polish.py), and only when asked.
+
+FILLERS = (
+    'euh', 'euhh', 'heu', 'heuu', 'eeuh', 'uh', 'uhh', 'uhm', 'um', 'umm', 'erm',
+    'hum', 'hmm', 'hm', 'mmh', 'mh', 'bah',
+)
+KEEP_DOUBLED = {
+    'nous', 'vous', 'ça', 'très', 'non', 'oui', 'si', 'no', 'yes', 'so', 'very',
+    'bye', 'bla', 'toc', 'vite', 'that', 'had',
+}
+
+_WORD = r"[\w'’-]+"
+_CAP = '\x00'                      # marks a letter to capitalise
+_FILLER_RE = re.compile(
+    r"(?<![\w'’-])(?:" + '|'.join(FILLERS) + r")(?![\w'’-])[,…]*(?:\.\.\.)?\s*",
+    re.IGNORECASE)
+_REPEAT_RE = re.compile(rf"(?<![\w'’-])((?:{_WORD}\s+){{0,2}}{_WORD})(?:\s+\1)+(?![\w'’-])", re.IGNORECASE)
+
+
+def _drop_filler(m):
+    before = m.string[:m.start()].rstrip()
+    sentence_start = not before or before[-1] in '.!?\n'
+    return _CAP if sentence_start else ''
+
+
+def _collapse(m):
+    words = m.group(1).split()
+    if len(words) == 1 and words[0].lower() in KEEP_DOUBLED:
+        return m.group(0)
+    return m.group(1)
+
+
+def _capitalise(m):
+    return m.group(1).upper()
+
+
+def tidy(text):
+    """Drop hesitations and collapse stuttered words; see above."""
+    if not text.strip():
+        return text
+    out = _FILLER_RE.sub(_drop_filler, text)
+    out = _REPEAT_RE.sub(_collapse, out)
+    if out == text:
+        return text
+    # Punctuation left orphaned by a removed word. French keeps its space
+    # before ; : ! ? so only commas and full stops are pulled back.
+    out = re.sub(r'\s+([,.…])', r'\1', out)
+    out = re.sub(r',(\s*[,.;:!?])', r'\1', out)
+    out = re.sub(r'^[\s,;:' + _CAP + r']*,\s*', _CAP, out)
+    out = re.sub(r'[ \t]+', ' ', out).strip(' ')
+    out = re.sub(_CAP + r'+\s*([\w])', _capitalise, out)
+    out = out.replace(_CAP, '')
+    return out if re.search(r'\w', out) else ''

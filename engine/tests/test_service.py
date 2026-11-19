@@ -550,3 +550,70 @@ def test_low_memory_refuses_to_load_the_speech_model(fake, speech_wav, monkeypat
     assert h.of('Error') == [f'low-memory:640:{memory.ASR_NEED_MB}']
     assert h.events[-1] == ('Stopped', 'error')
     assert h.engine._recognizer is None, 'nothing was loaded'
+
+
+# -- model on demand (Load / Unload) ----------------------------------------
+
+def test_model_state_follows_a_session(fake, speech_wav):
+    async def main():
+        h = Harness(asyncio.get_running_loop())
+        await h.engine.start({'audio-file': speech_wav, 'realtime': False})
+        await h.wait_stopped()
+        return h
+    h = run(main())
+    assert h.of('Model') == ['loading', 'ready']
+    h.engine.unload()
+    assert h.of('Model')[-1] == 'asleep'
+    assert h.engine.status()['model'].value == 'asleep'
+
+
+def test_preload_and_release(fake, monkeypatch):
+    monkeypatch.setenv('VOICE_HOLD_MEM_AVAILABLE_MB', '8000')
+
+    async def main():
+        h = Harness(asyncio.get_running_loop())
+        h.engine._recognizer = fake
+        assert await h.engine.preload({'keep-loaded-s': 1800.0}) == ''
+        assert fake.loaded and h.engine.model == 'ready'
+        assert 1700 < h.engine.status()['unload_in_s'].value <= 1800
+        assert await h.engine.preload() == '', 'already loaded: nothing to do'
+        assert h.engine.release()
+        return h
+    h = run(main())
+    assert h.of('Model') == ['loading', 'ready', 'asleep']
+    assert not fake.loaded
+
+
+def test_preload_refuses_without_memory(fake, monkeypatch):
+    monkeypatch.setenv('VOICE_HOLD_MEM_AVAILABLE_MB', '200')
+
+    async def main():
+        h = Harness(asyncio.get_running_loop())
+        h.engine._recognizer = fake
+        return h, await h.engine.preload()
+    h, err = run(main())
+    assert err.startswith('low-memory:')
+    assert not fake.loaded and h.of('Model') == []
+
+
+def test_preload_failure_goes_back_to_asleep(fake, monkeypatch):
+    monkeypatch.setenv('VOICE_HOLD_MEM_AVAILABLE_MB', '8000')
+    fake.fail_load = True
+
+    async def main():
+        h = Harness(asyncio.get_running_loop())
+        h.engine._recognizer = fake
+        return h, await h.engine.preload()
+    h, err = run(main())
+    assert err.startswith('model:')
+    assert h.of('Model') == ['loading', 'asleep']
+
+
+def test_release_waits_for_a_session(fake, speech_wav):
+    async def main():
+        h = Harness(asyncio.get_running_loop())
+        await h.engine.start({'audio-file': speech_wav, 'realtime': True})
+        refused = h.engine.release()
+        h.engine.cancel()
+        return refused
+    assert run(main()) is False

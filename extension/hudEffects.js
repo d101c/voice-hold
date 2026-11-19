@@ -6,20 +6,22 @@
 //   swell   a bump swells out of the bar (the quiet one)
 //   drop    a drop falls from the bar, then springs open sideways
 //   spring  the whole capsule zooms out of the bar and wobbles
-//   glow    swell, with a blue halo that flashes as it opens and closes
+//   glow    swell, with a halo in the accent colour that flashes as it
+//           opens and closes
 //
-// `parts` is {box, content, bars, scale}; `geo` is {x, y, w, h}: where the
+// `parts` is {box, content, bars, scale, accent}; `geo` is {x, y, w, h}: where the
 // open capsule sits. Everything is done with eases, so with animations off
 // (or the actor off stage) each step ends at once.
 import Clutter from 'gi://Clutter';
 import GLib from 'gi://GLib';
+
+import {rgba} from './accentColor.js';
 
 export const EFFECTS = ['swell', 'drop', 'spring', 'glow'];
 export const DEFAULT_EFFECT = 'drop';
 
 const SEED_W = 64;           // width of the bump or drop the capsule opens from
 const FADE_MS = 160;
-const GLOW_CLASS = 'voice-hud-glow';
 const M = Clutter.AnimationMode;
 
 export function effectOf(name) {
@@ -38,6 +40,24 @@ function later(parts, ms, fn) {
     parts.fx.add(id);
 }
 
+// The halo: an inline box-shadow over the capsule's own style, taken back
+// after `ms`. Inline because the accent colour is only known at run time.
+function glow(parts, ms) {
+    const {box} = parts;
+    if (parts.glowBox !== box) {
+        parts.glowBox = box;
+        parts.glowBase = box.get_style() ?? '';
+    }
+    box.set_style(`${parts.glowBase} box-shadow: 0 2px 30px 4px ${rgba(parts.accent ?? '#3584e4', 0.9)};`);
+    later(parts, ms, () => unglow(parts));
+}
+
+function unglow(parts) {
+    if (parts.glowBox && parts.glowBox === parts.box)
+        parts.box.set_style(parts.glowBase);
+    parts.glowBox = null;
+}
+
 export function cancel(parts) {
     for (const id of parts?.fx ?? [])
         GLib.Source.remove(id);
@@ -49,7 +69,7 @@ function reset(parts) {
     const {box, content, bars} = parts;
     box.remove_all_transitions();
     content.remove_all_transitions();
-    box.remove_style_class_name(GLOW_CLASS);
+    unglow(parts);
     box.set_pivot_point(0.5, 0);
     box.set_scale(1, 1);
     content.translation_y = 0;
@@ -119,8 +139,7 @@ export function enter(parts, geo, name, island = true) {
         seed(parts, geo);
         box.ease({x, width: w, height: h, duration: 420, mode: M.EASE_OUT_BACK});
         reveal(parts, 220, 8);
-        box.add_style_class_name(GLOW_CLASS);
-        later(parts, 520, () => box.remove_style_class_name(GLOW_CLASS));
+        glow(parts, 520);
         break;
     default:
         seed(parts, geo);
@@ -157,8 +176,7 @@ export function leave(parts, name, island, onComplete) {
         box.ease({scale_x: 0.25, scale_y: 0, delay: 40, duration: 260, mode: M.EASE_IN_BACK, onComplete});
         break;
     case 'glow':
-        box.add_style_class_name(GLOW_CLASS);
-        later(parts, 160, () => box.remove_style_class_name(GLOW_CLASS));
+        glow(parts, 160);
         shrink(140);
         break;
     default:

@@ -3,63 +3,71 @@
    family and size come from the system's interface font, set inline on the
    capsule (systemFont.js): sizes below are relative to it. */
 .voice-hud-capsule { color: #fff; }
-.voice-hud { padding: 8px 12px; spacing: 10px; }
+.voice-hud { padding: 11px 16px; spacing: 12px; }
 
 /* Next to the cursor: same family as Accent Hold's .accent-popup, dark
    pill, 12px radius. */
 .voice-hud-cursor {
     background-color: rgba(40,40,40,0.95);
-    border-radius: 12px;
+    border-radius: 14px;
 }
 
 /* Island: part of the top bar. Same background as the bar (set inline from
    its theme), square top, rounded bottom, a soft shadow on the desktop. */
 .voice-hud-island {
     background-color: #000;
-    border-radius: 0 0 22px 22px;
+    border-radius: 0 0 26px 26px;
     box-shadow: 0 5px 16px rgba(0,0,0,0.45);
     transition-duration: 260ms;
 }
-.voice-hud-content-island { padding: 10px 20px 11px 20px; spacing: 12px; }
+.voice-hud-content-island { padding: 14px 26px 15px 26px; spacing: 14px; }
 
-.voice-hud-icon {
-    icon-size: 16px;
-    color: #ddd;
-}
-.voice-hud-icon:loading {
-    color: #999;
-}
-.voice-hud-icon:listening,
-.voice-hud-icon:busy {
-    color: #3584e4;
-}
-.voice-hud-icon:error {
-    color: #e01b24;
-}
+/* No icon: the bars carry the state (hud.js). The active bars, the lock
+   and the progress bar take the system's accent colour, set inline
+   (accentColor.js). */
 .voice-hud-bars {
-    spacing: 3px;
-    height: 20px;
+    spacing: 4px;
+    height: 36px;
 }
 .voice-hud-bar {
-    width: 4px;
+    width: 5px;
     border-radius: 2px;
-    background-color: #3584e4;
+    background-color: rgba(255,255,255,0.25);
 }
 .voice-hud-bar:quiet {
     background-color: rgba(255,255,255,0.25);
 }
-/* A long sentence is cut at its start by the label (hud.js): the pill keeps
-   one steady width instead of following every word. */
+/* Hands-free: the dictation goes on without the keys held. */
+.voice-hud-lock {
+    icon-size: 17px;
+}
+/* The speech model loading (hud.js fills it over the expected time). */
+.voice-hud-progress {
+    width: 52px;
+    height: 5px;
+    border-radius: 2px;
+    background-color: rgba(255,255,255,0.2);
+}
+.voice-hud-progress-fill {
+    height: 5px;
+    border-radius: 2px;
+}
+/* The words wrap: the pill widens with them up to max-width, then grows
+   downwards (hud.js keeps about three lines). */
 .voice-hud-text {
     color: #ddd;
-    max-width: 480px;
+    font-size: 1.18em;
+    max-width: 640px;
 }
 .voice-hud-text:live {
     color: #fff;
 }
 .voice-hud-text:hint {
-    font-size: 0.86em;
+    font-size: 1em;
     color: #aaa;
+}
+.voice-hud-text:error {
+    color: #ff7b7b;
 }
 
 /* -- Voice commands (optional, commands/commandHud.js) ----------------------
@@ -84,10 +92,9 @@
 
 .voice-cmd-hud-icon { icon-size: 16px; color: #ddd; }
 .voice-cmd-hud-icon:loading { color: #999; }
-.voice-cmd-hud-icon:listening { color: #3584e4; }
 .voice-cmd-hud-icon:error { color: #e01b24; }
 .voice-cmd-hud-bars { spacing: 3px; height: 20px; }
-.voice-cmd-hud-bar { width: 4px; border-radius: 2px; background-color: #3584e4; }
+.voice-cmd-hud-bar { width: 4px; border-radius: 2px; background-color: rgba(255,255,255,0.25); }
 .voice-cmd-hud-bar:quiet { background-color: rgba(255,255,255,0.25); }
 .voice-cmd-hud-text { color: #ddd; max-width: 520px; }
 .voice-cmd-hud-text:live { color: #fff; }
@@ -110,9 +117,3 @@
     padding: 10px 12px;
 }
 .voice-cmd-dialog-warning { font-size: 12px; color: #f8e45c; }
-
-/* The "glow" effect (hudEffects.js): a halo in the accent colour while the
-   island opens and closes. After the island rules so that it wins. */
-.voice-hud-glow {
-    box-shadow: 0 2px 30px 4px rgba(53,132,228,0.9);
-}

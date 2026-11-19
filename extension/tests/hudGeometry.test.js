@@ -3,7 +3,7 @@
 // Run: gjs -m extension/tests/hudGeometry.test.js
 import {
     CURSOR_GAP, ISLAND_OVERLAP, POINTER_GAP,
-    cursorPosition, islandPosition, islandTop, monitorAt, trailing,
+    cursorPosition, islandPosition, islandTop, levelCurve, monitorAt, trailing,
 } from '../hudGeometry.js';
 
 let failures = 0;
@@ -123,6 +123,17 @@ test('trailing keeps the end, with an ellipsis', () => {
 test('trailing counts code points, not UTF-16 units', () => {
     eq(trailing('a😀b😀c', 3), '…b😀c', 'emoji');
     eq(trailing('😀😀', 2), '😀😀', 'exact');
+});
+
+test('level curve: whisper visible, speech not pinned, silence flat', () => {
+    eq(levelCurve(0), 0, 'silence');
+    eq(levelCurve(4 * 0.0015) < 0.05, true, 'room noise');
+    const whisper = levelCurve(4 * 0.008);      // about -42 dBFS
+    eq(whisper > 0.25 && whisper < 0.45, true, `whisper ${whisper}`);
+    const speech = levelCurve(4 * 0.08);        // about -22 dBFS
+    eq(speech > 0.7 && speech < 0.95, true, `speech ${speech}`);
+    eq(levelCurve(1), 1, 'loud');
+    eq(levelCurve(-1), 0, 'nonsense');
 });
 
 print(failures ? `${failures} failure(s)` : 'all passed');

@@ -23,7 +23,7 @@
       <description>auto: hold the modifier to dictate, tap to toggle. hold: release always stops. toggle: the shortcut starts and stops.</description>
     </key>
     <key name="tap-ms" type="i">
-      <default>350</default>
+      <default>500</default>
       <range min="150" max="1000"/>
       <summary>Tap threshold</summary>
       <description>Releasing the modifier within this many milliseconds counts as a tap (toggle mode).</description>
@@ -39,10 +39,21 @@
       <summary>Microphone</summary>
       <description>PipeWire node name of the microphone to record from. Empty = the system default input.</description>
     </key>
+    <key name="tidy" type="b">
+      <default>true</default>
+      <summary>Remove hesitations</summary>
+      <description>Drop hesitations (euh, uh, hum) and words said twice in a row from the dictated text. Instant, by rules.</description>
+    </key>
     <key name="polish" type="b">
       <default>false</default>
-      <summary>Polish with a local LLM</summary>
-      <description>Send each finished block through the local LLM (llama.cpp, installed with the voice commands) to fix punctuation and casing. Off = pure offline recognition.</description>
+      <summary>Self-corrections with the local LLM</summary>
+      <description>Send each finished block through the local LLM (llama.cpp, installed with the voice commands) to keep only the corrected version when the speaker corrects themselves ("Monday, no, Tuesday"). Slow (seconds per block) and approximate; the text is kept as it is when the answer does not look like a clean-up.</description>
+    </key>
+    <key name="keep-loaded-min" type="i">
+      <default>30</default>
+      <range min="1" max="480"/>
+      <summary>Keep the speech model loaded</summary>
+      <description>Minutes the speech model (about 1 GB) stays in memory after the last dictation. The next dictation after that waits a few seconds for it to load.</description>
     </key>
     <key name="welcome-shown" type="b">
       <default>false</default>

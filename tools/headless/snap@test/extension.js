@@ -4,6 +4,7 @@
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Shell from 'gi://Shell';
+import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 export default class Snap {
     enable() {
         this._dir = GLib.getenv('SNAP_DIR');
@@ -25,7 +26,17 @@ export default class Snap {
             stream.close(null);
         });
     }
+    // $SNAP_DIR/menu: open (or close) the Voice Hold indicator's menu.
+    _menu() {
+        const req = `${this._dir}/menu`;
+        if (!GLib.file_test(req, GLib.FileTest.EXISTS))
+            return;
+        GLib.unlink(req);
+        const indicator = Main.panel.statusArea['voice-hold@griffit.gmail.com'];
+        indicator?.menu.toggle();
+    }
     _tick() {
+        this._menu();
         this._full();
         const go = GLib.file_test(`${this._dir}/go`, GLib.FileTest.EXISTS);
         const stop = GLib.file_test(`${this._dir}/stop`, GLib.FileTest.EXISTS);
