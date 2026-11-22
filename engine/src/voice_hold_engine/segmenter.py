@@ -24,7 +24,10 @@ DEFAULT_PARTIAL_WINDOW_S = 9.0
 
 
 class Segmenter:
-    def __init__(self, vad, *, pre_roll_s=0.3, partial_window_s=DEFAULT_PARTIAL_WINDOW_S,
+    # The VAD says "speech" 0.3 to 0.5 s after it began (min_speech_s plus
+    # its own window): 0.3 s of pre-roll cut the first syllables of a
+    # dictation. 0.8 s keeps them, at the cost of a little silence decoded.
+    def __init__(self, vad, *, pre_roll_s=0.8, partial_window_s=DEFAULT_PARTIAL_WINDOW_S,
                  partial_min_new_s=0.7, sample_rate=SAMPLE_RATE):
         self._vad = vad
         self._rate = sample_rate

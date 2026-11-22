@@ -6,6 +6,8 @@ import time
 
 from . import cloud, llm, rules, safety
 
+CONTEXT_S = 120.0
+
 CLOSED = {
     'open_app', 'close_window', 'close_all_windows', 'set_volume', 'change_volume',
     'set_brightness', 'change_brightness', 'toggle_dark_mode', 'toggle_dnd',
@@ -20,6 +22,9 @@ class Interpreter:
         self._cloud_fn = cloud_fn or cloud.interpret
         # {'provider', 'model'} while the cloud is switched on, else None.
         self.cloud = None
+        # The last cloud exchange (monotonic time, request, answer), kept
+        # CONTEXT_S so that "oui, vas-y" can follow a question it asked.
+        self._last = None
         self._rules = rules.RuleParser(apps)
         self.work_dir = work_dir
 
@@ -38,8 +43,13 @@ class Interpreter:
             intent = None
         if intent is None and self.cloud:
             try:
-                intent = self._cloud_fn(text, **self.cloud)
+                context = None
+                if self._last and time.monotonic() - self._last[0] < CONTEXT_S:
+                    context = list(self._last[1:])
+                intent = self._cloud_fn(text, context=context, **self.cloud)
                 source = 'cloud'
+                reply = intent.get('text') or intent.get('summary') or intent.get('say') or ''
+                self._last = (time.monotonic(), text, reply) if reply else None
             except cloud.CloudError as e:
                 why = str(e)
                 # Offline, or the provider is down: the local model answers.

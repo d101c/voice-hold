@@ -147,6 +147,25 @@ TOOLS = [
 ]
 FINAL_TOOLS = {'gnome_action', 'propose_command', 'power'}
 
+# A question gets an answer, never an action: "est-ce que mon pare-feu est
+# activé ?" once came back as `sudo ufw enable`. A request phrased as a
+# question ("tu peux activer...", "can you...") is still a request.
+_QUESTION_START = re.compile(
+    r"^\s*(est-ce qu|combien|quel|quelle|quels|quelles|comment|pourquoi|où|ou est|quand|qui|"
+    r"qu'est-ce|qu’est-ce|c'est quoi|c’est quoi|y a-t-il|il y a|ai-je|suis-je|"
+    r"is|are|do|does|did|what|how|why|where|when|which|who|am i|have i)\b", re.IGNORECASE)
+_REQUEST = re.compile(r"\b(tu peux|peux-tu|pouvez-vous|vous pouvez|pourrais-tu|pourriez-vous|"
+                      r"can you|could you|would you|please)\b", re.IGNORECASE)
+NOT_NOW = ('Nothing was done: the user asked a question, not for a change. Answer it in words, '
+           'from what you found; you may end by offering the change ("Voulez-vous que je ...?").')
+
+
+def is_question(text):
+    text = text.strip()
+    if _REQUEST.search(text):
+        return False
+    return text.endswith('?') or bool(_QUESTION_START.match(text))
+
 # Never read: keys, keyrings, browser profiles, credentials.
 SECRET_PATHS = re.compile(r'\.ssh|\.gnupg|keyring|id_rsa|id_ed25519|\.env\b|token|secret|passw|'
                           r'\.mozilla|google-chrome|chromium|\.netrc|\.aws|gcloud|/etc/shadow|credential',
@@ -209,8 +228,11 @@ def _final(name, args):
     return {'action': 'power', 'power_action': args.get('power_action', ''), 'needs_confirmation': True}
 
 
-def interpret(text, *, provider='anthropic', model=DEFAULT_MODEL, client=None, key=None):
-    """Intent dict for `text`, or raise CloudError."""
+def interpret(text, *, provider='anthropic', model=DEFAULT_MODEL, client=None, key=None, context=None):
+    """Intent dict for `text`, or raise CloudError. `context`: the previous
+    exchange as [user text, assistant answer], so that "oui, vas-y" follows
+    « Voulez-vous que je l'active ? ».
+    """
     if provider not in PROVIDERS:
         raise CloudError('cloud-provider-unsupported')
     if model not in PROVIDERS[provider]:
@@ -225,7 +247,11 @@ def interpret(text, *, provider='anthropic', model=DEFAULT_MODEL, client=None, k
             raise CloudError('cloud-no-key')
         client = anthropic.Anthropic(api_key=key, timeout=30.0, max_retries=1)
 
-    messages = [{'role': 'user', 'content': text}]
+    messages = []
+    if context:
+        messages += [{'role': 'user', 'content': context[0]}, {'role': 'assistant', 'content': context[1]}]
+    messages.append({'role': 'user', 'content': text})
+    question = is_question(text)
     t0 = time.monotonic()
     looked = []
     for _ in range(MAX_TURNS):
@@ -257,6 +283,14 @@ def interpret(text, *, provider='anthropic', model=DEFAULT_MODEL, client=None, k
         uses = [b for b in msg.content if b.type == 'tool_use']
         said = ' '.join(b.text for b in msg.content if b.type == 'text').strip()
         final = next((u for u in uses if u.name in FINAL_TOOLS), None)
+        if final is not None and question:
+            # Send it back: every tool call gets its result, the action none.
+            messages.append({'role': 'assistant', 'content': msg.content})
+            messages.append({'role': 'user', 'content': [
+                {'type': 'tool_result', 'tool_use_id': u.id, 'is_error': u.name in FINAL_TOOLS,
+                 'content': NOT_NOW if u.name in FINAL_TOOLS else _look(u.name, u.input)}
+                for u in uses]})
+            continue
         if final is not None:
             intent = _final(final.name, final.input)
             if said and not intent.get('say'):
