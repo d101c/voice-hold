@@ -85,6 +85,21 @@
       <summary>Top-bar indicator</summary>
       <description>Show an icon and menu in the GNOME Shell top bar.</description>
     </key>
+    <key name="sounds" type="b">
+      <default>true</default>
+      <summary>Sounds</summary>
+      <description>A short sound when listening starts and when the text is written (follows the system's event sounds setting).</description>
+    </key>
+    <key name="pause-media" type="b">
+      <default>true</default>
+      <summary>Pause media while dictating</summary>
+      <description>Pause the media players that are playing (MPRIS) when a dictation starts, and resume them afterwards.</description>
+    </key>
+    <key name="paste-last-shortcut" type="as">
+      <default>[]</default>
+      <summary>Paste the last dictation</summary>
+      <description>Shortcut that writes the last dictation again where the cursor is. Empty: none.</description>
+    </key>
     <key name="show-hud" type="b">
       <default>true</default>
       <summary>Show the pill</summary>

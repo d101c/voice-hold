@@ -10,8 +10,6 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n > 1);\n"
 
-msgid "Click in a text field first"
-msgstr "Cliquez d'abord dans un champ texte"
 
 msgid "press again or Esc to stop"
 msgstr "appuyez encore ou Échap pour arrêter"
@@ -807,3 +805,30 @@ msgstr "Le modèle cloud a refusé cette demande"
 
 msgid "Cloud model error (%s)"
 msgstr "Erreur du modèle cloud (%s)"
+
+msgid "Copied — paste it with Ctrl+V"
+msgstr "Copié — collez avec Ctrl+V"
+
+msgid "Paste the last dictation"
+msgstr "Coller la dernière dictée"
+
+msgid "While dictating"
+msgstr "Pendant la dictée"
+
+msgid "In applications that do not take dictated text directly, the text is pasted at the end and stays in the clipboard."
+msgstr "Dans les applications qui ne reçoivent pas directement le texte dicté, il est collé à la fin et reste dans le presse-papiers."
+
+msgid "Sounds"
+msgstr "Sons"
+
+msgid "A short sound when listening starts and when the text is written."
+msgstr "Un son bref quand l'écoute commence et quand le texte est écrit."
+
+msgid "Pause music and videos"
+msgstr "Mettre en pause musique et vidéos"
+
+msgid "Players that are playing pause while you speak and resume afterwards."
+msgstr "Les lecteurs en cours de lecture se mettent en pause pendant que vous parlez, puis reprennent."
+
+msgid "Also in the menu of the top bar icon."
+msgstr "Aussi dans le menu de l'icône de la barre du haut."

@@ -11,7 +11,10 @@ import {HoldMachine, IDLE, TOGGLE} from './holdMachine.js';
 import {Hud} from './hud.js';
 import {speechLowMemory} from './memoryText.js';
 import {installKeyHook} from './keyHook.js';
-import {TextSink} from './textSink.js';
+import {MediaPause} from './media.js';
+import {Paster} from './paste.js';
+import {Cues} from './sounds.js';
+import {joinBlock, TextSink} from './textSink.js';
 
 // Glue between the gesture (holdMachine), the engine (D-Bus), the text field
 // (textSink) and the pill (hud).
@@ -22,6 +25,11 @@ import {TextSink} from './textSink.js';
 // not reset. If the engine never answers (process died, Error without
 // Stopped, Stop acknowledged but no Stopped within END_GUARD_MS) the session
 // is ended locally: preedit cleared, pill hidden, timers stopped.
+//
+// No text field takes input-method text (many Electron and X11 apps, or no
+// window at all): the dictation goes on, the words show in the pill only,
+// and at the end the whole text goes to the clipboard and is pasted into the
+// window that had the focus (paste.js).
 
 const WATCH_MS = 50;
 const END_GUARD_MS = 3000;
@@ -33,6 +41,8 @@ const HINT_MS = 2500;
 // In hands-free mode, the last seconds before the silence stop are counted.
 const COUNTDOWN_MS = 3000;
 const SILENCE_TICK_MS = 250;
+// A paste this soon after the previous one into the same window follows it.
+const PASTE_FOLLOW_MS = 5 * 60 * 1000;
 
 // Engine errors after which no further signal is to be expected.
 const FATAL_ERRORS = ['models-missing', 'low-memory:', 'audio:', 'model:'];
@@ -53,8 +63,13 @@ export function modifierMask(accel) {
 }
 
 export class Dictation {
-    constructor(settings, gettext, openSetup = null) {
+    constructor(settings, gettext, openSetup = null, dir = '.') {
         this._settings = settings;
+        this._cues = new Cues(dir, settings);
+        this._media = new MediaPause(settings);
+        this._paster = new Paster();
+        this._last = '';             // the text of the last dictation, see pasteLast()
+        this._lastPaste = null;      // {window, at, char}: the last text pasted at the end of a dictation
         this._openSetup = openSetup;
         this._ = gettext;
         this._machine = new HoldMachine(this._machineOptions());
@@ -114,6 +129,8 @@ export class Dictation {
         this._engine = null;
         this._sink.destroy();
         this._sink = null;
+        this._paster.destroy();
+        this._paster = null;
         this._hud.destroy();
         this._hud = null;
         this._settings = null;
@@ -139,14 +156,8 @@ export class Dictation {
     // stops one, nor when there is no text field): the voice commands give
     // way then (extension.js).
     shortcut(beforeStart = null) {
-        if (this._machine.state === IDLE) {
-            if (!this._sink.available) {
-                this._hud.show(this._('Click in a text field first'), 'error');
-                this._hud.hide(1800);
-                return;
-            }
+        if (this._machine.state === IDLE)
             beforeStart?.();
-        }
         this._run(this._machine.shortcut(GLib.get_monotonic_time() / 1000));
     }
 
@@ -304,12 +315,16 @@ export class Dictation {
             ending: false,
             window: global.display.focus_window,
             focus: Main.inputMethod.currentFocus,
+            clipboard: !this._sink.available,   // no field: pasted at the end
+            text: '',                           // what was written, for pasteLast()
         };
         this._session = session;
         this._engineState = '';
         this._handsFreeShown = false;
         this._clearHint();
         this._sink.begin();
+        this._cues.play('start');
+        this._media.pause();
         if (this._settings.get_boolean('show-hud')) {
             this._hud.show(this._('Starting…'), 'loading');
         }
@@ -406,6 +421,8 @@ export class Dictation {
         const had = !!this._session;
         this._session = null;
         this._sink.end();
+        if (had)
+            this._media.resume();
         if (had && !this._startQueued)
             this._onIdle?.();
     }
@@ -504,7 +521,7 @@ export class Dictation {
     _focusKept() {
         return !!this._session &&
             global.display.focus_window === this._session.window &&
-            this._sink.focused;
+            (this._session.clipboard || this._sink.focused);
     }
 
     _onFocusWindow() {
@@ -561,25 +578,33 @@ export class Dictation {
     _onPartial(text) {
         if (!this._live)
             return;
-        if (!this._focusKept() || !this._sink.partial(text)) {
+        const session = this._session;
+        if (!this._focusKept() || (!session.clipboard && !this._sink.partial(text))) {
             this._run(this._machine.external('cancel'));
             return;
         }
         this._clearHint();
-        this._hud.live(text);
+        this._hud.live(session.clipboard ? joinBlock(this._lastChar(session), text, {firstOfSession: !session.text}) : text);
+    }
+
+    // The last character written in this session ('' before the first block).
+    _lastChar(session) {
+        return Array.from(session.text).pop() ?? '';
     }
 
     _onFinal(text) {
         if (!this._session)
             return;
-        if (!this._focusKept() || !this._sink.commit(text)) {
+        const session = this._session;
+        if (!this._focusKept() || (!session.clipboard && !this._sink.commit(text))) {
             // Focus moved: this block goes nowhere rather than elsewhere.
             if (this._live)
                 this._run(this._machine.external('cancel'));
             return;
         }
+        session.text += joinBlock(this._lastChar(session), text, {firstOfSession: !session.text});
         this._clearHint();
-        this._hud.live(text);
+        this._hud.live(session.clipboard ? session.text : text);
     }
 
     _onStopped(reason) {
@@ -593,14 +618,67 @@ export class Dictation {
         // Stop/Cancel it is already idle, or in the next gesture.
         if (!wasEnding)
             this._run(this._machine.external('engine'));
-        if (reason === 'error')
+        const written = reason !== 'cancel' && reason !== 'error' && session.text.trim() ? session.text : '';
+        if (written) {
+            this._last = written;
+            this._cues.play('stop');
+        }
+        if (written && session.clipboard && !session.yielding) {
+            this._deliver(this._pasteSpacing(written, session.window), session.window);
+        } else if (reason === 'error') {
             this._hud.hide(2500);
-        else if (session.yielding)
+        } else if (session.yielding) {
             this._hud.hideNow();          // the command's pill takes its place
-        else
+        } else {
             this._hud.hide();
+        }
         if (this._startQueued)
             this._startNow();
+    }
+
+    // Clipboard, then a virtual paste into `window` when it still has the
+    // focus; the pill says which.
+    _deliver(text, window) {
+        this._paster.deliver(text, window).then(how => {
+            if (!this._hud)
+                return;
+            if (how === 'pasted') {
+                this._hud.hide();
+            } else if (!this._session) {
+                this._hud.show(this._('Copied — paste it with Ctrl+V'), 'listening');
+                this._hud.hide(2500);
+            }
+        });
+    }
+
+    // A pasted text cannot see what is before the cursor: when the previous
+    // paste went to the same window a moment ago, the cursor is most likely
+    // right after it, and a space separates the two.
+    _pasteSpacing(text, window) {
+        const prev = this._lastPaste;
+        const now = GLib.get_monotonic_time() / 1000;
+        const out = prev && prev.window === window && now - prev.at < PASTE_FOLLOW_MS
+            ? joinBlock(prev.char, text) : text;
+        this._lastPaste = {window, at: now, char: Array.from(out).pop() ?? ''};
+        return out;
+    }
+
+    // The menu's "Paste the last dictation" (and its optional shortcut):
+    // into the focused field when there is one, else as above.
+    pasteLast() {
+        if (!this._last || this._session)
+            return;
+        if (this._sink.available) {
+            this._sink.begin();
+            this._sink.commit(this._last);
+            this._sink.end();
+        } else {
+            this._deliver(this._last, global.display.focus_window);
+        }
+    }
+
+    get hasLast() {
+        return !!this._last;
     }
 
     _onError(message) {

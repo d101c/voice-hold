@@ -29,6 +29,7 @@ export default class VoiceHoldExtension extends Extension {
                 this._welcomeSource?.destroy();
                 this.openPreferences();
             },
+            this.path,
         );
         this._commander = null;
         this._commandBound = false;
@@ -60,6 +61,7 @@ export default class VoiceHoldExtension extends Extension {
             'changed::enabled', rebind,
             'changed::enabled', rebindCommand,
             'changed::dictation-shortcut', rebind,
+            'changed::paste-last-shortcut', rebind,
             'changed::show-indicator', toggleIndicator,
             'changed::commands-enabled', () => this._syncCommands(),
             'changed::command-shortcut', rebindCommand,
@@ -132,6 +134,7 @@ export default class VoiceHoldExtension extends Extension {
             `${this.path}/icons/voice-hold-symbolic.svg`,
             () => this.openPreferences(),
             _,
+            () => this._dictation,
         );
         this._indicator.setCommands(this._commandsMenu());
     }
@@ -166,6 +169,11 @@ export default class VoiceHoldExtension extends Extension {
                 });
             },
         );
+        if (this._settings.get_strv('paste-last-shortcut').some(a => a)) {
+            Main.wm.addKeybinding('paste-last-shortcut', this._settings, Meta.KeyBindingFlags.IGNORE_AUTOREPEAT,
+                Shell.ActionMode.NORMAL, () => this._dictation?.pasteLast());
+            this._pasteBound = true;
+        }
         this._bound = true;
     }
 
@@ -173,6 +181,9 @@ export default class VoiceHoldExtension extends Extension {
         if (!this._bound)
             return;
         Main.wm.removeKeybinding('dictation-shortcut');
+        if (this._pasteBound)
+            Main.wm.removeKeybinding('paste-last-shortcut');
+        this._pasteBound = false;
         this._bound = false;
     }
 

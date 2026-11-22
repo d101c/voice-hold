@@ -52,6 +52,7 @@ export default class VoiceHoldPreferences extends ExtensionPreferences {
         });
         this._buildEngineGroup(page, window);
         this._buildGestureGroup(page, settings);
+        this._buildDuringGroup(page, settings);
         this._buildMicrophoneGroup(page, settings);
         this._buildPolishGroup(page, settings);
         this._buildAppearanceGroup(page, settings);
@@ -185,6 +186,35 @@ export default class VoiceHoldPreferences extends ExtensionPreferences {
         });
         group.add(keepRow);
         settings.bind('keep-loaded-min', keepRow, 'value', Gio.SettingsBindFlags.DEFAULT);
+    }
+
+    // -- while dictating ---------------------------------------------------
+
+    _buildDuringGroup(page, settings) {
+        const group = new Adw.PreferencesGroup({
+            title: _('While dictating'),
+            description: _('In applications that do not take dictated text directly, the text is pasted at the end and stays in the clipboard.'),
+        });
+        page.add(group);
+
+        const sounds = new Adw.SwitchRow({
+            title: _('Sounds'),
+            subtitle: _('A short sound when listening starts and when the text is written.'),
+        });
+        group.add(sounds);
+        settings.bind('sounds', sounds, 'active', Gio.SettingsBindFlags.DEFAULT);
+
+        const media = new Adw.SwitchRow({
+            title: _('Pause music and videos'),
+            subtitle: _('Players that are playing pause while you speak and resume afterwards.'),
+        });
+        group.add(media);
+        settings.bind('pause-media', media, 'active', Gio.SettingsBindFlags.DEFAULT);
+
+        const last = this._shortcutRow(settings, 'paste-last-shortcut');
+        last.title = _('Paste the last dictation');
+        last.subtitle = _('Also in the menu of the top bar icon.');
+        group.add(last);
     }
 
     // The editor of a shortcut stored as a strv under `key`.
