@@ -13,6 +13,11 @@ import {isTerminal, pasteAllowed} from './pasteKeys.js';
 
 // Time for the clipboard owner change to reach the application.
 const PASTE_DELAY_MS = 80;
+// Keys of the user's own shortcut may still be down: wait for them, so the
+// virtual Ctrl+V is not read as Ctrl+Shift+Super+V, at most this long.
+const RELEASE_WAIT_MS = 1500;
+const HELD = Clutter.ModifierType.SHIFT_MASK | Clutter.ModifierType.CONTROL_MASK |
+    Clutter.ModifierType.MOD1_MASK | Clutter.ModifierType.MOD4_MASK | Clutter.ModifierType.SUPER_MASK;
 
 export class Paster {
     constructor() {
@@ -37,7 +42,13 @@ export class Paster {
         return new Promise(resolve => {
             if (this._timeoutId)
                 GLib.Source.remove(this._timeoutId);
+            let waited = 0;
             this._timeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, PASTE_DELAY_MS, () => {
+                const [,, mods] = global.get_pointer();
+                if ((mods & HELD) && waited < RELEASE_WAIT_MS) {
+                    waited += PASTE_DELAY_MS;
+                    return GLib.SOURCE_CONTINUE;      // polled again PASTE_DELAY_MS later
+                }
                 this._timeoutId = 0;
                 if (global.display.focus_window !== window) {
                     resolve('copied');

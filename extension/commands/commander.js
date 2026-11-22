@@ -427,9 +427,25 @@ export class Commander {
             return;
         }
         if (session.selection)
-            this._rewriteSelection(text, session);
+            this._commandOrRewrite(text, session);
         else
             this._interpret(text, session.window);
+    }
+
+    // With text selected, a known command ("open the settings", "volume
+    // down") is still a command: the rules alone are asked first, and only
+    // what they do not know rewrites the selection.
+    async _commandOrRewrite(text, session) {
+        const epoch = this._epoch;
+        const res = await this._engine.interpret(text, {'llm': false, 'cloud': false,
+            'work-dir': this._settings.get_string('command-work-dir')});
+        if (this._stale(epoch))
+            return;
+        const action = res.ok ? res.value?.action : '';
+        if (action && action !== 'unknown' && action !== 'run_shell')
+            this._interpret(text, session.window);
+        else
+            this._rewriteSelection(text, session);
     }
 
     // The text selected in the focused field, when the application reports
@@ -451,8 +467,9 @@ export class Commander {
         this._busy = true;
         const question = /\?\s*$/.test(said);
         this._hud.status(question ? this._('Thinking…') : this._('Rewriting the selection…'), 'loading');
-        const cloud = this._settings.get_boolean('cloud-enabled')
-            ? {provider: this._settings.get_string('cloud-provider'), model: ''} : null;
+        const cloud = this._settings.get_boolean('cloud-enabled') &&
+            this._settings.get_string('cloud-provider') === 'anthropic'
+            ? {provider: 'anthropic', model: this._settings.get_string('cloud-model')} : null;
         const instruction = question
             ? `Answer this question about the text, in at most three short sentences, in the language of the question: ${said}`
             : said;

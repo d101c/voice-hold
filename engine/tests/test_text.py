@@ -64,3 +64,9 @@ def test_command_between_two_clauses_takes_a_capital():
 def test_command_words_between_punctuation_inside_a_sentence_need_both_sides():
     assert clean("Il a lancé une nouvelle ligne, très belle.") == "Il a lancé une nouvelle ligne, très belle."
     assert clean("La ligne 12. Nouvelle ligne de bus.") == "La ligne 12. Nouvelle ligne de bus."
+
+
+def test_command_after_a_determiner_is_a_noun():
+    assert clean("We just launched a new line.") == "We just launched a new line."
+    assert clean("Voici ma nouvelle ligne") == "Voici ma nouvelle ligne"
+    assert clean("Voici, nouvelle ligne") == "Voici\n"

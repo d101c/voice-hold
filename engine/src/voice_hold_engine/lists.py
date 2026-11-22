@@ -4,9 +4,10 @@
     "J'ai trois choses à faire, premièrement acheter du pain, deuxièmement
     appeler Léa."  ->  "J'ai trois choses à faire :\\n1. Acheter du pain\\n2. Appeler Léa"
 
-A list starts with the first ordinal and goes on with the next one, in the
-same block or a later one of the same dictation: one usually pauses between
-items, and each pause ends a block. An ordinal only counts at the start of
+A list starts with the first two ordinals in the same block ("First, let me
+say hello." alone is a sentence, and a leading line break would send a chat
+message), then goes on with the next ones, in that block or a later one of
+the same dictation. An ordinal only counts at the start of
 a clause (after a pause mark, or at the start of the block); "first" and
 "second", which are ordinary words, also need a comma or colon after them.
 """
@@ -55,7 +56,7 @@ class Lists:
             if n == expected or (n == 1 and not marks):
                 marks.append((m, n))
                 expected = n + 1
-        if not marks:
+        if not marks or (self.last == 0 and len(marks) < 2):
             return text
         out = text[:marks[0][0].start()].rstrip().rstrip(',;')
         if out and out[-1] not in '.!?:':

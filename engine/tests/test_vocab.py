@@ -51,3 +51,10 @@ def test_from_options_tolerates_bad_json():
 def test_key_matches_french_and_english_spellings():
     assert key('Philippe') == key('Filip')
     assert key('Kubernetes') == key('cubernétes')
+
+
+def test_short_names_never_replace_ordinary_words():
+    v = Vocabulary(['Louis', 'Marie', 'Marc'])
+    for s in ["Je lui ai dit.", "Son mari arrive.", "Une marque connue.", "Mark my words."]:
+        assert v.apply(s) == s, s
+    assert v.apply("louis et marie") == "Louis et Marie"

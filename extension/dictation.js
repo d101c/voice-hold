@@ -3,6 +3,7 @@
 import Clutter from 'gi://Clutter';
 import GLib from 'gi://GLib';
 import IBus from 'gi://IBus';
+import St from 'gi://St';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 import {accelLabel} from './accelLabel.js';
@@ -15,6 +16,7 @@ import {HistoryWriter} from './history.js';
 import {MediaPause} from './media.js';
 import {categoryOf, instructionFor} from './modes.js';
 import {Paster} from './paste.js';
+import {isTerminal} from './pasteKeys.js';
 import {Cues} from './sounds.js';
 import {joinBlock, TextSink} from './textSink.js';
 import {WakeControl} from './wakeControl.js';
@@ -48,7 +50,10 @@ const HINT_MS = 2500;
 const COUNTDOWN_MS = 3000;
 const SILENCE_TICK_MS = 250;
 // A paste this soon after the previous one into the same window follows it.
-const PASTE_FOLLOW_MS = 5 * 60 * 1000;
+const PASTE_FOLLOW_MS = 30 * 1000;
+// "Paste the last dictation" from the menu waits for the menu to close and
+// the focus to go back to the window.
+const MENU_PASTE_DELAY_MS = 250;
 
 // Engine errors after which no further signal is to be expected.
 const FATAL_ERRORS = ['models-missing', 'low-memory:', 'audio:', 'model:'];
@@ -75,6 +80,7 @@ export class Dictation {
         this._media = new MediaPause(settings);
         this._paster = new Paster();
         this._history = new HistoryWriter();
+        this._pasteLastId = 0;
         this._last = '';             // the text of the last dictation, see pasteLast()
         this._lastPaste = null;      // {window, at, char}: the last text pasted at the end of a dictation
         this._openSetup = openSetup;
@@ -143,6 +149,10 @@ export class Dictation {
         this._sink = null;
         this._paster.destroy();
         this._paster = null;
+        if (this._pasteLastId) {
+            GLib.Source.remove(this._pasteLastId);
+            this._pasteLastId = 0;
+        }
         this._hud.destroy();
         this._hud = null;
         this._settings = null;
@@ -650,14 +660,19 @@ export class Dictation {
         if (!wasEnding)
             this._run(this._machine.external('engine'));
         const written = reason !== 'cancel' && reason !== 'error' && session.text.trim() ? session.text : '';
-        if (written && !session.instruction) {
+        if (written && (!session.instruction || session.yielding)) {
             this._last = written;
             this._remember(written, session.window);
             this._cues.play('stop');
         }
-        if (written && session.instruction && !session.yielding) {
+        if (written && session.buffered && session.yielding) {
+            // A voice command takes over: the words held back are not lost,
+            // they wait in the clipboard.
+            St.Clipboard.get_default().set_text(St.ClipboardType.CLIPBOARD, written);
+            this._hud.hideNow();
+        } else if (written && session.instruction) {
             this._rewriteAndWrite(written, session);
-        } else if (written && session.clipboard && !session.yielding) {
+        } else if (written && session.clipboard) {
             this._deliver(this._pasteSpacing(written, session.window), session.window);
         } else if (reason === 'error') {
             this._hud.hide(2500);
@@ -681,32 +696,57 @@ export class Dictation {
         this._history.add(text, window?.get_wm_class?.() ?? '', this._settings.get_int('history-days'));
     }
 
+    // The cloud model, when it is switched on and its provider is one the
+    // engine can talk to; else null (the local model).
     _cloud() {
-        if (!this._settings.get_boolean('cloud-enabled'))
+        if (!this._settings.get_boolean('cloud-enabled') || this._settings.get_string('cloud-provider') !== 'anthropic')
             return null;
-        return {provider: this._settings.get_string('cloud-provider'), model: ''};
+        return {provider: 'anthropic', model: this._settings.get_string('cloud-model')};
+    }
+
+    // A new dictation has started meanwhile: what ends late keeps away from
+    // its pill and its field.
+    get _busyAgain() {
+        return !!this._session || this._startQueued;
+    }
+
+    // The pill for a status of our own, unless the user turned it off
+    // (errors always show).
+    _say(text, pseudo, hideMs) {
+        if (this._busyAgain || (pseudo !== 'error' && !this._settings.get_boolean('show-hud')))
+            return;
+        this._hud.show(text, pseudo);
+        this._hud.hide(hideMs);
     }
 
     // A mode: the whole text goes to the language model, and what comes back
     // is written where the dictation started (as said when no model could).
     async _rewriteAndWrite(said, session) {
-        this._hud.show(this._('Rewriting…'), 'loading');
-        const out = (await this._engine?.rewrite(said, session.instruction, this._cloud())) || '';
+        if (this._settings.get_boolean('show-hud'))
+            this._hud.show(this._('Rewriting…'), 'loading');
+        const out = ((await this._engine?.rewrite(said, session.instruction, this._cloud())) || '').trim();
         if (!this._hud)
             return;
-        const text = out.trim() ? out.trim() : said;
+        const text = out || said;
         this._last = text;
         this._remember(text, session.window);
         this._cues.play('stop');
-        if (!out.trim()) {
-            this._hud.show(this._('No language model for this mode: written as said'), 'error');
-            this._hud.hide(3500);
+        if (this._busyAgain) {
+            // Never into the new dictation's field: the clipboard.
+            St.Clipboard.get_default().set_text(St.ClipboardType.CLIPBOARD, text);
+            return;
         }
-        if (!session.clipboard && global.display.focus_window === session.window && this._sink.focused) {
-            this._sink.commit(text);
-            if (out.trim())
+        if (!out)
+            this._say(this._('No language model for this mode: written as said'), 'error', 3500);
+        const late = new TextSink(Main.inputMethod, Clutter);
+        late.begin(session.focus);
+        if (!session.clipboard && global.display.focus_window === session.window && late.focused) {
+            late.commit(text);
+            late.destroy();
+            if (out)
                 this._hud.hide();
         } else {
+            late.destroy();
             this._deliver(this._pasteSpacing(text, session.window), session.window);
         }
     }
@@ -715,14 +755,12 @@ export class Dictation {
     // focus; the pill says which.
     _deliver(text, window) {
         this._paster.deliver(text, window).then(how => {
-            if (!this._hud)
+            if (!this._hud || this._busyAgain)
                 return;
-            if (how === 'pasted') {
+            if (how === 'pasted')
                 this._hud.hide();
-            } else if (!this._session) {
-                this._hud.show(this._('Copied — paste it with Ctrl+V'), 'listening');
-                this._hud.hide(2500);
-            }
+            else
+                this._say(this._('Copied — paste it with Ctrl+V'), 'listening', 2500);
         });
     }
 
@@ -732,17 +770,29 @@ export class Dictation {
     _pasteSpacing(text, window) {
         const prev = this._lastPaste;
         const now = GLib.get_monotonic_time() / 1000;
-        const out = prev && prev.window === window && now - prev.at < PASTE_FOLLOW_MS
-            ? joinBlock(prev.char, text) : text;
+        const follows = prev && prev.window === window && now - prev.at < PASTE_FOLLOW_MS &&
+            !isTerminal(window?.get_wm_class?.() ?? '');
+        const out = follows ? joinBlock(prev.char, text) : text;
         this._lastPaste = {window, at: now, char: Array.from(out).pop() ?? ''};
         return out;
     }
 
     // The menu's "Paste the last dictation" (and its optional shortcut):
     // into the focused field when there is one, else as above.
-    pasteLast() {
+    // From the menu, `delayed`: once it has closed and given the focus back.
+    pasteLast(delayed = false) {
         if (!this._last || this._session)
             return;
+        if (delayed) {
+            if (this._pasteLastId)
+                GLib.Source.remove(this._pasteLastId);
+            this._pasteLastId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, MENU_PASTE_DELAY_MS, () => {
+                this._pasteLastId = 0;
+                this.pasteLast(false);
+                return GLib.SOURCE_REMOVE;
+            });
+            return;
+        }
         if (this._sink.available) {
             this._sink.begin();
             this._sink.commit(this._last);

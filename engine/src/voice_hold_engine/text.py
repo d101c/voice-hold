@@ -50,6 +50,21 @@ def _newline(phrase):
     return '\n\n' if phrase.lower() in PARAGRAPH_COMMANDS else '\n'
 
 
+# A determiner just before the command, with no pause mark between them,
+# makes it an ordinary noun phrase: "we launched a new line", "ma nouvelle ligne".
+DETERMINERS = {
+    'a', 'an', 'the', 'my', 'your', 'our', 'their', 'his', 'her', 'its', 'this', 'that', 'any', 'one',
+    'une', 'la', 'ma', 'ta', 'sa', 'cette', 'notre', 'votre', 'leur', 'chaque', 'de', 'du', 'des',
+}
+
+
+def _object_of(before, gap):
+    if re.search(r'[,.;:!?]', gap):
+        return False
+    words = re.findall(r"[\w'’-]+", before)
+    return bool(words) and words[-1].lower() in DETERMINERS
+
+
 def clean(text):
     """Normalise whitespace and turn spoken line-break commands at the edges
     of the block into newlines. A block that is only a command becomes the
@@ -61,7 +76,7 @@ def clean(text):
     if m:
         return _newline(m.group(1))
     m = _TRAIL_RE.search(text)
-    if m and m.start() > 0:
+    if m and m.start() > 0 and not _object_of(text[:m.start()], text[m.start():m.start(1)]):
         text = text[:m.start()].rstrip() + _newline(m.group(1))
     m = _LEAD_RE.match(text)
     if m and m.end() < len(text):

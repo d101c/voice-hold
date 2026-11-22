@@ -103,10 +103,11 @@ export class TextSink {
         }
     }
 
-    begin() {
+    // `focus`: the field to write into, by default the one focused now.
+    begin(focus = this._im?.currentFocus ?? null) {
         this._blocks = 0;
         this._lastChar = null;
-        this._focus = this._im?.currentFocus ?? null;
+        this._focus = focus;
     }
 
     partial(text) {

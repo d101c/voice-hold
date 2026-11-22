@@ -15,15 +15,21 @@ def test_list_in_one_block_english():
 
 def test_list_across_blocks():
     lists = Lists()
-    assert lists.format("Premièrement, acheter du pain.") == "\n1. Acheter du pain"
-    assert lists.format("Deuxièmement, appeler Léa.", final=False) == "\n2. Appeler Léa"
-    assert lists.format("Deuxièmement, appeler Léa.") == "\n2. Appeler Léa"
-    assert lists.format("Troisièmement, partir.") == "\n3. Partir"
+    assert lists.format("Premièrement, acheter du pain, deuxièmement, du lait.") == \
+        "\n1. Acheter du pain\n2. Du lait"
+    assert lists.format("Troisièmement, appeler Léa.", final=False) == "\n3. Appeler Léa"
+    assert lists.format("Troisièmement, appeler Léa.") == "\n3. Appeler Léa"
+    assert lists.format("Quatrièmement, partir.") == "\n4. Partir"
+
+
+def test_one_ordinal_alone_is_a_sentence():
+    for s in ["First, let me say hello.", "Premièrement, merci."]:
+        assert Lists().format(s) == s
 
 
 def test_partial_does_not_move_the_state():
     lists = Lists()
-    lists.format("Premièrement, du pain.", final=False)
+    lists.format("Premièrement, du pain, deuxièmement, du lait.", final=False)
     assert lists.last == 0
     assert lists.format("Deuxièmement, du lait.") == "Deuxièmement, du lait."
 

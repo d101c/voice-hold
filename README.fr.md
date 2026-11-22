@@ -49,7 +49,7 @@ hors-ligne.
   petit modèle de langage que le moteur fait tourner sur votre ordinateur
   (llama.cpp), un téléchargement à part (`voice-hold-engine setup --commands`,
   ou le bouton Installer de cette page).
-- Historique des dernières dictées, sur votre ordinateur seulement (7 jours
+- Historique des dernières dictées, sur votre ordinateur seulement (éteint
   par défaut), et *Coller la dernière dictée* dans le menu de la barre du haut.
 - Rien ne tourne quand vous ne dictez pas (sauf si le mot de réveil est
   activé) ; le modèle quitte la mémoire après quelques minutes d'inactivité.

@@ -28,6 +28,11 @@ def test_ordinary_speech_is_left_alone():
         "C'est plutôt bien, non ?",
         "There is no way.",
         "Il a dit non 3 fois.",
+        "I was going to say I'm sorry to hear about your dad.",
+        "I do think we should actually do it.",
+        "Je suis allé à la plage et j'ai demandé pardon à Marie.",
+        "I told Mary that, actually, Paris is nice.",
+        "Je veux dire que tu as raison.",
     ]:
         assert correct(s) == s, s
 
@@ -50,3 +55,7 @@ def test_other_sentences_untouched():
 def test_empty():
     assert correct("") == ""
     assert correct("   ") == "   "
+
+
+def test_leading_punctuation_is_kept():
+    assert correct("... Rendez-vous à 9 h, non, 10 h.") == "... Rendez-vous à 10 h."

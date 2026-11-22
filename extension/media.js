@@ -62,6 +62,11 @@ export class MediaPause {
             if (epoch !== this._epoch)
                 return;                   // resumed meanwhile: leave them playing
             await call(name, PLAYER, 'Pause');
+            if (epoch !== this._epoch) {
+                // The dictation ended while this one was being paused.
+                await call(name, PLAYER, 'Play');
+                return;
+            }
             this._paused.push(name);
         }
     }

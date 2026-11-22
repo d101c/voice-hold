@@ -50,12 +50,21 @@ def _distance(a, b):
     return prev[-1]
 
 
+# Below this length a phonetic key is shared by too many ordinary words
+# ("Louis" and "lui", "Marie" and "mari"): only the same letters count.
+MIN_KEY = 5
+
+
+def _plain(text):
+    return re.sub(r'[^a-z0-9]', '', _strip_accents(text.lower()))
+
+
 def _close(a, b):
+    n = max(len(a), len(b))
+    if n < MIN_KEY:
+        return False
     if a == b:
         return True
-    n = max(len(a), len(b))
-    if n < 5:
-        return False
     return _distance(a, b) <= (1 if n < 10 else 2)
 
 
@@ -105,7 +114,7 @@ class Vocabulary:
                     run = text[start:end]
                     if '\n' in run or (size > 1 and re.search(r'[.!?;:]', run)):
                         continue
-                    if run != entry and _close(key(run), k):
+                    if run != entry and (_plain(run) == _plain(entry) or _close(key(run), k)):
                         spans.append((start, end))
                         i += size
                         done = True

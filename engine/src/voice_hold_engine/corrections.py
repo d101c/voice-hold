@@ -17,7 +17,8 @@ rest.
 """
 import re
 
-# Strong markers: a correction is likely; the same word lines up.
+# Strong markers: a correction is likely; the same word lines up. Those
+# that are also ordinary words need a pause mark before them (_NEED_PAUSE).
 _STRONG = [
     r'non,?\s+je\s+veux\s+dire', r'je\s+veux\s+dire', r'non,?\s+pardon', r'pardon',
     r'enfin\s+non', r'ou\s+plutôt', r'non\s+attends?', r'je\s+me\s+suis\s+trompée?',
@@ -25,16 +26,17 @@ _STRONG = [
 ]
 # Weak markers: also ordinary words; only a word of the same kind lines up.
 _WEAK = [r'non', r'plutôt', r'no']
+_NEED_PAUSE = re.compile(r'^(?:je veux dire|pardon|i mean|sorry|actually|correction|non|plutôt|no)$', re.IGNORECASE)
 # A sentence that ends with one of these is dropped, with the one before it.
 _DROP = [r'oublie\s+ça', r'efface\s+ça', r'annule\s+ça', r'scratch\s+that', r'never\s*mind', r'forget\s+that']
 
 _P = r'[,;:]'
 _MARKER_RE = re.compile(
-    rf'(?:\s*{_P}\s*|\s+)(?P<m>{"|".join(_STRONG + _WEAK)})(?:\s*{_P})?\s+',
+    rf'(?:\s*(?P<pause>{_P})\s*|\s+)(?P<m>{"|".join(_STRONG + _WEAK)})(?:\s*{_P})?\s+',
     re.IGNORECASE)
 _STRONG_RE = re.compile(rf'^(?:{"|".join(_STRONG)})$', re.IGNORECASE)
 _DROP_RE = re.compile(rf'^\s*(?:{"|".join(_DROP)})\s*[.!]?\s*$', re.IGNORECASE)
-_SENTENCES_RE = re.compile(r'[^.!?]+[.!?]*\s*')
+_SENTENCES_RE = re.compile(r'[^.!?]*(?:[.!?]+|$)\s*')
 _WORD_RE = re.compile(r"[\w'’-]+")
 
 WEEKDAYS = {
@@ -74,21 +76,36 @@ def _kind(word, sentence_start=False):
 def _fix_sentence(sentence):
     """One correction per pass; repeated until nothing changes."""
     for m in _MARKER_RE.finditer(sentence):
+        marker = re.sub(r'\s+', ' ', m.group('m').strip())
+        if _NEED_PAUSE.match(marker) and not m.group('pause'):
+            continue                          # "I'm sorry to hear", "should actually do it"
         left = sentence[:m.start()]
         right = sentence[m.end():]
         words = list(_WORD_RE.finditer(left))
+        rwords = _WORD_RE.findall(right)
         first = _WORD_RE.search(right)
         if not words or not first:
             continue
         r0 = first.group(0)
-        strong = bool(_STRONG_RE.match(re.sub(r'\s+', ' ', m.group('m').strip())))
+        strong = bool(_STRONG_RE.match(marker))
         kind = _kind(r0)
+        # A name lines up with an earlier name only when the replacement is
+        # that name ("Marie, non, Sophie"), not a sentence that starts with one.
+        if kind == 'name' and len(rwords) > 2:
+            kind = None
+        r1 = _kind(rwords[1]) if len(rwords) > 1 else None
         cut = None
         for i in range(len(words) - 1, max(-1, len(words) - 9), -1):
             w = words[i].group(0)
             if strong and w.lower() == r0.lower() and w.lower() not in ('non', 'no'):
-                cut = words[i].start()
-                break
+                # A short or common word only lines up when the next word is the
+                # same, or of the same kind, on both sides ("to John ... to Mary").
+                nxt = words[i + 1].group(0) if i + 1 < len(words) else ''
+                same_next = len(rwords) > 1 and nxt.lower() == rwords[1].lower()
+                if (len(w) >= 4 and w.lower() not in _FUNCTION_WORDS) or same_next or \
+                        (r1 and _kind(nxt) == r1):
+                    cut = words[i].start()
+                    break
             if kind and _kind(w, sentence_start=(i == 0)) == kind:
                 cut = words[i].start()
                 break

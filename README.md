@@ -41,7 +41,7 @@ Press-and-hold dictation for GNOME, fully offline.
   the rules do not know go to a small language model that the engine runs
   on your computer (llama.cpp), a separate download
   (`voice-hold-engine setup --commands`, or the Install button of that page).
-- History of the last dictations, on your computer only (7 days by default),
+- History of the last dictations, on your computer only (off by default),
   and *Paste the last dictation* in the top bar menu.
 - Nothing runs when you are not dictating (unless the wake word is on); the
   model leaves memory after a few minutes of inactivity.

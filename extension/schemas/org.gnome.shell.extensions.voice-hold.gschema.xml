@@ -113,7 +113,7 @@
       <description>The instruction of the "custom" mode, given to the language model with the dictated text.</description>
     </key>
     <key name="history-days" type="i">
-      <default>7</default>
+      <default>0</default>
       <range min="-1" max="365"/>
       <summary>Keep the dictations</summary>
       <description>Days the text of past dictations is kept on this computer. 0: not kept. -1: until cleared.</description>
