@@ -43,6 +43,8 @@ gnome-extensions pack "$SRC" \
   --extra-source=setupPage.js \
   --extra-source=textSink.js \
   --extra-source=vocabPage.js \
+  --extra-source=wakeControl.js \
+  --extra-source=wakeRules.js \
   --extra-source=welcome.js \
   --extra-source=LICENSE \
   "${PODIR[@]}" \

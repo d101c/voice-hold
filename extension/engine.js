@@ -53,7 +53,7 @@ const CALL_TIMEOUT_MS = 15000;
 const STOP_TIMEOUT_MS = 60000;
 
 export class EngineClient {
-    // handlers: {Owner, State, Model, Source, Level, Speech, Partial, Final, Stopped, Error}
+    // handlers: {Owner, State, Model, Source, Level, Speech, Partial, Final, Stopped, Wake, Error}
     // `Owner(hasOwner)` is called when the engine appears on or leaves the bus.
     constructor(handlers) {
         this._handlers = handlers;
@@ -249,6 +249,19 @@ export class EngineClient {
                     }
                 });
         });
+    }
+
+    // Listen for the wake word ({enabled, phrases: [..], source, sensitivity}),
+    // or stop. Stopping never starts the engine. Resolves to '' or why not.
+    listen({enabled, phrases = [], source = '', sensitivity = 0.5}) {
+        if (!enabled && !this._proxy?.g_name_owner)
+            return Promise.resolve('');
+        return this._callFor('Listen', new GLib.Variant('(a{sv})', [{
+            'enabled': GLib.Variant.new_boolean(!!enabled),
+            'phrases': GLib.Variant.new_string(JSON.stringify(phrases)),
+            'source': GLib.Variant.new_string(source),
+            'sensitivity': GLib.Variant.new_double(sensitivity),
+        }]), STOP_TIMEOUT_MS);
     }
 
     // Never starts the engine: when it is not running, nothing is speaking.

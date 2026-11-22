@@ -83,6 +83,8 @@ class Engine:
         self._starting = False
         self._speaking = False
         self._idle_handle = None
+        self._wake = None                     # wake.WakeListener while the wake word is listened for
+        self._wake_error = ''
         self.exit_event = asyncio.Event()
         self.quit_requested = False           # Quit(): exit even if busy
 
@@ -126,7 +128,72 @@ class Engine:
             'speaking': Variant('b', bool(self._speaker and self._speaker.speaking)),
             'model': Variant('s', self.model),
             'unload_in_s': Variant('d', self._unload_in()),
+            'wake': Variant('s', self._wake_state()),
         }
+
+    # -- wake word ---------------------------------------------------------------
+
+    def _wake_state(self):
+        if self._wake is not None and self._wake.running:
+            return 'listening'
+        if self._wake is not None and self._wake.failure:
+            return f'error: {self._wake.failure}'
+        return self._wake_error or 'off'
+
+    async def listen(self, options):
+        """Listen for the wake word, or stop. options: enabled (b), phrases
+        (JSON list), source (PipeWire node, '' = default), sensitivity (d).
+        Returns '' or why not ('wake-model-missing', 'audio: …')."""
+        self._cancel_idle()
+        self._stop_listening()
+        self._wake_error = ''
+        if not bool(_opt(options, 'enabled', False)):
+            self._schedule_idle()
+            return ''
+        from . import wakeword
+        from .asr import SileroVad
+        from .wake import WakeListener
+        if wakeword.missing():
+            self._wake_error = 'wake-model-missing'
+            self._schedule_idle()
+            return self._wake_error
+        try:
+            phrases = wakeword.phrases_from_json(str(_opt(options, 'phrases', '')))
+            detector = await self._loop.run_in_executor(
+                None, lambda: wakeword.Detector(phrases, sensitivity=float(_opt(options, 'sensitivity', 0.5))))
+            vad = SileroVad(threshold=0.5, min_silence_s=0.25, max_speech_s=6.0)
+        except Exception as e:
+            self._wake_error = f'wake: {e}'
+            self._schedule_idle()
+            return self._wake_error
+
+        def heard(phrase):
+            try:
+                self._loop.call_soon_threadsafe(self._on_wake, phrase)
+            except RuntimeError:
+                pass
+        listener = WakeListener(detector, heard, vad=vad, target=str(_opt(options, 'source', '')))
+        try:
+            listener.start()
+        except Exception as e:
+            self._wake_error = f'audio: {e}'
+            self._schedule_idle()
+            return self._wake_error
+        self._wake = listener
+        if self.active:
+            listener.suspend(True)
+        self._schedule_idle()
+        return ''
+
+    def _stop_listening(self):
+        if self._wake is not None:
+            self._wake.stop()
+            self._wake = None
+
+    def _on_wake(self, phrase):
+        if self.active or self._starting:
+            return
+        self._emit('Wake', phrase)
 
     # -- text-to-speech -------------------------------------------------------
 
@@ -276,8 +343,14 @@ class Engine:
             self._opts['audio_file'] = os.environ['VOICE_HOLD_AUDIO_FILE']
         if self._opts['audio_file']:
             source = FileSource(self._opts['audio_file'], on_chunk, realtime=self._opts['realtime'])
+        elif bool(_opt(options, 'from-wake', False)) and self._wake is not None and self._wake.woken:
+            # Started by the wake word: the listener's own stream, from the
+            # end of the word, so a sentence said in one breath is whole.
+            source = self._wake.lend(on_chunk)
         else:
             source = MicSource(on_chunk, target=self._opts['source'])
+            if self._wake is not None:
+                self._wake.suspend(True)      # the shortcut: no wake word in the middle of a dictation
         try:
             source.start()
         except Exception as e:
@@ -390,6 +463,8 @@ class Engine:
         if self._source is not None:
             self._source.stop()
             self._source = None
+        if self._wake is not None:
+            self._wake.suspend(False)
         if self._speaking:
             self._speaking = False
             self._emit('Speech', False)
@@ -526,6 +601,8 @@ class Engine:
             self.unload()
             self._emit('State', IDLE)
             self._schedule_idle()
+        elif self._wake is not None and self._wake.running:
+            self._schedule_idle()             # listening for the wake word: stay
         else:
             self.exit_event.set()
 
@@ -652,6 +729,13 @@ class VoiceHoldInterface(ServiceInterface):
         return await self._engine.rewrite(text, instruction, cloud)
 
     @method()
+    async def Listen(self, options: 'a{sv}') -> 's':
+        """Listen for the wake word (options: enabled, phrases as JSON,
+        source, sensitivity), or stop with enabled false. '' or why not."""
+        self._engine.exit_event.clear()
+        return await self._engine.listen(options)
+
+    @method()
     def StopSpeaking(self):
         self._engine.stop_speaking()
 
@@ -702,6 +786,10 @@ class VoiceHoldInterface(ServiceInterface):
         return speaking
 
     @signal()
+    def Wake(self, phrase: 's') -> 's':
+        return phrase
+
+    @signal()
     def Error(self, message: 's') -> 's':
         return message
 
@@ -744,5 +832,6 @@ async def serve():
         break
     if engine.active:
         engine.cancel()
+    engine._stop_listening()
     gone.cancel()
     bus.disconnect()

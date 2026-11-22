@@ -67,6 +67,14 @@ export class HoldMachine {
         return [];
     }
 
+    // The wake word was heard: hands-free, as after a tap.
+    wake() {
+        if (this.state !== IDLE)
+            return [];
+        this.state = TOGGLE;
+        return [['start']];
+    }
+
     escape() {
         if (this.state === IDLE)
             return [];

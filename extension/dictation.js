@@ -17,6 +17,7 @@ import {categoryOf, instructionFor} from './modes.js';
 import {Paster} from './paste.js';
 import {Cues} from './sounds.js';
 import {joinBlock, TextSink} from './textSink.js';
+import {WakeControl} from './wakeControl.js';
 
 // Glue between the gesture (holdMachine), the engine (D-Bus), the text field
 // (textSink) and the pill (hud).
@@ -93,8 +94,11 @@ export class Dictation {
             Partial: t => this._onPartial(t),
             Final: t => this._onFinal(t),
             Stopped: r => this._onStopped(r),
+            Wake: p => this._onWake(p),
             Error: m => this._onError(m),
         });
+        this._fromWake = false;      // the next start was asked by the wake word
+        this._wake = new WakeControl(settings, this._engine);
         this._watchId = 0;
         this._silenceId = 0;
         this._silenceDeadline = 0;
@@ -126,6 +130,8 @@ export class Dictation {
         this._run(this._machine.external('cancel'));
         this._dropQueuedStart();
         this._endSession();
+        this._wake.destroy();
+        this._wake = null;
         this._keyHook.uninstall();
         this._keyHook = null;
         global.display.disconnectObject(this);
@@ -346,6 +352,7 @@ export class Dictation {
             'replacements': JSON.stringify(this._settings.get_value('replacements').deepUnpack()),
             'keep-loaded-s': this._settings.get_int('keep-loaded-min') * 60,
             'source': this._settings.get_string('microphone'),
+            'from-wake': this._fromWake,
         };
         this._engine.start(options).then(err => {
             if (!err || this._session !== session || session.ending)
@@ -543,7 +550,19 @@ export class Dictation {
 
     // -- engine events -----------------------------------------------------
 
+    // The engine heard the wake word: a hands-free dictation, as after a tap
+    // of the shortcut, on the engine's own listening stream.
+    _onWake(_phrase) {
+        if (!this._settings.get_boolean('wake-enabled') || this._machine.state !== IDLE ||
+            this._session || this._startQueued || this._elsewhere?.())
+            return;
+        this._fromWake = true;
+        this._run(this._machine.wake());
+        this._fromWake = false;
+    }
+
     _onOwner(hasOwner) {
+        this._wake?.engineOwner(hasOwner);
         if (hasOwner || !this._session)
             return;
         this._hud.error(this._('Engine stopped unexpectedly'));

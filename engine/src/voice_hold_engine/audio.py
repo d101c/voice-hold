@@ -20,8 +20,11 @@ STDERR_TAIL = 300
 
 
 class MicSource:
+    # Named, so that the extension can tell our streams from another
+    # application's recording (a call: the wake word pauses meanwhile).
     CMD = ['pw-record', '--rate', str(SAMPLE_RATE), '--channels', '1',
-           '--format', 's16', '--latency', '20ms', '-']
+           '--format', 's16', '--latency', '20ms',
+           '-P', '{ application.name = "Voice Hold" application.id = "org.griffit.VoiceHold" }', '-']
 
     def __init__(self, on_chunk, target=''):
         self._on_chunk = on_chunk

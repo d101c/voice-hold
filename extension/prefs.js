@@ -56,6 +56,7 @@ export default class VoiceHoldPreferences extends ExtensionPreferences {
         });
         this._buildEngineGroup(page, window);
         this._buildGestureGroup(page, settings);
+        this._buildWakeGroup(page, settings);
         this._buildDuringGroup(page, settings);
         this._buildMicrophoneGroup(page, settings);
         this._buildPolishGroup(page, settings);
@@ -190,6 +191,90 @@ export default class VoiceHoldPreferences extends ExtensionPreferences {
         });
         group.add(keepRow);
         settings.bind('keep-loaded-min', keepRow, 'value', Gio.SettingsBindFlags.DEFAULT);
+    }
+
+    // -- wake word --------------------------------------------------------
+
+    _buildWakeGroup(page, settings) {
+        const group = new Adw.PreferencesGroup({
+            title: _('Wake word'),
+            description: _('Say the word, then speak: a hands-free dictation starts without touching the keyboard, and stops after a silence. The microphone stays open meanwhile and GNOME shows it; the word is recognised on this computer. Paused while the screen is locked and while another application records (a call).'),
+        });
+        page.add(group);
+
+        const enabled = new Adw.SwitchRow({title: _('Listen for the wake word')});
+        group.add(enabled);
+        settings.bind('wake-enabled', enabled, 'active', Gio.SettingsBindFlags.DEFAULT);
+
+        const phrase = new Adw.EntryRow({title: _('The word to say'), show_apply_button: true});
+        phrase.set_text(settings.get_string('wake-phrase'));
+        phrase.connect('apply', () => {
+            const text = phrase.get_text().trim();
+            if (text)
+                settings.set_string('wake-phrase', text);
+            else
+                phrase.set_text(settings.get_string('wake-phrase'));
+        });
+        group.add(phrase);
+
+        const levels = [0.3, 0.5, 0.7];
+        const sensitivity = new Adw.ComboRow({
+            title: _('Sensitivity'),
+            subtitle: _('Higher hears the word more easily, and wakes by mistake more often.'),
+            model: Gtk.StringList.new([_('Low'), _('Normal'), _('High')]),
+        });
+        const current = settings.get_double('wake-sensitivity');
+        sensitivity.set_selected(levels.reduce((best, v, i) =>
+            Math.abs(v - current) < Math.abs(levels[best] - current) ? i : best, 0));
+        sensitivity.connect('notify::selected', () =>
+            settings.set_double('wake-sensitivity', levels[sensitivity.get_selected()]));
+        group.add(sensitivity);
+
+        const battery = new Adw.SwitchRow({
+            title: _('Also on battery'),
+            subtitle: _('Listening costs a little power: the word is only looked for while someone speaks.'),
+        });
+        group.add(battery);
+        settings.bind('wake-on-battery', battery, 'active', Gio.SettingsBindFlags.DEFAULT);
+
+        const state = new Adw.ActionRow({title: _('State')});
+        group.add(state);
+        const refresh = () => this._wakeState().then(text => state.set_subtitle(text));
+        settings.connect('changed::wake-enabled', () => {
+            state.set_subtitle('…');
+            GLib.timeout_add(GLib.PRIORITY_DEFAULT, 2000, () => {
+                refresh();
+                return GLib.SOURCE_REMOVE;
+            });
+        });
+        page.connect('map', refresh);
+        refresh();
+
+        for (const row of [phrase, sensitivity, battery, state])
+            settings.bind('wake-enabled', row, 'sensitive', Gio.SettingsBindFlags.GET);
+    }
+
+    // What the engine says about the wake word; never starts it.
+    _wakeState() {
+        return new Promise(resolve => {
+            Gio.DBus.session.call(BUS_NAME, OBJECT_PATH, INTERFACE, 'Status', null,
+                new GLib.VariantType('(a{sv})'), Gio.DBusCallFlags.NO_AUTO_START, 5000, null, (conn, res) => {
+                    let wake = 'off';
+                    try {
+                        wake = conn.call_finish(res).deepUnpack()[0].wake?.deepUnpack() ?? 'off';
+                    } catch {
+                        // not running: not listening
+                    }
+                    if (wake === 'listening')
+                        resolve(_('Listening'));
+                    else if (wake === 'wake-model-missing')
+                        resolve(_('The small model of the wake word is missing: it downloads when the speech engine is updated.'));
+                    else if (wake.startsWith('error') || wake.startsWith('audio') || wake.startsWith('wake:'))
+                        resolve(_('Not listening: %s').format(wake));
+                    else
+                        resolve(_('Not listening'));
+                });
+        });
     }
 
     // -- while dictating ---------------------------------------------------
