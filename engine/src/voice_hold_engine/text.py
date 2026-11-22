@@ -5,7 +5,10 @@ honoured only where it cannot be ordinary speech:
   - the block is nothing but the command        -> "\\n" (or "\\n\\n");
   - the command ends the block                  -> trailing newline;
   - the command starts the block and is followed by punctuation
-    ("Nouvelle ligne, bonjour")                  -> leading newline.
+    ("Nouvelle ligne, bonjour")                  -> leading newline;
+  - the command is set off by punctuation on both sides, between two
+    sentences or clauses ("Merci. Nouvelle ligne. À bientôt.") -> newline,
+    and the next word takes a capital.
 Inside a sentence it is left alone: "il a une nouvelle ligne de vêtements",
 "the new line of products", "à la ligne 12" are words, not commands.
 Blocks are what the voice activity detector cuts at pauses, so saying the
@@ -33,6 +36,14 @@ _ONLY_RE = re.compile(rf"^[\s{_P}]*({_ALT})[\s{_P}]*$", re.IGNORECASE)
 _TRAIL_RE = re.compile(rf"[\s,;:]*{_NOT_IN_WORD}[\s{_P}]*$", re.IGNORECASE)
 # The command starts the block and is set off by punctuation.
 _LEAD_RE = re.compile(rf"^[\s{_P}]*{_NOT_IN_WORD}\s*[{_P}]+\s*", re.IGNORECASE)
+# The command inside the block, punctuation before and after it.
+_MID_RE = re.compile(rf"([{_P}])\s*{_NOT_IN_WORD}\s*[{_P}]+\s*(\w?)", re.IGNORECASE)
+
+
+def _mid(m):
+    # A comma or colon before the command was only the pause before it.
+    before = m.group(1) if m.group(1) in '.!?' else ''
+    return before + _newline(m.group(2)) + m.group(3).upper()
 
 
 def _newline(phrase):
@@ -55,7 +66,7 @@ def clean(text):
     m = _LEAD_RE.match(text)
     if m and m.end() < len(text):
         text = _newline(m.group(1)) + text[m.end():]
-    return text
+    return _MID_RE.sub(_mid, text)
 
 
 def is_only_command(text):
