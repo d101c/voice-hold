@@ -40,6 +40,11 @@ export function buildCommandsPage(window, settings, gettext, shortcutRow) {
     group.add(shortcut);
     settings.bind('commands-enabled', shortcut, 'sensitive', Gio.SettingsBindFlags.GET);
 
+    group.add(new Adw.ActionRow({
+        title: _('Rewrite a selection'),
+        subtitle: _('Select text, hold the shortcut and say what to do with it: “shorter”, “in English”, “more polite”. Ask a question to get an answer instead.'),
+    }));
+
     // -- helper ---------------------------------------------------------------
     const helper = new Adw.PreferencesGroup({
         title: _('Command helper'),

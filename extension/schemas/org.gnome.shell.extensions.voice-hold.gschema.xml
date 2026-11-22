@@ -59,6 +59,65 @@
       <summary>Replacements</summary>
       <description>A spoken phrase and the text written in its place.</description>
     </key>
+    <key name="text-mode-email" type="s">
+      <choices>
+        <choice value="as-said"/>
+        <choice value="message"/>
+        <choice value="email"/>
+        <choice value="notes"/>
+        <choice value="custom"/>
+      </choices>
+      <default>'as-said'</default>
+      <summary>Mode for email applications</summary>
+      <description>as-said: the words as they come. message, email, notes, custom: the whole text is rewritten by a language model at the end of the dictation.</description>
+    </key>
+    <key name="text-mode-chat" type="s">
+      <choices>
+        <choice value="as-said"/>
+        <choice value="message"/>
+        <choice value="email"/>
+        <choice value="notes"/>
+        <choice value="custom"/>
+      </choices>
+      <default>'as-said'</default>
+      <summary>Mode for chat applications</summary>
+      <description>as-said: the words as they come. message, email, notes, custom: the whole text is rewritten by a language model at the end of the dictation.</description>
+    </key>
+    <key name="text-mode-code" type="s">
+      <choices>
+        <choice value="as-said"/>
+        <choice value="message"/>
+        <choice value="email"/>
+        <choice value="notes"/>
+        <choice value="custom"/>
+      </choices>
+      <default>'as-said'</default>
+      <summary>Mode for code editors and terminals</summary>
+      <description>as-said: the words as they come. message, email, notes, custom: the whole text is rewritten by a language model at the end of the dictation.</description>
+    </key>
+    <key name="text-mode-other" type="s">
+      <choices>
+        <choice value="as-said"/>
+        <choice value="message"/>
+        <choice value="email"/>
+        <choice value="notes"/>
+        <choice value="custom"/>
+      </choices>
+      <default>'as-said'</default>
+      <summary>Mode for other applications</summary>
+      <description>as-said: the words as they come. message, email, notes, custom: the whole text is rewritten by a language model at the end of the dictation.</description>
+    </key>
+    <key name="text-mode-custom" type="s">
+      <default>''</default>
+      <summary>Your mode</summary>
+      <description>The instruction of the "custom" mode, given to the language model with the dictated text.</description>
+    </key>
+    <key name="history-days" type="i">
+      <default>7</default>
+      <range min="-1" max="365"/>
+      <summary>Keep the dictations</summary>
+      <description>Days the text of past dictations is kept on this computer. 0: not kept. -1: until cleared.</description>
+    </key>
     <key name="polish" type="b">
       <default>false</default>
       <summary>Self-corrections with the local LLM</summary>

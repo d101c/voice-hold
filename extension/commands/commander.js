@@ -3,6 +3,7 @@
 import Clutter from 'gi://Clutter';
 import GLib from 'gi://GLib';
 import IBus from 'gi://IBus';
+import St from 'gi://St';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 import {modifierMask} from '../dictation.js';
@@ -10,6 +11,7 @@ import {EngineClient} from '../engine.js';
 import {HoldMachine, IDLE, TOGGLE} from '../holdMachine.js';
 import {installKeyHook} from '../keyHook.js';
 import {llmLowMemory, speechLowMemory} from '../memoryText.js';
+import {selectedText} from '../textSink.js';
 import {Actions} from './actions.js';
 import {CommandEngineClient, commandHistory} from './commandEngine.js';
 import {CommandHud} from './commandHud.js';
@@ -215,7 +217,8 @@ export class Commander {
             this._queued = true;
             return;
         }
-        const session = {ending: false, texts: [], window: global.display.focus_window};
+        const session = {ending: false, texts: [], window: global.display.focus_window,
+            focus: Main.inputMethod.currentFocus, selection: this._selection()};
         this._session = session;
         this._voice.stopSpeaking();
         if (this._settings.get_boolean('show-hud'))
@@ -423,7 +426,64 @@ export class Commander {
             this._hud.hide(1500);
             return;
         }
-        this._interpret(text, session.window);
+        if (session.selection)
+            this._rewriteSelection(text, session);
+        else
+            this._interpret(text, session.window);
+    }
+
+    // The text selected in the focused field, when the application reports
+    // it (GNOME 46+, input-method fields), else null.
+    _selection() {
+        try {
+            return selectedText(Main.inputMethod.getSurroundingText());
+        } catch {
+            return null;
+        }
+    }
+
+    // Text selected when the shortcut was pressed: what was said is an
+    // instruction for it ("shorter", "in English", "more polite"). The
+    // rewritten text replaces the selection if it is still there; a question
+    // ("what does it mean?") is answered in the pill and changes nothing.
+    async _rewriteSelection(said, session) {
+        const epoch = this._epoch;
+        this._busy = true;
+        const question = /\?\s*$/.test(said);
+        this._hud.status(question ? this._('Thinking…') : this._('Rewriting the selection…'), 'loading');
+        const cloud = this._settings.get_boolean('cloud-enabled')
+            ? {provider: this._settings.get_string('cloud-provider'), model: ''} : null;
+        const instruction = question
+            ? `Answer this question about the text, in at most three short sentences, in the language of the question: ${said}`
+            : said;
+        try {
+            const out = (await this._voice.rewrite(session.selection, instruction, cloud)).trim();
+            if (this._stale(epoch))
+                return;
+            if (!out) {
+                this._hud.error(this._('No language model answered: switch on the cloud model or install the local one'));
+                return;
+            }
+            if (question) {
+                this._hud.result(said, out);
+                this._hud.hide(15000);
+                return;
+            }
+            const still = global.display.focus_window === session.window &&
+                Main.inputMethod.currentFocus === session.focus && this._selection() === session.selection;
+            if (still) {
+                Main.inputMethod.commit(out);
+                this._hud.status(this._('Selection rewritten'), 'listening');
+                this._hud.hide(1200);
+            } else {
+                St.Clipboard.get_default().set_text(St.ClipboardType.CLIPBOARD, out);
+                this._hud.status(this._('The selection changed: the new text is in the clipboard'), 'listening');
+                this._hud.hide(3500);
+            }
+        } finally {
+            if (epoch === this._epoch)
+                this._busy = false;
+        }
     }
 
     _onVoiceError(message) {

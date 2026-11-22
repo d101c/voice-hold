@@ -27,7 +27,10 @@ gnome-extensions pack "$SRC" \
   --extra-source=hudEffects.js \
   --extra-source=hudGeometry.js \
   --extra-source=hudPlacement.js \
+  --extra-source=history.js \
   --extra-source=media.js \
+  --extra-source=modes.js \
+  --extra-source=modesPage.js \
   --extra-source=paste.js \
   --extra-source=pasteKeys.js \
   --extra-source=sounds.js \

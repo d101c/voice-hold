@@ -865,3 +865,105 @@ msgstr "Quand je dis"
 
 msgid "Write"
 msgstr "Écrire"
+
+msgid "Rewriting…"
+msgstr "Réécriture…"
+
+msgid "No language model for this mode: written as said"
+msgstr "Aucun modèle de langue pour ce mode : écrit tel quel"
+
+msgid "Modes"
+msgstr "Modes"
+
+msgid "Modes by application"
+msgstr "Modes par application"
+
+msgid "“As said” writes your words as they come. The other modes wait for the end of the dictation and have a language model rewrite the whole text: the cloud model when it is switched on (only the text is sent), else the local one of the voice commands. Without either, the text is written as said."
+msgstr "« Tel quel » écrit vos mots au fur et à mesure. Les autres modes attendent la fin de la dictée et font réécrire tout le texte par un modèle de langue : celui du cloud s'il est activé (seul le texte est envoyé), sinon le modèle local des commandes vocales. Sans l'un ni l'autre, le texte est écrit tel quel."
+
+msgid "As said"
+msgstr "Tel quel"
+
+msgid "Clean message"
+msgstr "Message soigné"
+
+msgid "Email"
+msgstr "Courriel"
+
+msgid "Notes"
+msgstr "Notes"
+
+msgid "Your mode"
+msgstr "Votre mode"
+
+msgid "Thunderbird, Evolution, Geary; Gmail, Outlook and Proton Mail in a browser"
+msgstr "Thunderbird, Evolution, Geary ; Gmail, Outlook et Proton Mail dans un navigateur"
+
+msgid "Chat"
+msgstr "Messagerie"
+
+msgid "Slack, Discord, Signal, Telegram, WhatsApp, Element…"
+msgstr "Slack, Discord, Signal, Telegram, WhatsApp, Element…"
+
+msgid "Code and terminals"
+msgstr "Code et terminaux"
+
+msgid "VS Code, Zed, JetBrains, Builder, terminals"
+msgstr "VS Code, Zed, JetBrains, Builder, terminaux"
+
+msgid "Other applications"
+msgstr "Autres applications"
+
+msgid "Everything else"
+msgstr "Tout le reste"
+
+msgid "Your mode: the instruction"
+msgstr "Votre mode : la consigne"
+
+msgid "History"
+msgstr "Historique"
+
+msgid "The text of your last dictations, kept on this computer only."
+msgstr "Le texte de vos dernières dictées, gardé sur cet ordinateur uniquement."
+
+msgid "Keep the dictations"
+msgstr "Garder les dictées"
+
+msgid "Not kept"
+msgstr "Pas gardées"
+
+msgid "1 day"
+msgstr "1 jour"
+
+msgid "7 days"
+msgstr "7 jours"
+
+msgid "30 days"
+msgstr "30 jours"
+
+msgid "Until cleared"
+msgstr "Jusqu'à effacement"
+
+msgid "Clear the history"
+msgstr "Effacer l'historique"
+
+msgid "Clear"
+msgstr "Effacer"
+
+msgid "Rewriting the selection…"
+msgstr "Réécriture de la sélection…"
+
+msgid "No language model answered: switch on the cloud model or install the local one"
+msgstr "Aucun modèle de langue n'a répondu : activez le modèle cloud ou installez le modèle local"
+
+msgid "Selection rewritten"
+msgstr "Sélection réécrite"
+
+msgid "The selection changed: the new text is in the clipboard"
+msgstr "La sélection a changé : le nouveau texte est dans le presse-papiers"
+
+msgid "Rewrite a selection"
+msgstr "Réécrire une sélection"
+
+msgid "Select text, hold the shortcut and say what to do with it: “shorter”, “in English”, “more polite”. Ask a question to get an answer instead."
+msgstr "Sélectionnez du texte, maintenez le raccourci et dites quoi en faire : « plus court », « en anglais », « plus poli ». Posez une question pour obtenir une réponse à la place."

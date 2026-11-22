@@ -12,6 +12,7 @@ import {buildCloudPage} from './cloudPage.js';
 import {buildCommandsPage} from './commands/prefsPage.js';
 import {listSources} from './engine.js';
 import {buildSetupPage} from './setupPage.js';
+import {buildModesPage} from './modesPage.js';
 import {buildVocabPage} from './vocabPage.js';
 
 const BUS_NAME = 'org.griffit.VoiceHold';
@@ -44,6 +45,7 @@ export default class VoiceHoldPreferences extends ExtensionPreferences {
         });
         window.add(setup);
         window.add(buildVocabPage(settings, _));
+        window.add(buildModesPage(settings, _));
         // Optional voice commands: their own page, after those of the
         // dictation.
         window.add(buildCommandsPage(window, settings, _, (s, key) => this._shortcutRow(s, key)));

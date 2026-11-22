@@ -11,7 +11,9 @@ import {HoldMachine, IDLE, TOGGLE} from './holdMachine.js';
 import {Hud} from './hud.js';
 import {speechLowMemory} from './memoryText.js';
 import {installKeyHook} from './keyHook.js';
+import {HistoryWriter} from './history.js';
 import {MediaPause} from './media.js';
+import {categoryOf, instructionFor} from './modes.js';
 import {Paster} from './paste.js';
 import {Cues} from './sounds.js';
 import {joinBlock, TextSink} from './textSink.js';
@@ -30,6 +32,9 @@ import {joinBlock, TextSink} from './textSink.js';
 // window at all): the dictation goes on, the words show in the pill only,
 // and at the end the whole text goes to the clipboard and is pasted into the
 // window that had the focus (paste.js).
+//
+// A dictation mode other than "as said" (modes.js) also holds the words back:
+// at the end the whole text is rewritten by a language model, then written.
 
 const WATCH_MS = 50;
 const END_GUARD_MS = 3000;
@@ -68,6 +73,7 @@ export class Dictation {
         this._cues = new Cues(dir, settings);
         this._media = new MediaPause(settings);
         this._paster = new Paster();
+        this._history = new HistoryWriter();
         this._last = '';             // the text of the last dictation, see pasteLast()
         this._lastPaste = null;      // {window, at, char}: the last text pasted at the end of a dictation
         this._openSetup = openSetup;
@@ -316,8 +322,11 @@ export class Dictation {
             window: global.display.focus_window,
             focus: Main.inputMethod.currentFocus,
             clipboard: !this._sink.available,   // no field: pasted at the end
-            text: '',                           // what was written, for pasteLast()
+            text: '',                           // what was said, for pasteLast() and the history
+            instruction: this._modeInstruction(global.display.focus_window),
         };
+        // Words held back until the end: no field to write into, or a mode.
+        session.buffered = session.clipboard || !!session.instruction;
         this._session = session;
         this._engineState = '';
         this._handsFreeShown = false;
@@ -582,12 +591,12 @@ export class Dictation {
         if (!this._live)
             return;
         const session = this._session;
-        if (!this._focusKept() || (!session.clipboard && !this._sink.partial(text))) {
+        if (!this._focusKept() || (!session.buffered && !this._sink.partial(text))) {
             this._run(this._machine.external('cancel'));
             return;
         }
         this._clearHint();
-        this._hud.live(session.clipboard ? joinBlock(this._lastChar(session), text, {firstOfSession: !session.text}) : text);
+        this._hud.live(session.buffered ? session.text + joinBlock(this._lastChar(session), text, {firstOfSession: !session.text}) : text);
     }
 
     // The last character written in this session ('' before the first block).
@@ -599,7 +608,7 @@ export class Dictation {
         if (!this._session)
             return;
         const session = this._session;
-        if (!this._focusKept() || (!session.clipboard && !this._sink.commit(text))) {
+        if (!this._focusKept() || (!session.buffered && !this._sink.commit(text))) {
             // Focus moved: this block goes nowhere rather than elsewhere.
             if (this._live)
                 this._run(this._machine.external('cancel'));
@@ -607,7 +616,7 @@ export class Dictation {
         }
         session.text += joinBlock(this._lastChar(session), text, {firstOfSession: !session.text});
         this._clearHint();
-        this._hud.live(session.clipboard ? session.text : text);
+        this._hud.live(session.buffered ? session.text : text);
     }
 
     _onStopped(reason) {
@@ -622,11 +631,14 @@ export class Dictation {
         if (!wasEnding)
             this._run(this._machine.external('engine'));
         const written = reason !== 'cancel' && reason !== 'error' && session.text.trim() ? session.text : '';
-        if (written) {
+        if (written && !session.instruction) {
             this._last = written;
+            this._remember(written, session.window);
             this._cues.play('stop');
         }
-        if (written && session.clipboard && !session.yielding) {
+        if (written && session.instruction && !session.yielding) {
+            this._rewriteAndWrite(written, session);
+        } else if (written && session.clipboard && !session.yielding) {
             this._deliver(this._pasteSpacing(written, session.window), session.window);
         } else if (reason === 'error') {
             this._hud.hide(2500);
@@ -637,6 +649,47 @@ export class Dictation {
         }
         if (this._startQueued)
             this._startNow();
+    }
+
+    // The mode of the application the text goes to: its instruction, or ''.
+    _modeInstruction(window) {
+        const cat = categoryOf(window?.get_wm_class?.() ?? '', window?.get_title?.() ?? '');
+        return instructionFor(this._settings.get_string(`text-mode-${cat}`),
+            this._settings.get_string('text-mode-custom'));
+    }
+
+    _remember(text, window) {
+        this._history.add(text, window?.get_wm_class?.() ?? '', this._settings.get_int('history-days'));
+    }
+
+    _cloud() {
+        if (!this._settings.get_boolean('cloud-enabled'))
+            return null;
+        return {provider: this._settings.get_string('cloud-provider'), model: ''};
+    }
+
+    // A mode: the whole text goes to the language model, and what comes back
+    // is written where the dictation started (as said when no model could).
+    async _rewriteAndWrite(said, session) {
+        this._hud.show(this._('Rewriting…'), 'loading');
+        const out = (await this._engine?.rewrite(said, session.instruction, this._cloud())) || '';
+        if (!this._hud)
+            return;
+        const text = out.trim() ? out.trim() : said;
+        this._last = text;
+        this._remember(text, session.window);
+        this._cues.play('stop');
+        if (!out.trim()) {
+            this._hud.show(this._('No language model for this mode: written as said'), 'error');
+            this._hud.hide(3500);
+        }
+        if (!session.clipboard && global.display.focus_window === session.window && this._sink.focused) {
+            this._sink.commit(text);
+            if (out.trim())
+                this._hud.hide();
+        } else {
+            this._deliver(this._pasteSpacing(text, session.window), session.window);
+        }
     }
 
     // Clipboard, then a virtual paste into `window` when it still has the

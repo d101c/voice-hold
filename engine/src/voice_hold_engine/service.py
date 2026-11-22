@@ -136,6 +136,20 @@ class Engine:
             self._speaker = Speaker()
         return self._speaker
 
+    async def rewrite(self, text, instruction, cloud=None):
+        """`text` rewritten as `instruction` says (rewrite.py), or '' when
+        no language model could do it. On the polish worker: one LLM job at
+        a time, and never on the speech decoder's thread."""
+        from .rewrite import rewrite
+        self._cancel_idle()
+        self._inflight += 1
+        try:
+            return await self._loop.run_in_executor(
+                self._polish_executor, lambda: rewrite(text, instruction, cloud=cloud))
+        finally:
+            self._inflight -= 1
+            self._schedule_idle()
+
     async def speak(self, text, lang='fr', speed=1.0):
         """Say `text` aloud. Returns '' when it started, else why not
         ('voice-missing', 'empty', 'failed'). A sentence being said is cut."""
@@ -625,6 +639,17 @@ class VoiceHoldInterface(ServiceInterface):
         self._engine.exit_event.clear()
         return await self._engine.speak(text, str(_opt(options, 'lang', 'fr')),
                                         float(_opt(options, 'speed', 1.0)))
+
+    @method()
+    async def Rewrite(self, text: 's', instruction: 's', options: 'a{sv}') -> 's':
+        """`text` rewritten as `instruction` says; '' when no language model
+        could. options: cloud (b), cloud-provider, cloud-model."""
+        self._engine.exit_event.clear()
+        cloud = None
+        if bool(_opt(options, 'cloud', False)):
+            cloud = {'provider': str(_opt(options, 'cloud-provider', 'anthropic')),
+                     'model': str(_opt(options, 'cloud-model', ''))}
+        return await self._engine.rewrite(text, instruction, cloud)
 
     @method()
     def StopSpeaking(self):
