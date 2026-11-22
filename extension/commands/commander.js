@@ -13,7 +13,6 @@ import {llmLowMemory, speechLowMemory} from '../memoryText.js';
 import {Actions} from './actions.js';
 import {CommandEngineClient, commandHistory} from './commandEngine.js';
 import {CommandHud} from './commandHud.js';
-import {confirm} from './confirmDialog.js';
 import {dispatch} from './dispatch.js';
 import {RECENT, recentLabel} from './recent.js';
 
@@ -538,7 +537,7 @@ export class Commander {
         const i = result.intent;
         if (i.action === 'power') {
             const names = {suspend: this._('Suspend'), reboot: this._('Restart'), shutdown: this._('Power off'), logout: this._('Log out')};
-            const ok = await confirm({
+            const ok = await this._hud.confirm({
                 title: this._('Voice Hold heard: “%s”').format(text),
                 command: names[i.power_action] ?? i.power_action,
                 warning: '',
@@ -551,7 +550,7 @@ export class Commander {
                 this._actions.power(i.power_action);
             return;
         }
-        const ok = await confirm({
+        const ok = await this._hud.confirm({
             title: this._('Voice Hold heard: “%s”').format(text),
             summary: i.summary ?? '',
             command: `$ ${i.command}`,

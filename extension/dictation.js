@@ -77,7 +77,7 @@ export class Dictation {
         this._watchId = 0;
         this._silenceId = 0;
         this._silenceDeadline = 0;
-        this._countdown = 0;         // seconds shown, 0 = none
+        this._countdown = 0;         // 1 while the ring runs
         this._hintId = 0;
         this._hint = false;          // a status hint is up, no words yet
         this._handsFreeShown = false;
@@ -231,7 +231,6 @@ export class Dictation {
         if (this._machine.state !== TOGGLE || !this._live || this._handsFreeShown)
             return;
         this._handsFreeShown = true;
-        this._hud.setLocked(true);
         if (this._engineState !== 'loading')
             this._showHint(this._handsFreeHint(), 'listening');
         this._armSilence();
@@ -313,7 +312,6 @@ export class Dictation {
         this._sink.begin();
         if (this._settings.get_boolean('show-hud')) {
             this._hud.show(this._('Starting…'), 'loading');
-            this._hud.setLocked(false);
         }
         const options = {
             'silence-stop-s': 0,
@@ -461,8 +459,8 @@ export class Dictation {
 
     // -- silence timer (toggle mode) ---------------------------------------
 
-    // The last COUNTDOWN_MS are counted down in the pill, so the stop
-    // never comes as a surprise.
+    // In the last COUNTDOWN_MS a ring empties in the pill, so the stop
+    // never comes as a surprise; speaking again takes it away.
     _armSilence() {
         this._stopSilence();
         const s = this._settings.get_double('silence-stop-s');
@@ -479,10 +477,9 @@ export class Dictation {
                 this._run(this._machine.external('silence'));
                 return GLib.SOURCE_REMOVE;
             }
-            const n = Math.ceil(left / 1000);
-            if (left <= COUNTDOWN_MS && n !== this._countdown) {
-                this._countdown = n;
-                this._hud.status(this._('Stopping in %d s — speak to go on').format(n), 'listening');
+            if (left <= COUNTDOWN_MS && !this._countdown) {
+                this._countdown = 1;
+                this._hud.countdown(left);
             }
             return GLib.SOURCE_CONTINUE;
         });
@@ -495,8 +492,7 @@ export class Dictation {
         }
         if (this._countdown) {
             this._countdown = 0;
-            if (this._live)
-                this._hud.status('', 'listening');
+            this._hud.stopCountdown();
         }
     }
 

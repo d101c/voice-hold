@@ -46,6 +46,10 @@ const RESIZE_MS = 220;
 // expected load time, then waits for the engine: never full before it is.
 const PROGRESS_CAP = 0.9;
 const PROGRESS_W = 52;
+// The countdown ring the bars curl into (countdown()).
+const RING_RADIUS = 12;
+const DOT = 6;
+const MORPH_MS = 380;
 const PANEL_OPAQUE_ALPHA = 200;   // below this the bar is see-through (Blur my Shell…): use black
 const MONITOR_MARGIN = 24;        // the capsule never comes closer than this to the monitor's edges
 
@@ -66,10 +70,10 @@ export class Hud {
         this._bars = [];
         this._heights = new Array(BARS).fill(BAR_MIN);
         this._label = null;
-        this._lock = null;
+        this._ringTimeline = null;  // the countdown, while the bars are a ring
+        this._morphed = false;
         this._progress = null;
         this._progressFill = null;
-        this._locked = false;
         this._accent = '';
         this._hideId = 0;
         this._hideAt = 0;       // when the pending hide fires (monotonic ms)
@@ -137,16 +141,6 @@ export class Hud {
         }
         this._content.add_child(bars);
 
-        // Hands-free: a lock after the level, the dictation goes on without
-        // the keys held.
-        this._lock = new St.Icon({
-            icon_name: 'changes-prevent-symbolic',
-            style_class: 'voice-hud-lock',
-            y_align: Clutter.ActorAlign.CENTER,
-            visible: this._locked,
-        });
-        this._lock.set_style(`color: ${this._accent};`);
-        this._content.add_child(this._lock);
 
         this._label = new St.Label({style_class: 'voice-hud-text', y_align: Clutter.ActorAlign.CENTER});
         const ct = this._label.clutter_text;
@@ -183,10 +177,11 @@ export class Hud {
         this._meter = null;
         this._state = '';
         this._label = null;
-        this._lock = null;
+        this._ringTimeline?.stop();
+        this._ringTimeline = null;
+        this._morphed = false;
         this._progress = null;
         this._progressFill = null;
-        this._locked = false;
         this._bars = [];
         this._heights.fill(BAR_MIN);
         this._level = 0;
@@ -398,14 +393,69 @@ export class Hud {
         return !!this._progress?.visible;
     }
 
-    // Hands-free (true) or held (false).
-    setLocked(locked) {
-        this._locked = locked;
-        if (!this._lock || this._lock.visible === locked)
+    // Hands-free, the silence stop comes in `ms`: the bars, flat by now,
+    // glide into a ring of dots in the accent colour, which then go out one
+    // after the other around it, each with a fade. stopCountdown() unrolls
+    // the ring back into bars.
+    countdown(ms) {
+        if (!this._meter || this._leaving)
             return;
-        this._lock.visible = locked;
-        if (this._box && !this._leaving)
-            this._place(true);
+        this.stopCountdown(false);
+        this._morphed = true;
+        const n = this._bars.length;
+        const radius = RING_RADIUS * this._scale;
+        const dot = DOT * this._scale;
+        const box = this._meter.get_allocation_box();
+        const cx = (box.x2 - box.x1) / 2;
+        const cy = (box.y2 - box.y1) / 2;
+        this._bars.forEach((bar, i) => {
+            // Clockwise from twelve o'clock: the line curls into the ring.
+            const a = -Math.PI / 2 + 2 * Math.PI * i / n;
+            const bx = bar.x + bar.width / 2;
+            bar.remove_all_transitions();
+            bar.set_style(`background-color: ${this._accent};`);
+            bar.set_height(Math.round(dot));
+            bar.ease({
+                translation_x: cx + radius * Math.cos(a) - bx,
+                translation_y: radius * Math.sin(a) + (cy - (bar.y + dot / 2)),
+                duration: MORPH_MS,
+                delay: i * 18,
+                mode: Clutter.AnimationMode.EASE_OUT_CUBIC,
+            });
+        });
+        this._ringTimeline = new Clutter.Timeline({actor: this._meter, duration: Math.max(MORPH_MS + 200, Math.round(ms))});
+        const morphShare = MORPH_MS / this._ringTimeline.get_duration();
+        this._ringTimeline.connect('new-frame', tl => {
+            // After the morph, dot i fades out over its own slice of the time.
+            const p = Math.max(0, (tl.get_progress() - morphShare) / (1 - morphShare));
+            this._bars.forEach((bar, i) => {
+                const lit = 1 - Math.min(1, Math.max(0, p * n - i));
+                bar.opacity = Math.round(45 + 210 * lit);
+            });
+        });
+        this._ringTimeline.start();
+    }
+
+    stopCountdown(animate = true) {
+        this._ringTimeline?.stop();
+        this._ringTimeline = null;
+        if (!this._morphed)
+            return;
+        this._morphed = false;
+        for (const bar of this._bars) {
+            bar.remove_all_transitions();
+            bar.opacity = 255;
+            bar.set_style(null);
+            bar.add_style_pseudo_class('quiet');
+            bar.set_height(Math.round(BAR_MIN * this._scale));
+            if (animate) {
+                bar.ease({translation_x: 0, translation_y: 0, duration: MORPH_MS,
+                    mode: Clutter.AnimationMode.EASE_OUT_CUBIC});
+            } else {
+                bar.translation_x = 0;
+                bar.translation_y = 0;
+            }
+        }
     }
 
     error(text) {
@@ -499,6 +549,8 @@ export class Hud {
     }
 
     _paintBars() {
+        if (this._morphed)
+            return;                   // the bars are the countdown ring
         for (let i = 0; i < this._bars.length; i++) {
             const target = BAR_MIN + (BAR_MAX - BAR_MIN) * this._level * BAR_WEIGHTS[i] *
                 (0.85 + 0.3 * Math.random());

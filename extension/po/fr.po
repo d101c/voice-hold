@@ -211,9 +211,6 @@ msgstr "« Lundi, non, mardi » devient « mardi ». Utilise le modèle de langu
 msgid "Hands-free — %s to finish"
 msgstr "Mains libres — %s pour finir"
 
-msgid "Stopping in %d s — speak to go on"
-msgstr "Arrêt dans %d s — parlez pour continuer"
-
 msgid "Ready"
 msgstr "Prêt"
 

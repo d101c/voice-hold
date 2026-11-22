@@ -4,12 +4,13 @@ import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Pango from 'gi://Pango';
+import Shell from 'gi://Shell';
 import St from 'gi://St';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 import {accentColor} from '../accentColor.js';
 import * as effects from '../hudEffects.js';
-import {cursorPosition, islandPosition, trailing, ISLAND_OVERLAP} from '../hudGeometry.js';
+import {cursorPosition, islandPosition, levelCurve, trailing, ISLAND_OVERLAP} from '../hudGeometry.js';
 import {systemFontCss} from '../systemFont.js';
 
 // The pill of the voice commands: the same island as the dictation's
@@ -21,12 +22,14 @@ import {systemFontCss} from '../systemFont.js';
 // kept until the user clicks the capsule, the next command, or a long delay.
 // The capsule only takes the pointer while it shows one.
 
-const BARS = 7;
-const BAR_WEIGHTS = [0.45, 0.7, 1.0, 0.8, 1.0, 0.7, 0.45];
-const BAR_MIN = 3;
-const BAR_MAX = 20;
+// Same level as the dictation's pill (../hud.js): nine bars, decibel scale.
+const BARS = 9;
+const BAR_WEIGHTS = [0.4, 0.6, 0.85, 1.0, 0.8, 1.0, 0.85, 0.6, 0.4];
+const BAR_MIN = 4;
+const BAR_MAX = 34;
 const HIDE_DELAY_MS = 450;
-const MAX_CHARS = 64;
+// The status line wraps like the dictation's (max-width in the stylesheet).
+const MAX_CHARS = 240;
 
 const RESIZE_MS = 220;
 const PANEL_OPAQUE_ALPHA = 200;   // below this the bar is see-through (Blur my Shell…): use black
@@ -139,8 +142,11 @@ export class CommandHud {
         this._row.add_child(bars);
 
         this._label = new St.Label({style_class: 'voice-cmd-hud-text', y_align: Clutter.ActorAlign.CENTER});
-        this._label.clutter_text.set_ellipsize(Pango.EllipsizeMode.START);
-        this._label.clutter_text.set_single_line_mode(true);
+        const ct = this._label.clutter_text;
+        ct.set_single_line_mode(false);
+        ct.set_line_wrap(true);
+        ct.set_line_wrap_mode(Pango.WrapMode.WORD_CHAR);
+        ct.set_ellipsize(Pango.EllipsizeMode.NONE);
         this._row.add_child(this._label);
 
         this._scroll = new St.ScrollView({style_class: 'voice-cmd-hud-result', visible: false, x_expand: true});
@@ -160,6 +166,10 @@ export class CommandHud {
         else
             this._scroll.add_actor(scrolled);
         this._content.add_child(this._scroll);
+
+        // Confirmation buttons, shown by confirm() only.
+        this._buttons = new St.BoxLayout({style_class: 'voice-cmd-hud-buttons', x_align: Clutter.ActorAlign.END, visible: false});
+        this._content.add_child(this._buttons);
 
         Main.layoutManager.uiGroup.add_child(this._box);
         // Above everything, but never grabbing anything.
@@ -208,10 +218,14 @@ export class CommandHud {
     _natural() {
         const monitor = Main.layoutManager.primaryMonitor;
         const maxW = monitor ? monitor.width - 2 * MONITOR_MARGIN * this._scale : 10000;
+        // Measured free, then given that size: a wrapped line would be cut
+        // off otherwise (see ../hud.js).
+        this._content.set_size(-1, -1);
         let [, w] = this._content.get_preferred_width(-1);
         w = Math.min(Math.ceil(w), maxW);
-        const [, h] = this._content.get_preferred_height(w);
-        return [w, Math.ceil(h) + (this._island ? ISLAND_OVERLAP : 0)];
+        const h = Math.ceil(this._content.get_preferred_height(w)[1]);
+        this._content.set_size(w, h);
+        return [w, h + (this._island ? ISLAND_OVERLAP : 0)];
     }
 
     // Where the capsule hangs from: centred under the primary monitor's bar,
@@ -357,6 +371,68 @@ export class CommandHud {
         this._place(true);
     }
 
+    // Ask before running something, in the island: what it does, the exact
+    // command, and Run / Cancel (Enter / Escape). The island takes the
+    // keyboard meanwhile. Resolves to true (run) or false. `onOpen(close)`
+    // hands out a function that answers false (the dictation took over, the
+    // extension is being disabled).
+    confirm({title, summary = '', command, warning = '', runLabel, cancelLabel, onOpen = null}) {
+        return new Promise(resolve => {
+            this.result(summary || title, warning ? `${command}\n\n${warning}` : command,
+                {pseudo: 'listening', monospace: true});
+            this._cancelHide();
+            const box = this._box;
+            let done = false;
+            let grab = null;
+            const finish = ok => {
+                if (done)
+                    return;
+                done = true;
+                if (grab)
+                    Main.popModal(grab);
+                box.disconnectObject(this);
+                if (this._box === box) {
+                    this._buttons.destroy_all_children();
+                    this._buttons.visible = false;
+                    this._place(true);
+                }
+                resolve(ok);
+            };
+            const button = (label, ok, primary) => {
+                const b = new St.Button({
+                    label,
+                    style_class: `voice-cmd-hud-button${primary ? ' voice-cmd-hud-button-primary' : ''}`,
+                    can_focus: true,
+                });
+                if (primary)
+                    b.set_style(`background-color: ${this._accent};`);
+                b.connect('clicked', () => finish(ok));
+                return b;
+            };
+            this._buttons.destroy_all_children();
+            this._buttons.add_child(button(cancelLabel, false, false));
+            this._buttons.add_child(button(runLabel, true, true));
+            this._buttons.visible = true;
+            this._place(true);
+            box.reactive = true;
+            box.can_focus = true;
+            box.connectObject(
+                'key-press-event', (_a, event) => {
+                    const key = event.get_key_symbol();
+                    if (key === Clutter.KEY_Return || key === Clutter.KEY_KP_Enter)
+                        finish(true);
+                    else if (key === Clutter.KEY_Escape)
+                        finish(false);
+                    return Clutter.EVENT_STOP;
+                },
+                'destroy', () => finish(false),
+                this);
+            grab = Main.pushModal(box, {actionMode: Shell.ActionMode.POPUP});
+            global.stage.set_key_focus(box);
+            onOpen?.(() => finish(false));
+        });
+    }
+
     get showingResult() {
         return !!this._scroll?.visible && !this._leaving;
     }
@@ -376,7 +452,7 @@ export class CommandHud {
     level(v) {
         if (!this._box || this._leaving)
             return;
-        this._level = Math.max(0, Math.min(1, v));
+        this._level = levelCurve(v);
         this._paintBars();
         this._startDecay();
     }
