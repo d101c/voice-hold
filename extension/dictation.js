@@ -332,6 +332,9 @@ export class Dictation {
             'silence-stop-s': 0,
             'polish': this._settings.get_boolean('polish'),
             'tidy': this._settings.get_boolean('tidy'),
+            'corrections': this._settings.get_boolean('corrections'),
+            'vocabulary': JSON.stringify(this._settings.get_strv('vocabulary')),
+            'replacements': JSON.stringify(this._settings.get_value('replacements').deepUnpack()),
             'keep-loaded-s': this._settings.get_int('keep-loaded-min') * 60,
             'source': this._settings.get_string('microphone'),
         };

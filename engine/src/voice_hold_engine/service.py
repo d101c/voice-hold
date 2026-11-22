@@ -20,6 +20,9 @@ from dbus_fast import DBusError, Variant
 from dbus_fast.service import ServiceInterface, method, signal
 
 from . import INTERFACE, __version__, models, text as textmod
+from .corrections import correct
+from .lists import Lists
+from .vocab import Vocabulary
 from .audio import FileSource, MicSource
 from .segmenter import Segmenter, rms
 
@@ -67,6 +70,8 @@ class Engine:
         self._source = None
         self._segmenter = None
         self._opts = {}
+        self._vocab = Vocabulary()
+        self._lists = Lists()
         self._pending = set()                 # futures of this session (decode, load, polish)
         self._inflight = 0                    # jobs on a worker, whatever their session
         self._partial_inflight = False
@@ -217,7 +222,13 @@ class Engine:
             'audio_file': str(_opt(options, 'audio-file', '')),
             'realtime': bool(_opt(options, 'realtime', True)),
             'source': str(_opt(options, 'source', '')),
+            'corrections': bool(_opt(options, 'corrections', True)),
         }
+        # Personal words and replacements (JSON strings), and the numbering
+        # of a spoken list, for this session.
+        self._vocab = Vocabulary.from_options(str(_opt(options, 'vocabulary', '')),
+                                              str(_opt(options, 'replacements', '')))
+        self._lists = Lists()
         # How long the model stays loaded once idle: the client's setting,
         # kept for the following sessions.
         keep = float(_opt(options, 'keep-loaded-s', -1.0))
@@ -445,6 +456,10 @@ class Engine:
             return
         if raw and self._opts['tidy']:
             raw = textmod.tidy(raw)
+        if raw and self._opts.get('corrections'):
+            raw = correct(raw)
+        if raw:
+            raw = self._vocab.apply(raw)
         if final and raw and self._opts['polish']:
             from .polish import polish
             self._inflight += 1
@@ -466,7 +481,7 @@ class Engine:
         self._emit_text(out or raw, True)
 
     def _emit_text(self, raw, final):
-        text = textmod.clean(raw)
+        text = self._lists.format(textmod.clean(raw), final)
         if not text:
             return
         if final:

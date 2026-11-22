@@ -44,6 +44,21 @@
       <summary>Remove hesitations</summary>
       <description>Drop hesitations (euh, uh, hum) and words said twice in a row from the dictated text. Instant, by rules.</description>
     </key>
+    <key name="corrections" type="b">
+      <default>true</default>
+      <summary>Spoken self-corrections</summary>
+      <description>"at 2, no, I mean 3" becomes "at 3", by rules, in French and English.</description>
+    </key>
+    <key name="vocabulary" type="as">
+      <default>[]</default>
+      <summary>Your words</summary>
+      <description>Names, brands and jargon written your way; words that sound alike are corrected after recognition.</description>
+    </key>
+    <key name="replacements" type="a{ss}">
+      <default>{}</default>
+      <summary>Replacements</summary>
+      <description>A spoken phrase and the text written in its place.</description>
+    </key>
     <key name="polish" type="b">
       <default>false</default>
       <summary>Self-corrections with the local LLM</summary>

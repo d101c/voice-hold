@@ -200,8 +200,8 @@ msgstr "Retirer les hésitations"
 msgid "“euh”, “uh”, “hum” and words said twice in a row. Instant."
 msgstr "« euh », « uh », « hum » et les mots dits deux fois de suite. Instantané."
 
-msgid "Self-corrections with the local LLM"
-msgstr "Autocorrections par le LLM local"
+msgid "More self-corrections with the local LLM"
+msgstr "Plus d'autocorrections par le LLM local"
 
 msgid "“Monday, no, Tuesday” becomes “Tuesday”. Needs the language model of the voice commands. Slow on a laptop (2 to 6 s per sentence) and approximate: the text is kept as it is when the answer looks wrong."
 msgstr "« Lundi, non, mardi » devient « mardi ». Utilise le modèle de langue des commandes vocales. Lent sur un portable (2 à 6 s par phrase) et approximatif : le texte reste tel quel quand la réponse semble fausse."
@@ -832,3 +832,36 @@ msgstr "Les lecteurs en cours de lecture se mettent en pause pendant que vous pa
 
 msgid "Also in the menu of the top bar icon."
 msgstr "Aussi dans le menu de l'icône de la barre du haut."
+
+msgid "Spoken self-corrections"
+msgstr "Autocorrections parlées"
+
+msgid "“At 2, no, I mean 3” becomes “at 3”; “scratch that” drops the sentence before. Instant, by rules."
+msgstr "« À 14 h, non, je veux dire 15 h » devient « à 15 h » ; « oublie ça » efface la phrase d'avant. Instantané, par règles."
+
+msgid "Vocabulary"
+msgstr "Vocabulaire"
+
+msgid "Your words"
+msgstr "Vos mots"
+
+msgid "Names, brands and jargon, written your way. A word that sounds the same, or very close, is corrected after recognition."
+msgstr "Noms, marques et jargon, écrits à votre façon. Un mot qui sonne pareil, ou presque, est corrigé après la reconnaissance."
+
+msgid "Add a word"
+msgstr "Ajouter un mot"
+
+msgid "Remove"
+msgstr "Retirer"
+
+msgid "Replacements"
+msgstr "Remplacements"
+
+msgid "Say a phrase, get a text: an address, a signature, a symbol. Whole words, whatever the case. Type \\n for a new line."
+msgstr "Dites une expression, obtenez un texte : une adresse, une signature, un symbole. Mots entiers, majuscules ou non. Tapez \\n pour aller à la ligne."
+
+msgid "When I say"
+msgstr "Quand je dis"
+
+msgid "Write"
+msgstr "Écrire"

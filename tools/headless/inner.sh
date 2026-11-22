@@ -14,6 +14,14 @@ gnome-extensions enable voice-hold@griffit.gmail.com
 # HUD=cursor: the pill next to the text cursor instead of the island.
 [ -n "${HUD:-}" ] && gsettings --schemadir "$T/data/gnome-shell/extensions/voice-hold@griffit.gmail.com/schemas" \
     set org.gnome.shell.extensions.voice-hold hud-position "$HUD"
+# SET="key value|key value": any other settings, e.g. SET="vocabulary ['Noëlle']".
+if [ -n "${SET:-}" ]; then
+    IFS='|' read -ra KV <<< "$SET"
+    for kv in "${KV[@]}"; do
+        gsettings --schemadir "$T/data/gnome-shell/extensions/voice-hold@griffit.gmail.com/schemas" \
+            set org.gnome.shell.extensions.voice-hold "${kv%% *}" "${kv#* }"
+    done
+fi
 # COMMANDS=1: the voice commands switched on (Ctrl+Alt+Space).
 [ "${COMMANDS:-0}" = 1 ] && gsettings --schemadir "$T/data/gnome-shell/extensions/voice-hold@griffit.gmail.com/schemas" \
     set org.gnome.shell.extensions.voice-hold commands-enabled true

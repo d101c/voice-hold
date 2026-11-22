@@ -12,6 +12,7 @@ import {buildCloudPage} from './cloudPage.js';
 import {buildCommandsPage} from './commands/prefsPage.js';
 import {listSources} from './engine.js';
 import {buildSetupPage} from './setupPage.js';
+import {buildVocabPage} from './vocabPage.js';
 
 const BUS_NAME = 'org.griffit.VoiceHold';
 const OBJECT_PATH = '/org/griffit/VoiceHold';
@@ -42,7 +43,8 @@ export default class VoiceHoldPreferences extends ExtensionPreferences {
             picture: `${this.path}/icons/pill.png`,
         });
         window.add(setup);
-        // Optional voice commands: their own page, after the two of the
+        window.add(buildVocabPage(settings, _));
+        // Optional voice commands: their own page, after those of the
         // dictation.
         window.add(buildCommandsPage(window, settings, _, (s, key) => this._shortcutRow(s, key)));
         window.add(buildCloudPage(window, settings, _));
@@ -330,8 +332,15 @@ export default class VoiceHoldPreferences extends ExtensionPreferences {
         group.add(tidy);
         settings.bind('tidy', tidy, 'active', Gio.SettingsBindFlags.DEFAULT);
 
+        const corrections = new Adw.SwitchRow({
+            title: _('Spoken self-corrections'),
+            subtitle: _('“At 2, no, I mean 3” becomes “at 3”; “scratch that” drops the sentence before. Instant, by rules.'),
+        });
+        group.add(corrections);
+        settings.bind('corrections', corrections, 'active', Gio.SettingsBindFlags.DEFAULT);
+
         const sw = new Adw.SwitchRow({
-            title: _('Self-corrections with the local LLM'),
+            title: _('More self-corrections with the local LLM'),
             subtitle: _('“Monday, no, Tuesday” becomes “Tuesday”. Needs the language model of the voice commands. Slow on a laptop (2 to 6 s per sentence) and approximate: the text is kept as it is when the answer looks wrong.'),
         });
         group.add(sw);
