@@ -238,6 +238,12 @@ msgstr "Sous la barre du haut : elle glisse hors de la barre, toujours au même 
 msgid "Under the top bar"
 msgstr "Sous la barre du haut"
 
+msgid "At the bottom of the screen"
+msgstr "En bas de l'écran"
+
+msgid "At the bottom: it floats above the dock, always in the same place."
+msgstr "En bas : elle flotte au-dessus du dock, toujours au même endroit."
+
 msgid "Next to the text cursor"
 msgstr "À côté du curseur de texte"
 

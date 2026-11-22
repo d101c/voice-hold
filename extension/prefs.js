@@ -321,11 +321,11 @@ export default class VoiceHoldPreferences extends ExtensionPreferences {
         group.add(hud);
         settings.bind('show-hud', hud, 'active', Gio.SettingsBindFlags.DEFAULT);
 
-        const positions = ['island', 'cursor'];
+        const positions = ['bottom', 'island', 'cursor'];
         const position = new Adw.ComboRow({
             title: _('Pill position'),
-            subtitle: _('Under the top bar: it slides out of the bar, always in the same place.'),
-            model: Gtk.StringList.new([_('Under the top bar'), _('Next to the text cursor')]),
+            subtitle: _('At the bottom: it floats above the dock, always in the same place.'),
+            model: Gtk.StringList.new([_('At the bottom of the screen'), _('Under the top bar'), _('Next to the text cursor')]),
         });
         position.set_selected(Math.max(0, positions.indexOf(settings.get_string('hud-position'))));
         position.connect('notify::selected', () => {

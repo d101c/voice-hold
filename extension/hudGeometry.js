@@ -30,6 +30,36 @@ export function islandPosition(monitor, panel, width) {
     return [Math.round(cx - width / 2), Math.round(islandTop(monitor, panel) - ISLAND_OVERLAP)];
 }
 
+// -- bottom ------------------------------------------------------------------
+
+export const BOTTOM_GAP = 20;       // px between the pill and what is under it
+
+// Top-left corner of a pill `width` x `height` floating at the bottom of
+// `monitor`: centred on it, `gap` px above the lowest of what it must not
+// cover. That is the bottom of the work area (a fixed dock or panel reserves
+// its room there), and any `obstacle` near the bottom edge that reserves
+// nothing (a dock that hides itself and is showing). Obstacles are rects in
+// stage coordinates; only those in the monitor's bottom quarter and across
+// the pill's width count. Kept inside the work area.
+export function bottomPosition({monitor, workArea = null, obstacles = [], width, height, gap = BOTTOM_GAP}) {
+    if (!monitor)
+        return [0, 0];
+    const area = workArea ?? monitor;
+    const monitorBottom = monitor.y + monitor.height;
+    let x = monitor.x + (monitor.width - width) / 2;
+    x = Math.max(area.x, Math.min(x, area.x + area.width - width));
+    let floor = Math.min(area.y + area.height, monitorBottom);
+    for (const o of obstacles ?? []) {
+        const inBottom = o.y >= monitor.y + monitor.height * 3 / 4 && o.y < monitorBottom;
+        const across = o.x < x + width && o.x + o.width > x &&
+            o.x < monitor.x + monitor.width && o.x + o.width > monitor.x;
+        if (inBottom && across && o.height > 0)
+            floor = Math.min(floor, o.y);
+    }
+    const y = Math.max(area.y, floor - gap - height);
+    return [Math.round(x), Math.round(y)];
+}
+
 // The monitor that contains the point, else `fallback`.
 export function monitorAt(monitors, x, y, fallback = null) {
     return (monitors ?? []).find(m =>

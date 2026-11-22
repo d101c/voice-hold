@@ -12,6 +12,16 @@
     border-radius: 14px;
 }
 
+/* Bottom (default): a pill floating above the dock, detached from every
+   edge, that grows upwards as the text wraps. */
+.voice-hud-bottom {
+    background-color: rgba(24,24,27,0.94);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 26px;
+    box-shadow: 0 10px 28px rgba(0,0,0,0.5);
+}
+.voice-hud-content-bottom { padding: 12px 22px; spacing: 14px; }
+
 /* Island: part of the top bar. Same background as the bar (set inline from
    its theme), square top, rounded bottom, a soft shadow on the desktop. */
 .voice-hud-island {
@@ -80,6 +90,14 @@
     background-color: rgba(40,40,40,0.95);
     border-radius: 14px;
 }
+.voice-cmd-hud-bottom {
+    background-color: rgba(24,24,27,0.94);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 26px;
+    box-shadow: 0 10px 28px rgba(0,0,0,0.5);
+}
+.voice-cmd-hud-content-bottom { padding: 12px 22px 14px 22px; }
+.voice-cmd-hud-content-bottom .voice-cmd-hud-row { spacing: 14px; }
 .voice-cmd-hud-island {
     background-color: #000;
     border-radius: 0 0 26px 26px;

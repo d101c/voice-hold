@@ -92,12 +92,13 @@
     </key>
     <key name="hud-position" type="s">
       <choices>
+        <choice value="bottom"/>
         <choice value="island"/>
         <choice value="cursor"/>
       </choices>
-      <default>'island'</default>
+      <default>'bottom'</default>
       <summary>Pill position</summary>
-      <description>island: a capsule that slides out of the top bar, always in the same place. cursor: next to the text cursor (the pointer when the application does not report one).</description>
+      <description>bottom: a pill floating at the bottom of the screen, above the dock. island: a capsule that slides out of the top bar, always in the same place. cursor: next to the text cursor (the pointer when the application does not report one).</description>
     </key>
     <key name="hud-effect" type="s">
       <choices>
@@ -108,7 +109,7 @@
       </choices>
       <default>'drop'</default>
       <summary>Pill animation</summary>
-      <description>How the pill appears and disappears. swell: a bump swells out of the bar. drop: a drop falls from the bar and springs open. spring: the capsule zooms out of the bar and wobbles. glow: swell with a halo.</description>
+      <description>How the pill appears and disappears (at the bottom of the screen it always rises; glow adds its halo there). swell: a bump swells out of the bar. drop: a drop falls from the bar and springs open. spring: the capsule zooms out of the bar and wobbles. glow: swell with a halo.</description>
     </key>
     <key name="hud-preview" type="i">
       <default>0</default>

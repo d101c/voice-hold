@@ -26,6 +26,7 @@ gnome-extensions pack "$SRC" \
   --extra-source=hud.js \
   --extra-source=hudEffects.js \
   --extra-source=hudGeometry.js \
+  --extra-source=hudPlacement.js \
   --extra-source=systemFont.js \
   --extra-source=keyHook.js \
   --extra-source=memoryText.js \

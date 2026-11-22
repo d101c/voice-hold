@@ -9,6 +9,7 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import {accentColor} from './accentColor.js';
 import * as effects from './hudEffects.js';
 import {cursorPosition, islandPosition, levelCurve, trailing, ISLAND_OVERLAP} from './hudGeometry.js';
+import {anchorMonitor, bottomAnchor, PILL_NAME} from './hudPlacement.js';
 import {systemFontCss} from './systemFont.js';
 
 // The pill: level bars, and a line of text (status, then the
@@ -54,13 +55,13 @@ const PANEL_OPAQUE_ALPHA = 200;   // below this the bar is see-through (Blur my 
 const MONITOR_MARGIN = 24;        // the capsule never comes closer than this to the monitor's edges
 
 export class Hud {
-    // getPosition: () => 'island' | 'cursor' and getEffect: () => one of
+    // getPosition: () => 'bottom' | 'island' | 'cursor' and getEffect: () => one of
     // hudEffects.EFFECTS, both read each time the pill opens.
-    constructor(gettext, getPosition = () => 'island', getEffect = () => effects.DEFAULT_EFFECT) {
+    constructor(gettext, getPosition = () => 'bottom', getEffect = () => effects.DEFAULT_EFFECT) {
         this._getEffect = getEffect;
         this._ = gettext;
         this._getPosition = getPosition;
-        this._island = true;
+        this._where = 'bottom';  // 'bottom' | 'island' | 'cursor', fixed while the pill is up
         this._scale = 1;
         this._box = null;       // outer capsule
         this._clip = null;      // clipping box
@@ -93,7 +94,8 @@ export class Hud {
     _build() {
         if (this._box)
             return;
-        this._island = this._getPosition() !== 'cursor';
+        const where = this._getPosition();
+        this._where = ['island', 'cursor'].includes(where) ? where : 'bottom';
         // Sizes set from here are in physical pixels; the stylesheet's are
         // scaled by St.
         this._scale = St.ThemeContext.get_for_stage(global.stage).scale_factor || 1;
@@ -101,24 +103,25 @@ export class Hud {
         this._accent = accentColor();
 
         this._box = new St.Widget({
-            style_class: `voice-hud-capsule ${this._island ? 'voice-hud-island' : 'voice-hud-cursor'}`,
+            style_class: `voice-hud-capsule voice-hud-${this._where}`,
+            name: PILL_NAME,
             layout_manager: new Clutter.BinLayout(),
             reactive: false,
             opacity: 0,
         });
         // The system's interface font, and for the island the bar's colour.
-        this._box.set_style(systemFontCss() + (this._island ? ` background-color: ${this._panelColor()};` : ''));
+        this._box.set_style(systemFontCss() + (this._where === 'island' ? ` background-color: ${this._panelColor()};` : ''));
 
         this._clip = new St.Widget({
             layout_manager: new Clutter.FixedLayout(),
-            clip_to_allocation: this._island,
+            clip_to_allocation: this._where !== 'cursor',
             x_expand: true,
             y_expand: true,
         });
         this._box.add_child(this._clip);
 
         this._content = new St.BoxLayout({
-            style_class: `voice-hud ${this._island ? 'voice-hud-content-island' : ''}`,
+            style_class: `voice-hud voice-hud-content-${this._where}`,
         });
         this._content.add_constraint(new Clutter.AlignConstraint({
             source: this._clip,
@@ -208,7 +211,7 @@ export class Hud {
     // given that size: left to the clip's FixedLayout, it would get the
     // height of one line, and a wrapped second line would be cut off.
     _natural() {
-        const monitor = Main.layoutManager.primaryMonitor;
+        const monitor = this._where === 'bottom' ? anchorMonitor() : Main.layoutManager.primaryMonitor;
         const maxW = monitor ? monitor.width - 2 * MONITOR_MARGIN * this._scale : 10000;
         this._content.set_size(-1, -1);
         let [, w] = this._content.get_preferred_width(-1);
@@ -216,7 +219,7 @@ export class Hud {
         let [, h] = this._content.get_preferred_height(w);
         h = Math.ceil(h);
         this._content.set_size(w, h);
-        return [w, h + (this._island ? ISLAND_OVERLAP : 0)];
+        return [w, h + (this._where === 'island' ? ISLAND_OVERLAP : 0)];
     }
 
     // Where the capsule hangs from: centred under the primary monitor's bar,
@@ -228,23 +231,30 @@ export class Hud {
         return islandPosition(lm.primaryMonitor, panel, width);
     }
 
-    _place(animate = false) {
-        if (this._island)
-            this._placeIsland(animate);
-        else
-            this._placeAtCursor();
+    // Bottom: centred on the focused monitor, above the dock (hudPlacement.js).
+    _anchor(w, h) {
+        return this._where === 'island' ? this._islandAnchor(w) : bottomAnchor(w, h, this._scale);
     }
 
-    // Island: ease the capsule to its new natural size, keeping it centred,
-    // so a longer text makes it grow from both ends.
-    _placeIsland(animate) {
+    _place(animate = false) {
+        if (this._where === 'cursor')
+            this._placeAtCursor();
+        else
+            this._placeAnchored(animate);
+    }
+
+    // Island or bottom: ease the capsule to its new natural size, keeping it
+    // centred, so a longer text makes it grow from both ends; at the bottom
+    // its lower edge stays put and it grows upwards.
+    _placeAnchored(animate) {
         const [w, h] = this._natural();
-        const [x, y] = this._islandAnchor(w);
-        for (const prop of ['x', 'width', 'height'])
+        const [x, y] = this._anchor(w, h);
+        for (const prop of ['x', 'y', 'width', 'height'])
             this._box.remove_transition(prop);
-        this._box.set_y(y);
+        if (this._where === 'island')
+            this._box.set_y(y);
         if (animate && this._box.opacity > 0 && !this._leaving) {
-            this._box.ease({x, width: w, height: h, duration: RESIZE_MS, mode: Clutter.AnimationMode.EASE_OUT_CUBIC});
+            this._box.ease({x, y, width: w, height: h, duration: RESIZE_MS, mode: Clutter.AnimationMode.EASE_OUT_CUBIC});
         } else {
             this._box.set_position(x, y);
             this._box.set_size(w, h);
@@ -283,17 +293,17 @@ export class Hud {
     _enter() {
         this._leaving = false;
         let geo = null;
-        if (this._island) {
+        if (this._where !== 'cursor') {
             const [w, h] = this._natural();
-            const [x, y] = this._islandAnchor(w);
+            const [x, y] = this._anchor(w, h);
             geo = {x, y, w, h};
         }
-        effects.enter(this._parts(), geo, this._getEffect(), this._island);
+        effects.enter(this._parts(), geo, this._getEffect(), this._where);
     }
 
     _leave(onComplete) {
         this._leaving = true;
-        effects.leave(this._parts(), this._getEffect(), this._island, onComplete);
+        effects.leave(this._parts(), this._getEffect(), this._where, onComplete);
     }
 
     // -- public ----------------------------------------------------------
@@ -313,7 +323,7 @@ export class Hud {
         this._setText(status, 'hint');
         if (fresh || leaving) {
             // New, or caught on its way out: (re)open.
-            if (!this._island)
+            if (this._where === 'cursor')
                 this._place();
             this._enter();
         } else {

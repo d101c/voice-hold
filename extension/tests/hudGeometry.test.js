@@ -2,7 +2,7 @@
 
 // Run: gjs -m extension/tests/hudGeometry.test.js
 import {
-    CURSOR_GAP, ISLAND_OVERLAP, POINTER_GAP,
+    BOTTOM_GAP, CURSOR_GAP, ISLAND_OVERLAP, POINTER_GAP, bottomPosition,
     cursorPosition, islandPosition, islandTop, levelCurve, monitorAt, trailing,
 } from '../hudGeometry.js';
 
@@ -68,6 +68,55 @@ test('odd widths are rounded to whole pixels', () => {
 
 test('no monitor at all does not throw', () => {
     eq(islandPosition(null, null, 200), [0, -ISLAND_OVERLAP], 'position');
+});
+
+// -- bottom ----------------------------------------------------------------
+
+const bottom = o => bottomPosition({monitor: PRIMARY, width: 300, height: 50, ...o});
+
+test('bottom: centred, a gap above the screen edge when nothing is reserved', () => {
+    eq(bottom({}), [810, 1080 - BOTTOM_GAP - 50], 'position');
+});
+
+test('bottom: above a fixed dock, which shrinks the work area', () => {
+    const workArea = {x: 0, y: 32, width: 1920, height: 1080 - 32 - 72};
+    eq(bottom({workArea}), [810, 1080 - 72 - BOTTOM_GAP - 50], 'position');
+});
+
+test('bottom: above a dock that hides itself, while it shows', () => {
+    const dock = {x: 700, y: 1080 - 72, width: 520, height: 72};
+    eq(bottom({obstacles: [dock]}), [810, 1080 - 72 - BOTTOM_GAP - 50], 'position');
+});
+
+test('bottom: a dock slid out of the screen, or high up, or off to the side, is ignored', () => {
+    const want = [810, 1080 - BOTTOM_GAP - 50];
+    eq(bottom({obstacles: [{x: 700, y: 1080, width: 520, height: 72}]}), want, 'slid out');
+    eq(bottom({obstacles: [{x: 0, y: 32, width: 72, height: 1000}]}), want, 'left dock');
+    eq(bottom({obstacles: [{x: 1700, y: 1000, width: 200, height: 80}]}), want, 'not across the pill');
+    eq(bottom({obstacles: [{x: 2000, y: 1000, width: 500, height: 80}]}), want, 'other monitor');
+});
+
+test('bottom: a left dock narrows the work area, the pill stays on the screen centre', () => {
+    const workArea = {x: 72, y: 32, width: 1920 - 72, height: 1080 - 32};
+    eq(bottom({workArea}), [810, 1080 - BOTTOM_GAP - 50], 'position');
+});
+
+test('bottom: a pill wider than the free room is kept inside the work area', () => {
+    const workArea = {x: 72, y: 32, width: 400, height: 1048};
+    eq(bottom({workArea, width: 600}), [72, 1080 - BOTTOM_GAP - 50], 'left edge of the area');
+});
+
+test('bottom: a tall pill never goes above the work area', () => {
+    const workArea = {x: 0, y: 32, width: 1920, height: 300};
+    eq(bottom({workArea, height: 400}), [810, 32], 'top of the area');
+});
+
+test('bottom: second monitor, scaled gap', () => {
+    eq(bottomPosition({monitor: RIGHT, width: 200, height: 40, gap: 40}), [1920 + 540, 1024 - 40 - 40], 'position');
+});
+
+test('bottom: no monitor does not throw', () => {
+    eq(bottomPosition({monitor: null, width: 10, height: 10}), [0, 0], 'position');
 });
 
 // -- next to the cursor ----------------------------------------------------
