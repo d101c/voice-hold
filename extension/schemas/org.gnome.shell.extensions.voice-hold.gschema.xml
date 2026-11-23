@@ -180,6 +180,11 @@
       <summary>Wake word on battery</summary>
       <description>Keep listening for the wake word on battery.</description>
     </key>
+    <key name="write-at-end" type="b">
+      <default>false</default>
+      <summary>Accuracy first</summary>
+      <description>The words show grey in the field while you speak; at the end the whole dictation, recognised again at once with all its context, is written in their place.</description>
+    </key>
     <key name="sounds" type="b">
       <default>true</default>
       <summary>Sounds</summary>

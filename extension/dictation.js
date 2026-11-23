@@ -101,6 +101,7 @@ export class Dictation {
             Final: t => this._onFinal(t),
             Stopped: r => this._onStopped(r),
             Wake: p => this._onWake(p),
+            Whole: t => this._onWhole(t),
             Error: m => this._onError(m),
         });
         this._fromWake = false;      // the next start was asked by the wake word
@@ -342,7 +343,12 @@ export class Dictation {
             instruction: this._modeInstruction(global.display.focus_window),
         };
         // Words held back until the end: no field to write into, or a mode.
-        session.buffered = session.clipboard || !!session.instruction;
+        // "Accuracy first": the words show grey in the field while you speak,
+        // and the whole dictation, decoded again at once, replaces them.
+        session.writeAtEnd = !session.clipboard && !session.instruction &&
+            this._settings.get_boolean('write-at-end');
+        session.buffered = session.clipboard || !!session.instruction || session.writeAtEnd;
+        session.whole = '';
         this._session = session;
         this._engineState = '';
         this._handsFreeShown = false;
@@ -363,6 +369,9 @@ export class Dictation {
             'keep-loaded-s': this._settings.get_int('keep-loaded-min') * 60,
             'source': this._settings.get_string('microphone'),
             'from-wake': this._fromWake,
+            // Words held back anyway: the whole dictation is decoded again at
+            // the end, with all its context (Whole signal).
+            'whole-pass': session.buffered,
         };
         this._engine.start(options).then(err => {
             if (!err || this._session !== session || session.ending)
@@ -620,12 +629,15 @@ export class Dictation {
         if (!this._live)
             return;
         const session = this._session;
-        if (!this._focusKept() || (!session.buffered && !this._sink.partial(text))) {
+        const shown = session.buffered
+            ? session.text + joinBlock(this._lastChar(session), text, {firstOfSession: !session.text}) : text;
+        if (!this._focusKept() || (!session.buffered && !this._sink.partial(text)) ||
+            (session.writeAtEnd && !this._sink.partial(shown))) {
             this._run(this._machine.external('cancel'));
             return;
         }
         this._clearHint();
-        this._hud.live(session.buffered ? session.text + joinBlock(this._lastChar(session), text, {firstOfSession: !session.text}) : text);
+        this._hud.live(shown);
     }
 
     // The last character written in this session ('' before the first block).
@@ -644,8 +656,17 @@ export class Dictation {
             return;
         }
         session.text += joinBlock(this._lastChar(session), text, {firstOfSession: !session.text});
+        if (session.writeAtEnd)
+            this._sink.partial(session.text);
         this._clearHint();
         this._hud.live(session.buffered ? session.text : text);
+    }
+
+    // The whole dictation decoded again at the end (whole-pass): it replaces
+    // the blocks where the words were held back.
+    _onWhole(text) {
+        if (this._session)
+            this._session.whole = text;
     }
 
     _onStopped(reason) {
@@ -659,7 +680,8 @@ export class Dictation {
         // Stop/Cancel it is already idle, or in the next gesture.
         if (!wasEnding)
             this._run(this._machine.external('engine'));
-        const written = reason !== 'cancel' && reason !== 'error' && session.text.trim() ? session.text : '';
+        const said = session.whole.trim() ? session.whole : session.text;
+        const written = reason !== 'cancel' && reason !== 'error' && said.trim() ? said : '';
         if (written && (!session.instruction || session.yielding)) {
             this._last = written;
             this._remember(written, session.window);
@@ -672,6 +694,9 @@ export class Dictation {
             this._hud.hideNow();
         } else if (written && session.instruction) {
             this._rewriteAndWrite(written, session);
+        } else if (written && session.writeAtEnd) {
+            this._writeLate(written, session);
+            this._hud.hide();
         } else if (written && session.clipboard) {
             this._deliver(this._pasteSpacing(written, session.window), session.window);
         } else if (reason === 'error') {
@@ -738,17 +763,22 @@ export class Dictation {
         }
         if (!out)
             this._say(this._('No language model for this mode: written as said'), 'error', 3500);
+        if (this._writeLate(text, session) && out)
+            this._hud.hide();
+    }
+
+    // Write the text of an ended session where it started: into its field if
+    // it still has the focus, else by the clipboard. True when typed.
+    _writeLate(text, session) {
         const late = new TextSink(Main.inputMethod, Clutter);
         late.begin(session.focus);
-        if (!session.clipboard && global.display.focus_window === session.window && late.focused) {
+        const typed = !session.clipboard && global.display.focus_window === session.window && late.focused;
+        if (typed)
             late.commit(text);
-            late.destroy();
-            if (out)
-                this._hud.hide();
-        } else {
-            late.destroy();
+        late.destroy();
+        if (!typed)
             this._deliver(this._pasteSpacing(text, session.window), session.window);
-        }
+        return typed;
     }
 
     // Clipboard, then a virtual paste into `window` when it still has the

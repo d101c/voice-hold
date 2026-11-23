@@ -286,6 +286,13 @@ export default class VoiceHoldPreferences extends ExtensionPreferences {
         });
         page.add(group);
 
+        const atEnd = new Adw.SwitchRow({
+            title: _('Accuracy first: write the text at the end'),
+            subtitle: _('The words show grey in the field while you speak; when you stop, the whole dictation is recognised again at once, with all its context, and written in their place. A second or two more at the end.'),
+        });
+        group.add(atEnd);
+        settings.bind('write-at-end', atEnd, 'active', Gio.SettingsBindFlags.DEFAULT);
+
         const sounds = new Adw.SwitchRow({
             title: _('Sounds'),
             subtitle: _('A short sound when listening starts and when the text is written.'),

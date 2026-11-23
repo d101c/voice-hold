@@ -111,3 +111,65 @@ def test_rms_scale():
     assert rms(np.zeros(100)) == 0.0
     assert 0.3 < rms(np.full(100, 0.1)) < 0.5
     assert rms(np.full(100, 0.9)) == 1.0
+
+
+class SpanVad(FakeVad):
+    """As FakeVad, but says where each segment starts, as asr.SileroVad."""
+
+    def __init__(self, speech):
+        super().__init__(speech)
+        self._first = None
+
+    def accept(self, chunk):
+        i = self._i
+        out = super().accept(chunk)
+        if self.in_speech and self._first is None:
+            self._first = i
+        if out:
+            out = [(self._first * CHUNK, out[0])]
+            self._first = None
+        return out
+
+
+def ramp(n):
+    """Chunk i holds the value i, so a cut can be read off its samples."""
+    return [np.full(CHUNK, float(i), dtype=np.float32) for i in range(n)]
+
+
+def finals(seg, n):
+    out = []
+    for c in ramp(n):
+        out += [e for e in seg.feed(c) if e[0] == 'final']
+    return out
+
+
+def test_finals_are_contiguous_across_a_short_pause():
+    # speech chunks 10-20, a 0.5 s pause (16 chunks of 32 ms), speech 36-50
+    seg = Segmenter(SpanVad([(10, 20), (36, 50)]), partial_min_new_s=100)
+    f = finals(seg, 70)
+    assert len(f) == 2
+    first, second = f[0][1], f[1][1]
+    # nothing between the two finals is left out
+    assert second[0] == first[-1] or second[0] == first[-1] + 1
+    assert set(np.unique(first)) | set(np.unique(second)) >= set(range(10, 50))
+
+
+def test_a_long_silence_is_trimmed_before_the_next_final():
+    seg = Segmenter(SpanVad([(10, 20), (100, 110)]), partial_min_new_s=100)
+    f = finals(seg, 130)
+    second = f[1][1]
+    pad_chunks = int(0.5 * 16000 / CHUNK)
+    assert second[0] >= 100 - pad_chunks - 1
+
+
+def test_the_context_is_the_audio_just_before_the_final():
+    seg = Segmenter(SpanVad([(10, 20), (36, 50)]), partial_min_new_s=100)
+    f = finals(seg, 70)
+    ctx, second = f[1][2], f[1][1]
+    assert len(ctx) > 0 and ctx[-1] <= second[0]
+
+
+def test_bare_segments_still_work_without_context():
+    seg = Segmenter(FakeVad([(2, 40)]), partial_min_new_s=10)
+    f = finals(seg, 50)
+    assert len(f) == 1 and len(f[0][2]) == 0

@@ -1013,3 +1013,9 @@ msgstr "Pas à l'écoute : %s"
 
 msgid "Not listening"
 msgstr "Pas à l'écoute"
+
+msgid "Accuracy first: write the text at the end"
+msgstr "Précision d'abord : écrire le texte à la fin"
+
+msgid "The words show grey in the field while you speak; when you stop, the whole dictation is recognised again at once, with all its context, and written in their place. A second or two more at the end."
+msgstr "Les mots s'affichent en gris dans le champ pendant que vous parlez ; à l'arrêt, toute la dictée est reconnue à nouveau d'un bloc, avec tout son contexte, et écrite à leur place. Une ou deux secondes de plus à la fin."

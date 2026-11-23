@@ -16,6 +16,7 @@ import os
 import time
 from concurrent.futures import ThreadPoolExecutor
 
+import numpy as np
 from dbus_fast import DBusError, Variant
 from dbus_fast.service import ServiceInterface, method, signal
 
@@ -38,6 +39,9 @@ BUSY_ERROR = 'org.griffit.VoiceHold.Error.Busy'
 
 # `Level` is emitted at most this often (the meter does not need more).
 LEVEL_PERIOD_S = 0.1
+# The final pass decodes the whole dictation at once up to this length
+# (Parakeet at RTF ~0.13: about 12 s of waiting at the very most).
+WHOLE_MAX_S = 90
 
 
 class Busy(Exception):
@@ -304,7 +308,12 @@ class Engine:
             'realtime': bool(_opt(options, 'realtime', True)),
             'source': str(_opt(options, 'source', '')),
             'corrections': bool(_opt(options, 'corrections', True)),
+            'whole_pass': bool(_opt(options, 'whole-pass', False)),
+            'context': bool(_opt(options, 'context', True)),
         }
+        # The whole dictation's audio, for the final pass (whole_text()).
+        self._audio = []
+        self._audio_len = 0
         # Personal words and replacements (JSON strings), and the numbering
         # of a spoken list, for this session.
         self._vocab = Vocabulary.from_options(str(_opt(options, 'vocabulary', '')),
@@ -439,6 +448,8 @@ class Engine:
             while self._pending and gen == self._gen:
                 await asyncio.gather(*list(self._pending), return_exceptions=True)
                 await asyncio.sleep(0)
+            if self._opts.get('whole_pass') and gen == self._gen and self._audio:
+                await self._whole_pass(gen)
         except Exception:
             # A stop that dies must not keep the session "stopping" for ever,
             # nor the callers that wait for it: the next stop() starts over.
@@ -452,6 +463,38 @@ class Engine:
         if self._stop_done is not done:
             return                            # finished meanwhile (the model failed to load)
         self._finish(reason)
+
+    async def _whole_pass(self, gen):
+        """The whole dictation decoded at once: the words of each block now
+        hear those around them (no word lost at a cut, sentences punctuated
+        as one). Emitted as Whole(text) before Stopped; the client uses it
+        where it held the text back. Too long (WHOLE_MAX_S): nothing."""
+        if self._audio_len >= WHOLE_MAX_S * 16000:
+            return
+        audio = np.concatenate(self._audio)
+        self._audio = []
+        self._set_state(DECODING)
+        self._inflight += 1
+        try:
+            raw = await self._loop.run_in_executor(self._executor, self._recognizer.transcribe, audio)
+        except Exception as e:
+            self._emit('Error', f'decode: {e}')
+            return
+        finally:
+            self._inflight -= 1
+        if gen != self._gen:
+            return
+        self._emit('Whole', self._shape(raw, Lists(), final=True))
+
+    def _shape(self, raw, lists, final):
+        """The text clean-up of a decoded block (or of the whole dictation)."""
+        if raw and self._opts['tidy']:
+            raw = textmod.tidy(raw)
+        if raw and self._opts.get('corrections'):
+            raw = correct(raw)
+        if raw:
+            raw = self._vocab.apply(raw)
+        return lists.format(textmod.clean(raw), final) if raw else ''
 
     def cancel(self):
         if not self.active:
@@ -499,6 +542,9 @@ class Engine:
         if now - self._level_emitted >= LEVEL_PERIOD_S:
             self._level_emitted = now
             self._emit('Level', round(self._last_level, 3))
+        if self._opts.get('whole_pass') and self._audio_len < WHOLE_MAX_S * 16000:
+            self._audio.append(chunk)
+            self._audio_len += len(chunk)
         for ev in self._segmenter.feed(chunk):
             self._handle_event(gen, ev)
         speaking = self._segmenter.in_speech
@@ -519,15 +565,18 @@ class Engine:
             if not self._partial_inflight and not self._pending:
                 self._submit(gen, ev[1], final=False)
         elif kind == 'final':
-            self._submit(gen, ev[1], final=True)
+            self._submit(gen, ev[1], final=True, context=ev[2] if len(ev) > 2 else None)
 
     # -- decoding -----------------------------------------------------------
 
-    def _submit(self, gen, samples, final):
+    def _submit(self, gen, samples, final, context=None):
         if not final:
             self._partial_inflight = True
         self._inflight += 1
-        fut = self._loop.run_in_executor(self._executor, self._recognizer.transcribe, samples)
+        if context is not None and len(context) and self._opts.get('context', True):
+            fut = self._loop.run_in_executor(self._executor, self._recognizer.transcribe, samples, context)
+        else:
+            fut = self._loop.run_in_executor(self._executor, self._recognizer.transcribe, samples)
         self._pending.add(fut)
         fut.add_done_callback(lambda f: self._on_decoded(gen, final, f))
 
@@ -784,6 +833,10 @@ class VoiceHoldInterface(ServiceInterface):
     @signal()
     def Speaking(self, speaking: 'b') -> 'b':
         return speaking
+
+    @signal()
+    def Whole(self, text: 's') -> 's':
+        return text
 
     @signal()
     def Wake(self, phrase: 's') -> 's':
