@@ -332,7 +332,10 @@ class Engine:
             'source': str(_opt(options, 'source', '')),
             'corrections': bool(_opt(options, 'corrections', True)),
             'whole_pass': bool(_opt(options, 'whole-pass', False)),
-            'context': bool(_opt(options, 'context', True)),
+            # Off by default: on the bench, the 3 s of audio context cost
+            # more words at the block boundaries than they won (WER 10.9 %
+            # against 10.5 % on read French, contiguous blocks alone).
+            'context': bool(_opt(options, 'context', False)),
         }
         # The whole dictation's audio, for the final pass (whole_text()).
         self._audio = []
@@ -596,7 +599,7 @@ class Engine:
         if not final:
             self._partial_inflight = True
         self._inflight += 1
-        if context is not None and len(context) and self._opts.get('context', True):
+        if context is not None and len(context) and self._opts.get('context', False):
             fut = self._loop.run_in_executor(self._executor, self._recognizer.transcribe, samples, context)
         else:
             fut = self._loop.run_in_executor(self._executor, self._recognizer.transcribe, samples)
