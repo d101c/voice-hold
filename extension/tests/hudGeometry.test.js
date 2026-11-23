@@ -3,7 +3,7 @@
 // Run: gjs -m extension/tests/hudGeometry.test.js
 import {
     BOTTOM_GAP, CURSOR_GAP, ISLAND_OVERLAP, POINTER_GAP, bottomPosition,
-    cursorPosition, islandPosition, islandTop, levelCurve, monitorAt, trailing,
+    cursorPosition, islandPosition, islandTop, levelCurve, monitorAt, ringOffsets, trailing,
 } from '../hudGeometry.js';
 
 let failures = 0;
@@ -117,6 +117,38 @@ test('bottom: second monitor, scaled gap', () => {
 
 test('bottom: no monitor does not throw', () => {
     eq(bottomPosition({monitor: null, width: 10, height: 10}), [0, 0], 'position');
+});
+
+// -- countdown ring ---------------------------------------------------------
+
+// The meter as measured when the bug was found: 9 bars 5 px wide, 4 px apart,
+// in a meter 77 x 36, still tall from the last word.
+const METER_BARS = [0, 9, 18, 27, 36, 45, 54, 63, 72].map(x => ({x, width: 5}));
+
+test('ring: every dot on a circle around the centre of the meter', () => {
+    const r = 12;
+    const off = ringOffsets(METER_BARS, 77, 36, r);
+    off.forEach((o, i) => {
+        const cx = METER_BARS[i].x + 2.5 + o.x;
+        const cy = 18 + o.y;                    // the meter centres the dot vertically
+        const d = Math.hypot(cx - 38.5, cy - 18);
+        if (Math.abs(d - r) > 1)
+            throw new Error(`dot ${i} at ${d.toFixed(1)} px from the centre, want ${r}`);
+    });
+});
+
+test('ring: the dots stay inside the meter, so inside the pill', () => {
+    const dot = 6;
+    for (const o of ringOffsets(METER_BARS, 77, 36, 12)) {
+        if (Math.abs(o.y) + dot / 2 > 18)
+            throw new Error(`a dot leaves the meter: ${o.y}`);
+    }
+});
+
+test('ring: starts at twelve o\'clock and goes clockwise', () => {
+    const off = ringOffsets(METER_BARS, 77, 36, 12);
+    eq(off[0].y, -12, 'first dot on top');
+    eq(off[1].x + METER_BARS[1].x + 2.5 > 38.5, true, 'second dot to the right');
 });
 
 // -- next to the cursor ----------------------------------------------------

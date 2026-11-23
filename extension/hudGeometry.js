@@ -89,6 +89,25 @@ export function cursorPosition({cursor, pointer, monitors, primary, width, heigh
     return [Math.round(x), Math.round(y)];
 }
 
+// The countdown ring the level bars curl into (hud.js countdown()). `bars`
+// are the bars' boxes in the meter ({x, width}), `width` and `height` the
+// meter's. Each bar becomes a dot and, being centred vertically by the
+// meter, ends up on its middle line whatever height it had a moment ago:
+// only its x matters. Returns the translation of each bar so that the dots
+// sit clockwise from twelve o'clock on a circle of `radius` around the
+// centre of the meter.
+export function ringOffsets(bars, width, height, radius) {
+    const n = bars.length;
+    const cx = width / 2;
+    return bars.map((bar, i) => {
+        const a = -Math.PI / 2 + 2 * Math.PI * i / n;
+        return {
+            x: Math.round(cx + radius * Math.cos(a) - (bar.x + bar.width / 2)),
+            y: Math.round(radius * Math.sin(a)),
+        };
+    });
+}
+
 // The last `max` characters of `text` (code points, not UTF-16 units), with
 // an ellipsis in front when something was cut.
 export function trailing(text, max) {

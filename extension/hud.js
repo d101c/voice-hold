@@ -8,7 +8,7 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 import {accentColor} from './accentColor.js';
 import * as effects from './hudEffects.js';
-import {cursorPosition, islandPosition, levelCurve, trailing, ISLAND_OVERLAP} from './hudGeometry.js';
+import {cursorPosition, islandPosition, levelCurve, ringOffsets, trailing, ISLAND_OVERLAP} from './hudGeometry.js';
 import {anchorMonitor, bottomAnchor, PILL_NAME} from './hudPlacement.js';
 import {systemFontCss} from './systemFont.js';
 
@@ -416,18 +416,16 @@ export class Hud {
         const radius = RING_RADIUS * this._scale;
         const dot = DOT * this._scale;
         const box = this._meter.get_allocation_box();
-        const cx = (box.x2 - box.x1) / 2;
-        const cy = (box.y2 - box.y1) / 2;
+        // Before the bars shrink: their x and the meter's size (ringOffsets()).
+        const offsets = ringOffsets(this._bars.map(b => ({x: b.x, width: b.width})),
+            box.x2 - box.x1, box.y2 - box.y1, radius);
         this._bars.forEach((bar, i) => {
-            // Clockwise from twelve o'clock: the line curls into the ring.
-            const a = -Math.PI / 2 + 2 * Math.PI * i / n;
-            const bx = bar.x + bar.width / 2;
             bar.remove_all_transitions();
             bar.set_style(`background-color: ${this._accent};`);
             bar.set_height(Math.round(dot));
             bar.ease({
-                translation_x: cx + radius * Math.cos(a) - bx,
-                translation_y: radius * Math.sin(a) + (cy - (bar.y + dot / 2)),
+                translation_x: offsets[i].x,
+                translation_y: offsets[i].y,
                 duration: MORPH_MS,
                 delay: i * 18,
                 mode: Clutter.AnimationMode.EASE_OUT_CUBIC,
