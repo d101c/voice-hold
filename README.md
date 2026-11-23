@@ -184,6 +184,7 @@ What the engine uses:
 | Component | Licence | Notes |
 |---|---|---|
 | [Parakeet Ultra](https://huggingface.co/moondream/parakeet-ultra) (int8 export by sherpa-onnx) | CC-BY-4.0, Moondream, post-trained from NVIDIA's [Parakeet TDT 0.6B v3](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3) | Downloaded by you at `setup` from the sherpa-onnx releases; not redistributed here. Attribution: Moondream, NVIDIA NeMo. |
+| Kroko French streaming zipformer (`sherpa-onnx-streaming-zipformer-fr-kroko-2025-08-06`) | CC-BY-SA-4.0, Banafo (Kroko ASR) | Optional, wake word: downloaded by the engine the first time the wake word is switched on (or `setup --wake`); not redistributed here. |
 | [llama.cpp](https://github.com/ggml-org/llama.cpp) (release b12284) | MIT | Optional, voice commands and polish: the server binary is downloaded by you at `setup --commands`; not redistributed here. |
 | [Qwen3.5-2B](https://huggingface.co/unsloth/Qwen3.5-2B-GGUF) (Q4_K_M GGUF) | Apache-2.0, Alibaba Cloud | Optional, same download; not redistributed here. |
 | [Silero VAD](https://github.com/snakers4/silero-vad) | MIT | Downloaded by you at `setup`; not redistributed here. |
