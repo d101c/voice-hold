@@ -47,8 +47,15 @@ class Ring:
 
     def since(self, pos):
         """The audio from absolute position `pos` to now (what is still kept)."""
-        n = max(0, min(self.end - pos, len(self._buf), self.end))
-        return self._buf[len(self._buf) - n:].copy() if n else np.zeros(0, dtype=np.float32)
+        return self.slice(pos, self.end)
+
+    def slice(self, a, b):
+        """The audio from absolute position a to b (what is still kept of it)."""
+        first = self.end - len(self._buf)
+        a, b = max(a, first, 0), min(b, self.end)
+        if b <= a:
+            return np.zeros(0, dtype=np.float32)
+        return self._buf[a - first:b - first].copy()
 
 
 class LentSource:
@@ -148,6 +155,7 @@ class WakeListener:
             return
         with self._lock:
             self._ring.push(chunk)
+            end = self._ring.end
             lent = self._lent
             if self._woken_at is not None and lent is None and \
                     self._clock() - self._woken_time > KEEP_AFTER_S:
@@ -156,7 +164,8 @@ class WakeListener:
             lent(chunk)
             return
         try:
-            self._queue.put_nowait(chunk)
+            # With its position: the detection thread may be behind the ring.
+            self._queue.put_nowait((chunk, end))
         except queue.Full:
             pass                               # the detector is behind: drop, never block the stream
 
@@ -194,15 +203,16 @@ class WakeListener:
 
     def _detect_loop(self):
         while self._running:
-            chunk = self._queue.get()
-            if chunk is None:
+            item = self._queue.get()
+            if item is None:
                 break
             try:
-                self._detect(chunk)
+                self._detect(*item)
             except Exception as e:      # a detector error must not kill the listener
                 self.failure = f'wake: {e}'
 
-    def _detect(self, chunk):
+    def _detect(self, chunk, end):
+        """`end`: the ring position just after `chunk`."""
         if self._reset_pending:
             self._reset_now()
         with self._lock:
@@ -210,18 +220,24 @@ class WakeListener:
                 return
             if self._clock() < self._cooldown_until:
                 return
-            end = self._ring.end
         self._vad.accept(chunk)                # segments are not needed, only in_speech
         if not self._vad.in_speech:
             if self._seg_start is not None:
-                # Speech over without the word: the next one starts afresh.
+                # Speech over: the phrase said alone before a pause only
+                # comes out of the recogniser now; else the next utterance
+                # starts afresh.
+                flush = getattr(self._detector, 'flush', None)
+                hit = flush() if flush and self._fed <= MAX_UTTERANCE_S * SAMPLE_RATE else None
+                if hit is not None:
+                    self._woke(hit)
+                    return
                 self._seg_start = None
                 self._detector.reset()
             return
         if self._seg_start is None:
-            self._seg_start = max(0, end - int(PRE_ROLL_S * SAMPLE_RATE) - len(chunk))
+            self._seg_start = max(0, end - len(chunk) - int(PRE_ROLL_S * SAMPLE_RATE))
             with self._lock:
-                audio = self._ring.since(self._seg_start)
+                audio = self._ring.slice(self._seg_start, end)
             self._fed = len(audio)
         else:
             audio = chunk
@@ -229,8 +245,10 @@ class WakeListener:
         if self._fed > MAX_UTTERANCE_S * SAMPLE_RATE:
             return                             # a long sentence: the word starts an utterance
         hit = self._detector.accept(audio)
-        if hit is None:
-            return
+        if hit is not None:
+            self._woke(hit)
+
+    def _woke(self, hit):
         phrase, end_s = hit
         with self._lock:
             self._woken_at = min(self._ring.end, self._seg_start + int(end_s * SAMPLE_RATE))

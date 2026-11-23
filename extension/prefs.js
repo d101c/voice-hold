@@ -267,8 +267,10 @@ export default class VoiceHoldPreferences extends ExtensionPreferences {
                     }
                     if (wake === 'listening')
                         resolve(_('Listening'));
+                    else if (wake === 'downloading' || wake === 'wake-downloading')
+                        resolve(_('Downloading the small model of the wake word (54 MB)…'));
                     else if (wake === 'wake-model-missing')
-                        resolve(_('The small model of the wake word is missing: it downloads when the speech engine is updated.'));
+                        resolve(_('The small model of the wake word could not be downloaded: check the network, then switch the wake word off and on.'));
                     else if (wake.startsWith('error') || wake.startsWith('audio') || wake.startsWith('wake:'))
                         resolve(_('Not listening: %s').format(wake));
                     else

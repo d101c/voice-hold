@@ -1,4 +1,4 @@
-"""Command line: `voice-hold-engine [serve|setup [--tts [LANG…]|--commands]|status [--verify]|transcribe FILE|speak TEXT|interpret TEXT|apps|commands-serve|install-service|uninstall [--models]]`."""
+"""Command line: `voice-hold-engine [serve|setup [--tts [LANG…]|--commands|--wake]|status [--verify]|transcribe FILE|speak TEXT|interpret TEXT|apps|commands-serve|install-service|uninstall [--models]]`."""
 import argparse
 import asyncio
 import os
@@ -74,6 +74,14 @@ def cmd_setup(args):
         if not shutil.which('pw-play'):
             print('pw-play not found: install pipewire-audio-client-libraries (Ubuntu) or pipewire-utils', file=sys.stderr)
         return 0
+    if getattr(args, 'wake', False):
+        # `setup --wake`: only the wake word model, for an install that already works.
+        miss = models.setup_wake(base, log)
+        if miss:
+            print('Still missing: ' + ', '.join(miss), file=sys.stderr)
+            return 1
+        print('Wake word model ready. Switch the wake word on in the Voice Hold preferences.')
+        return 0
     if args.commands:
         # `setup --commands`: the local LLM (llama.cpp and its model) and
         # the helper's D-Bus service, for an install that already works.
@@ -113,6 +121,12 @@ def cmd_status(args):
     voices = models.voices_ready(base)
     print(f'voices: {", ".join(voices) if voices else "none (voice-hold-engine setup --tts)"}; '
           f'pw-play: {shutil.which("pw-play") or "NOT FOUND"}')
+    wake_miss = models.wake_missing(base)
+    wake_state = 'ready' if not wake_miss else 'not installed (voice-hold-engine setup --wake)'
+    if args.verify and not wake_miss:
+        bad = models.wake_verify(base)
+        wake_state = 'ready, checksums match' if not bad else 'CHECKSUM MISMATCH: ' + ', '.join(bad)
+    print(f'wake word: {models.WAKE_NAME} {wake_state}')
     from . import llamacpp
     from .commands import jobs
     lm = llamacpp.missing()
@@ -219,6 +233,7 @@ def main(argv=None):
     se = sub.add_parser('setup', help='download the models and install the D-Bus service')
     se.add_argument('--tts', nargs='*', metavar='LANG', help='download the voices for spoken answers (fr, en; all when none given)')
     se.add_argument('--commands', action='store_true', help='download the local LLM for the voice commands (llama.cpp, ~1.3 GB)')
+    se.add_argument('--wake', action='store_true', help='download the wake word model (Kroko fr, ~55 MB)')
     se.set_defaults(fn=cmd_setup)
     st = sub.add_parser('status', help='check models and service')
     st.add_argument('--verify', action='store_true', help='also check the SHA-256 of every model file')

@@ -156,3 +156,37 @@ def test_stream_end_reaches_the_dictation():
     lst._pump(None)
     assert got[-1] is None and lst.failure
     lst.stop()
+
+
+class FlushDetector(FakeDetector):
+    """Only says the phrase once the speech has ended (as a streaming model
+    that holds its last chunk)."""
+    def accept(self, samples):
+        self.seen += len(samples)
+        return None
+
+    def flush(self):
+        return ('hé kodiak', self.end_s) if self.seen else None
+
+
+def test_phrase_said_alone_is_heard_when_the_speech_ends():
+    det = FlushDetector(need=0, end_s=0.1)
+    lst, heard, ev = make(det)
+    run(lst, [0.9] * 6 + [0.0] * 2)
+    assert ev.wait(2)
+    assert heard == ['hé kodiak'] and lst.woken
+    lst.stop()
+
+
+def test_a_late_detector_never_gets_a_chunk_twice():
+    det = FakeDetector(need=10 ** 9, end_s=0)
+    lst, heard, ev = make(det)
+    lst._running = False                       # hold the detection thread back
+    lst.stop()
+    lst._queue = __import__('queue').Queue()
+    lst._running = True
+    run(lst, [0.0] * 30 + [0.9] * 10)          # all queued before any detection
+    while not lst._queue.empty():
+        lst._detect(*lst._queue.get())
+    pre = int(wake.PRE_ROLL_S * RATE / CHUNK) + 1
+    assert det.seen <= (10 + pre) * CHUNK

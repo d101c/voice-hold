@@ -262,3 +262,66 @@ def setup_voice(lang, base=None, log=None):
             shutil.rmtree(target)
         extracted.rename(target)
     return voice_ready(lang, base)
+
+
+# -- wake word -----------------------------------------------------------------
+# The small streaming French recogniser behind the wake word (wakeword.py):
+# Kroko fr 2025-08-06, a zipformer transducer from Banafo's community models
+# (CC-BY-SA-4.0), in the `asr-models` release of sherpa-onnx. Installed by
+# `setup --wake`. Pins: GitHub asset digest, checked against a download on
+# 2026-11-23 (wake-word bench, ticket #16).
+WAKE_NAME = 'sherpa-onnx-streaming-zipformer-fr-kroko-2025-08-06'
+WAKE_MODEL = {
+    'archive_size': 57_220_361,
+    'archive_sha256': 'e6ffd3dc43725cd6c8137b05c739f15607d0df946b9b90eb141e10059efca024',
+    'files': {
+        'encoder.onnx': (70_092_599, 'e02facae1daf6f1f13da67ea3ace7c722516d0868d1768d78c0580bc22cc0c5b'),
+        'decoder.onnx': (617_488, '6aed547570e3ab5afc05429a017cedd3a056c16df3baa5703f02461cefa25bac'),
+        'joiner.onnx': (336_817, 'a51eec759bcdcaae2614686fa2a8b57417b2d420dd55a5a5558b388d35a9b2b6'),
+        'tokens.txt': (5_415, 'fedfb9c844bfb2bf14171f8184863e3d617b815a8667bdd9fc9a3149fde73298'),
+    },
+}
+
+
+def _wake_required():
+    return {f'{WAKE_NAME}/{f}': v for f, v in WAKE_MODEL['files'].items()}
+
+
+def wake_missing(base=None):
+    """Wake word model files absent or not of the pinned size."""
+    return _wrong_size(base or models_dir(), _wake_required())
+
+
+def wake_verify(base=None):
+    """Wake word model files whose SHA-256 does not match the pin."""
+    base = base or models_dir()
+    return [rel for rel, (size, sha) in _wake_required().items()
+            if not (base / rel).is_file() or (base / rel).stat().st_size != size or sha256_of(base / rel) != sha]
+
+
+def setup_wake(base=None, log=None):
+    """Download and unpack the wake word model (~55 MB, 68 MB unpacked).
+    Returns the list of files still missing."""
+    base = base or models_dir()
+    log = log or (lambda s: (sys.stderr.write(s), sys.stderr.flush()))
+    if not wake_missing(base):
+        return []
+    base.mkdir(parents=True, exist_ok=True)
+    log(f'Downloading the wake word model {WAKE_NAME} (~{WAKE_MODEL["archive_size"] >> 20} MB)...\n')
+    with tempfile.TemporaryDirectory(dir=base) as tmp:
+        archive = Path(tmp) / (WAKE_NAME + '.tar.bz2')
+        _fetch(RELEASES + archive.name, archive, log,
+               size=WAKE_MODEL['archive_size'], sha256=WAKE_MODEL['archive_sha256'])
+        log('  extracting...\n')
+        _safe_extract(archive, Path(tmp))
+        archive.unlink()
+        extracted = Path(tmp) / WAKE_NAME
+        shutil.rmtree(extracted / 'test_wavs', ignore_errors=True)
+        bad = wake_verify(Path(tmp))
+        if bad:
+            raise RuntimeError(f'extracted files do not match the pinned checksums: {", ".join(bad)}')
+        target = base / WAKE_NAME
+        if target.exists():
+            shutil.rmtree(target)
+        extracted.rename(target)
+    return wake_missing(base)

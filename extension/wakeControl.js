@@ -107,9 +107,11 @@ export class WakeControl {
         this._engine.listen(options).then(err => {
             if (!this._settings || this._key !== key)
                 return;
-            this._listening = want && !err;
-            this._error = want ? err : '';
-            if (err && want)
+            // The engine fetches the small model first, then listens by itself.
+            const downloading = err === 'wake-downloading';
+            this._listening = want && (!err || downloading);
+            this._error = want && !downloading ? err : '';
+            if (err && want && !downloading)
                 this._scheduleRetry();
             else
                 this._retries = 0;

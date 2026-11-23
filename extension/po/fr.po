@@ -1005,8 +1005,11 @@ msgid "State"
 msgstr "État"
 
 
-msgid "The small model of the wake word is missing: it downloads when the speech engine is updated."
-msgstr "Le petit modèle du mot de réveil manque : il se télécharge avec la mise à jour du moteur vocal."
+msgid "The small model of the wake word could not be downloaded: check the network, then switch the wake word off and on."
+msgstr "Le petit modèle du mot de réveil n'a pas pu être téléchargé : vérifiez le réseau, puis éteignez et rallumez le mot de réveil."
+
+msgid "Downloading the small model of the wake word (54 MB)…"
+msgstr "Téléchargement du petit modèle du mot de réveil (54 Mo)…"
 
 msgid "Not listening: %s"
 msgstr "Pas à l'écoute : %s"

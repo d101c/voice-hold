@@ -11,8 +11,9 @@ hors-ligne.
 - **Maintenez `Ctrl+Espace`** et parlez ; relâchez pour arrêter. **Tapez**-le
   brièvement pour dicter mains libres (un second appui, `Échap` ou quelques
   secondes de silence arrêtent).
-- Ou dites le **mot de réveil** (en option, éteint par défaut) : une dictée
-  mains libres démarre sans toucher au clavier. Le mot est reconnu sur votre
+- Ou dites le **mot de réveil** (en option, éteint par défaut ; « Hé Kodiak »
+  sauf si vous en choisissez un autre) : une dictée mains libres démarre sans
+  toucher au clavier. Le mot est reconnu sur votre
   ordinateur ; l'écoute se met en pause quand l'écran est verrouillé ou
   qu'une autre application enregistre.
 - Le texte arrive **dans le champ sous le curseur**, bloc par bloc, pendant

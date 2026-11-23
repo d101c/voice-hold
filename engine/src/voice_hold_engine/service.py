@@ -89,6 +89,7 @@ class Engine:
         self._idle_handle = None
         self._wake = None                     # wake.WakeListener while the wake word is listened for
         self._wake_error = ''
+        self._wake_download = None            # the wake model being downloaded (a task)
         self.exit_event = asyncio.Event()
         self.quit_requested = False           # Quit(): exit even if busy
 
@@ -142,6 +143,8 @@ class Engine:
             return 'listening'
         if self._wake is not None and self._wake.failure:
             return f'error: {self._wake.failure}'
+        if self._wake_download is not None:
+            return 'downloading'
         return self._wake_error or 'off'
 
     async def listen(self, options):
@@ -151,6 +154,7 @@ class Engine:
         self._cancel_idle()
         self._stop_listening()
         self._wake_error = ''
+        self._wake_wanted = options            # what to do once a download ends
         if not bool(_opt(options, 'enabled', False)):
             self._schedule_idle()
             return ''
@@ -158,8 +162,11 @@ class Engine:
         from .asr import SileroVad
         from .wake import WakeListener
         if wakeword.missing():
-            self._wake_error = 'wake-model-missing'
-            self._schedule_idle()
+            # The small model (~54 MB) comes the first time the word is
+            # switched on; listening starts once it is there.
+            if self._wake_download is None:
+                self._wake_download = self._loop.create_task(self._download_wake(options))
+            self._wake_error = 'wake-downloading'
             return self._wake_error
         try:
             phrases = wakeword.phrases_from_json(str(_opt(options, 'phrases', '')))
@@ -188,6 +195,22 @@ class Engine:
             listener.suspend(True)
         self._schedule_idle()
         return ''
+
+    async def _download_wake(self, options):
+        try:
+            miss = await self._loop.run_in_executor(None, lambda: models.setup_wake(log=lambda _m: None))
+        except Exception as e:
+            miss = [str(e)]
+        self._wake_download = None
+        if miss:
+            self._wake_error = 'wake-model-missing'
+            self._schedule_idle()
+            return
+        wanted = getattr(self, '_wake_wanted', options)
+        if bool(_opt(wanted, 'enabled', False)):
+            await self.listen(wanted)
+        else:
+            self._schedule_idle()
 
     def _stop_listening(self):
         if self._wake is not None:
@@ -650,8 +673,8 @@ class Engine:
             self.unload()
             self._emit('State', IDLE)
             self._schedule_idle()
-        elif self._wake is not None and self._wake.running:
-            self._schedule_idle()             # listening for the wake word: stay
+        elif (self._wake is not None and self._wake.running) or self._wake_download is not None:
+            self._schedule_idle()             # listening for the wake word, or fetching its model: stay
         else:
             self.exit_event.set()
 

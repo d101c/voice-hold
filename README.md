@@ -9,8 +9,8 @@ Press-and-hold dictation for GNOME, fully offline.
 
 - **Hold `Ctrl+Space`** and talk; release to stop. **Tap** it instead to dictate
   hands-free (tap again, `Esc`, or a few seconds of silence stop it).
-- Or say the **wake word** (optional, off by default): a hands-free dictation
-  starts without touching the keyboard. The word is recognised on your
+- Or say the **wake word** (optional, off by default; *"Hé Kodiak"* unless you
+  choose another): a hands-free dictation starts without touching the keyboard. The word is recognised on your
   computer; listening pauses while the screen is locked or another
   application records.
 - The text lands **in the field under your cursor**, block by block, while

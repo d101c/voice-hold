@@ -165,7 +165,7 @@
       <description>Listen all the time for the wake word, and start a hands-free dictation when it is heard. The microphone stays open (the system shows it).</description>
     </key>
     <key name="wake-phrase" type="s">
-      <default>'Hé Holdie'</default>
+      <default>'Hé Kodiak'</default>
       <summary>Wake phrase</summary>
       <description>The word or phrase to say; several, separated by commas.</description>
     </key>
