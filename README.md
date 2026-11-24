@@ -20,7 +20,8 @@ Press-and-hold dictation for GNOME, fully offline.
 - A pill floats at the bottom of the screen, above the dock, with the
   microphone level and the words. It can hang from the top bar or follow the
   text cursor instead (settings). Short sounds mark the start and the end;
-  music and videos pause while you speak.
+  music and videos pause, or are turned down, while you speak. Change window
+  while you dictate and the words follow your cursor.
 - **Offline.** French, English and 23 other European languages, with
   punctuation and capitals, recognised on your CPU by Parakeet TDT 0.6B
   "Ultra" (via sherpa-onnx). No account, no network, no cloud. It works on a plane.
@@ -28,7 +29,12 @@ Press-and-hold dictation for GNOME, fully offline.
   self-corrections (*"at 2, no, I mean 3"* gives *"at 3"*, *"scratch that"*
   drops the sentence); lists (*"firstly… secondly…"*).
 - **Your vocabulary:** names and jargon written your way, and replacements
-  (*"my address"* becomes the full address).
+  (*"my address"* becomes the full address). Retype a word just after a
+  dictation and its spelling is learned by itself.
+- **Clean-up**, your choice: the rules alone (instant), a language model on
+  your computer, or a fast cloud model with your own key.
+- **Usage:** how many words you dictated and the time it saved you, counted
+  on your computer, numbers only.
 - **Modes** per kind of application (email, chat, code, other): as said,
   clean message, email, notes or your own instruction. A mode has a language
   model rewrite the whole text: the local one, or a cloud model if you switch
