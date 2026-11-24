@@ -179,6 +179,8 @@ the next version is grouped in a milestone.
 - **Report a bug:** open an issue with your distribution, GNOME Shell version,
   what you did, what you expected and what happened, plus any error shown by
   `journalctl -b /usr/bin/gnome-shell`.
+- **Follow the project:** new versions are announced on Mastodon,
+  [@d101c@mastodon.social](https://mastodon.social/@d101c).
 - **Suggest an idea:** open an issue that describes what you want to do.
 
 ## How it was made

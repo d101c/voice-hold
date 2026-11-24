@@ -170,6 +170,8 @@ prévu pour la prochaine version est regroupé dans un jalon (milestone).
   version de GNOME Shell, ce que vous avez fait, ce que vous attendiez et ce
   qui s'est passé, avec les erreurs affichées par
   `journalctl -b /usr/bin/gnome-shell`.
+- **Suivre le projet :** les nouvelles versions sont annoncées sur Mastodon,
+  [@d101c@mastodon.social](https://mastodon.social/@d101c).
 - **Proposer une idée :** ouvrez un ticket qui décrit ce que vous voulez faire.
 
 ## Comment il a été fait
