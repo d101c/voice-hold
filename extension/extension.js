@@ -123,6 +123,9 @@ export default class VoiceHoldExtension extends Extension {
                     action: _('Try it now'),
                     iconName: 'audio-input-microphone-symbolic',
                     onActivate: () => {
+                        // Right after login the overview is still up: leave
+                        // it, so the window is in front and ready to try.
+                        Main.overview.hide();
                         this._settings.set_string('prefs-page', 'setup');
                         this.openPreferences();
                     },
