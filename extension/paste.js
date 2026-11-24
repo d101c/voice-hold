@@ -30,7 +30,6 @@ export class Paster {
             GLib.Source.remove(this._timeoutId);
             this._timeoutId = 0;
         }
-        this._device?.run_dispose();
         this._device = null;
     }
 

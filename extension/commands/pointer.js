@@ -23,8 +23,6 @@ export class Pointer {
 
     destroy() {
         this.hide();
-        this._mouse?.run_dispose();
-        this._keyboard?.run_dispose();
         this._mouse = null;
         this._keyboard = null;
     }
