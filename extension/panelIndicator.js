@@ -99,6 +99,17 @@ class VoiceHoldIndicator extends PanelMenu.Button {
         }, this);
         this.menu.addMenuItem(this._toggle);
 
+        // The start and end sounds, one click away.
+        this._soundsToggle = new PopupMenu.PopupSwitchMenuItem(
+            _('Sounds'), this._settings.get_boolean('sounds'));
+        this._soundsToggle.connectObject('toggled', (_item, state) => {
+            if (this._settings.get_boolean('sounds') !== state)
+                this._settings.set_boolean('sounds', state);
+        }, this);
+        this.menu.addMenuItem(this._soundsToggle);
+        this._settings.connectObject('changed::sounds', () =>
+            this._soundsToggle.setToggleState(this._settings.get_boolean('sounds')), this);
+
         // The menu closes first, so the paste goes to the window under it.
         this._pasteItem = new PopupMenu.PopupMenuItem(_('Paste the last dictation'));
         this._pasteItem.connectObject('activate', () => this._getDictation()?.pasteLast(), this);
