@@ -1242,3 +1242,21 @@ msgstr "Continuer à dicter là-bas"
 
 msgid "Stop the dictation"
 msgstr "Arrêter la dictée"
+
+msgid "Voice Hold is ready"
+msgstr "Voice Hold est prêt"
+
+msgid "Click where you write, hold %s and speak."
+msgstr "Cliquez là où vous écrivez, maintenez %s et parlez."
+
+msgid "Try it now"
+msgstr "Essayer maintenant"
+
+msgid "While you dictate, a small pill floats at the bottom of the screen with the microphone level and the words."
+msgstr "Pendant la dictée, une petite pastille flotte en bas de l'écran avec le niveau du micro et les mots."
+
+msgid "That is all there is to it. It works the same wherever you write: click there, hold the shortcut, speak."
+msgstr "C'est tout. Ça marche de la même façon partout où vous écrivez : cliquez, maintenez le raccourci, parlez."
+
+msgid "Choose a shortcut in the preferences"
+msgstr "Choisissez un raccourci dans les préférences"

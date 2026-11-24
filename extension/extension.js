@@ -8,6 +8,7 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import {Extension, gettext as _} from 'resource:///org/gnome/shell/extensions/extension.js';
 
 import {Dictation} from './dictation.js';
+import {accelLabel} from './accelLabel.js';
 import {addIndicator} from './panelIndicator.js';
 import {engineInstalled, notifySetup} from './welcome.js';
 
@@ -102,8 +103,10 @@ export default class VoiceHoldExtension extends Extension {
         });
     }
 
-    // Once, right after the first install: the speech engine is a separate
-    // download, and nothing says so until the shortcut is pressed.
+    // Once, in the first session after the install. Without the speech
+    // engine (the extension came alone): one click installs it. With it
+    // (the one-line installer brought both): nothing else would tell the
+    // user that it is ready, nor what to press.
     _welcome() {
         if (this._settings.get_boolean('welcome-shown'))
             return;
@@ -112,8 +115,21 @@ export default class VoiceHoldExtension extends Extension {
             if (!this._settings || installed === null)
                 return;
             this._settings.set_boolean('welcome-shown', true);
-            if (installed)
+            if (installed) {
+                const accel = accelLabel(this._settings.get_strv('dictation-shortcut')[0] ?? '', _);
+                this._welcomeSource = notifySetup({
+                    title: _('Voice Hold is ready'),
+                    body: _('Click where you write, hold %s and speak.').format(accel),
+                    action: _('Try it now'),
+                    iconName: 'audio-input-microphone-symbolic',
+                    onActivate: () => {
+                        this._settings.set_string('prefs-page', 'setup');
+                        this.openPreferences();
+                    },
+                });
+                this._welcomeSource.connectObject('destroy', () => (this._welcomeSource = null), this);
                 return;
+            }
             this._welcomeSource = notifySetup({
                 title: _('Voice Hold: one last step'),
                 body: _('Install the speech engine: one click, about 500 MB.'),

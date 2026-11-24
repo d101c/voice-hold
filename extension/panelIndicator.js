@@ -10,6 +10,7 @@ import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import {getMixerControl} from 'resource:///org/gnome/shell/ui/status/volume.js';
 
+import {accelLabel} from './accelLabel.js';
 import {accentColor} from './accentColor.js';
 import {EngineClient} from './engine.js';
 import {speechLowMemory} from './memoryText.js';
@@ -72,6 +73,16 @@ class VoiceHoldIndicator extends PanelMenu.Button {
             this._icon = null;
         });
 
+        // What to do, said at the top of the menu, with the shortcut as it
+        // is set now.
+        this._howItem = new PopupMenu.PopupMenuItem('', {reactive: false});
+        this.menu.addMenuItem(this._howItem);
+        const how = () => {
+            const accel = accelLabel(this._settings.get_strv('dictation-shortcut')[0] ?? '', _);
+            this._howItem.label.text = accel ? _('Hold %s and speak').format(accel) : _('Choose a shortcut in the preferences');
+        };
+        this._settings.connectObject('changed::dictation-shortcut', how, this);
+        how();
         this._statusItem = new PopupMenu.PopupMenuItem('', {reactive: false});
         this.menu.addMenuItem(this._statusItem);
         this._modelItem = new PopupMenu.PopupMenuItem('');

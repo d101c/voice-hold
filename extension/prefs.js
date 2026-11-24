@@ -87,7 +87,6 @@ export default class VoiceHoldPreferences extends ExtensionPreferences {
             components: ['voice'],
             shortcut,
             accelerator: shortcut ? accel : null,
-            picture: `${this.path}/icons/pill.png`,
         });
         const vocab = buildVocabPage(settings, _);
         const modes = buildModesPage(settings, _);
@@ -105,7 +104,13 @@ export default class VoiceHoldPreferences extends ExtensionPreferences {
         // The test bench opens a given page (tools/headless): its number,
         // from 0, in VOICE_HOLD_PREFS_PAGE.
         const pages = [page, vocab, modes, commands, cloud, usage, setup];
-        const wanted = pages[parseInt(GLib.getenv('VOICE_HOLD_PREFS_PAGE') ?? '', 10)];
+        let wanted = pages[parseInt(GLib.getenv('VOICE_HOLD_PREFS_PAGE') ?? '', 10)];
+        // The welcome notification ("Try it now") asks for the page with
+        // the field to try the dictation in, once.
+        if (settings.get_string('prefs-page') === 'setup') {
+            wanted = setup;
+            settings.set_string('prefs-page', '');
+        }
         this._engineStatus().then(s => {
             if (wanted)
                 window.set_visible_page(wanted);
