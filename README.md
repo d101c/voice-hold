@@ -57,7 +57,16 @@ Second member of the *Hold* family after
 
 ## Install
 
-**The easy way, no terminal:** install the extension, then press `Ctrl`+`Space`
+**One line:** this installs the extension, the speech engine and its models
+(about 500 MB, into your home folder), and says what it will do before doing it:
+
+```bash
+curl -fsSL https://gnome-details.web.app/voice-hold/install.sh | bash -s -- voice-hold
+```
+
+Log out and back in: a notification says when Voice Hold is ready.
+
+**No terminal:** install the extension, then press `Ctrl`+`Space`
 (or the *Install* button of the notification). The settings open on an
 *Installation* page: one *Install* button downloads the speech engine and its
 models (about 500 MB) into your home folder, and a field lets you try the
@@ -170,12 +179,22 @@ the next version is grouped in a milestone.
 - **Report a bug:** open an issue with your distribution, GNOME Shell version,
   what you did, what you expected and what happened, plus any error shown by
   `journalctl -b /usr/bin/gnome-shell`.
+- **Follow the project:** new versions are announced on Mastodon,
+  [@d101c@mastodon.social](https://mastodon.social/@d101c).
 - **Suggest an idea:** open an issue that describes what you want to do.
 
-## Transparency
+## How it was made
 
-Written with an AI coding assistant (Claude), designed, reviewed and tested
-by hand by the author, who maintains it.
+Voice Hold was developed with substantial help from an AI coding assistant
+(Claude, by Anthropic), which wrote most of the code. The author chose the
+features and the approach, reviews the changes, uses it on his own laptop
+(GNOME 51, French and English) and maintains the project. The engine is
+covered by 473 pytest tests and the extension by plain-gjs test files
+(`extension/tests/`); a headless GNOME Shell bench (`tools/headless/`) plays a
+recorded voice through a whole dictation, and each release is installed from
+scratch on a clean virtual machine before it is announced. The accuracy
+figures quoted in this README come from recorded French and English speech,
+not from impressions. Bug reports are read and answered by a human.
 
 ## Licences
 

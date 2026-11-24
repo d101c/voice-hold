@@ -60,7 +60,17 @@ Deuxième membre de la famille *Hold* après
 
 ## Installation
 
-**Le plus simple, sans terminal :** installez l'extension, puis appuyez sur
+**En une ligne :** elle installe l'extension, le moteur vocal et ses modèles
+(environ 500 Mo, dans votre dossier personnel), et annonce ce qu'elle va faire
+avant de le faire :
+
+```bash
+curl -fsSL https://gnome-details.web.app/voice-hold/install.sh | bash -s -- voice-hold
+```
+
+Fermez puis rouvrez la session : une notification indique que Voice Hold est prêt.
+
+**Sans terminal :** installez l'extension, puis appuyez sur
 `Ctrl`+`Espace` (ou sur le bouton *Installer* de la notification). Les réglages
 s'ouvrent sur une page *Installation* : un bouton *Installer* télécharge le
 moteur vocal et ses modèles (environ 500 Mo) dans votre dossier personnel, et
@@ -160,12 +170,23 @@ prévu pour la prochaine version est regroupé dans un jalon (milestone).
   version de GNOME Shell, ce que vous avez fait, ce que vous attendiez et ce
   qui s'est passé, avec les erreurs affichées par
   `journalctl -b /usr/bin/gnome-shell`.
+- **Suivre le projet :** les nouvelles versions sont annoncées sur Mastodon,
+  [@d101c@mastodon.social](https://mastodon.social/@d101c).
 - **Proposer une idée :** ouvrez un ticket qui décrit ce que vous voulez faire.
 
-## Transparence
+## Comment il a été fait
 
-Écrit avec un assistant de code IA (Claude), conçu, relu et testé à la main
-par l'auteur, qui le maintient.
+Voice Hold a été développé avec l'aide importante d'un assistant de code IA
+(Claude, d'Anthropic), qui a écrit la plus grande partie du code. L'auteur a
+choisi les fonctions et l'approche, relit les changements, s'en sert sur son
+propre portable (GNOME 51, français et anglais) et maintient le projet. Le
+moteur est couvert par 473 tests pytest et l'extension par des fichiers de
+test gjs (`extension/tests/`) ; un banc GNOME Shell sans écran
+(`tools/headless/`) joue une voix enregistrée à travers une dictée entière, et
+chaque version est installée de zéro sur une machine virtuelle propre avant
+d'être annoncée. Les taux d'erreur cités dans ce README viennent de parole
+enregistrée en français et en anglais, pas d'impressions. Les rapports de bogue
+sont lus et traités par un humain.
 
 ## Licences
 
