@@ -20,7 +20,7 @@ import Soup from 'gi://Soup?version=3.0';
 
 // Pinned on a release tag of hold-setup, never on a moving branch. Read only
 // after a click on Install.
-export const MANIFEST_URL = 'https://raw.githubusercontent.com/d101c/hold-setup/v0.6/manifest.json';
+export const MANIFEST_URL = 'https://raw.githubusercontent.com/d101c/hold-setup/v0.8/manifest.json';
 const CHUNK = 256 * 1024;
 
 export function dataDir() {
