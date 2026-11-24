@@ -1022,3 +1022,34 @@ msgstr "Précision d'abord : écrire le texte à la fin"
 
 msgid "The words show grey in the field while you speak; when you stop, the whole dictation is recognised again at once, with all its context, and written in their place. A second or two more at the end."
 msgstr "Les mots s'affichent en gris dans le champ pendant que vous parlez ; à l'arrêt, toute la dictée est reconnue à nouveau d'un bloc, avec tout son contexte, et écrite à leur place. Une ou deux secondes de plus à la fin."
+
+msgid "Let it see the active window"
+msgstr "Lui laisser voir la fenêtre active"
+
+msgid "For “where is…” and “click on…”: a picture of the window you are working in, sent only when the model needs to look. Never the whole screen."
+msgstr "Pour « où est… » et « clique sur… » : une capture de la fenêtre où vous travaillez, envoyée seulement quand le modèle a besoin de regarder. Jamais l'écran entier."
+
+msgid "No picture of the window to point at"
+msgstr "Pas de capture de la fenêtre pour montrer l'endroit"
+
+msgid "No picture of the window to click on"
+msgstr "Pas de capture de la fenêtre pour cliquer"
+
+msgid "Written"
+msgstr "Écrit"
+
+
+msgid "Click: %s"
+msgstr "Clic : %s"
+
+msgid "Keys: %s (%s)"
+msgstr "Touches : %s (%s)"
+
+msgid "Click"
+msgstr "Cliquer"
+
+msgid "Press"
+msgstr "Appuyer"
+
+msgid "Unknown shortcut: %s"
+msgstr "Raccourci inconnu : %s"

@@ -138,6 +138,11 @@
       <summary>Cloud provider</summary>
       <description>Which provider's model is used when cloud-enabled is on.</description>
     </key>
+    <key name="cloud-screen" type="b">
+      <default>true</default>
+      <summary>Let the cloud model see the active window</summary>
+      <description>When on, a picture of the window you are working in is taken when you give a voice command, and sent to the cloud model only if it needs to look ("where is...", "click on..."). Never the whole screen.</description>
+    </key>
     <key name="cloud-model" type="s">
       <default>'claude-sonnet-5-5'</default>
       <summary>Cloud model</summary>

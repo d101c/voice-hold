@@ -12,6 +12,7 @@ interpreter's, so the extension runs it unchanged.
 
 The API key is read from the GNOME keyring, where the preferences stored it.
 """
+import base64
 import json
 import re
 import subprocess
@@ -45,8 +46,20 @@ commands for these subjects, and trust its verdicts.
 - Before changing something, check its current state; if it is already as asked, say so \
 and do nothing.
 
+When the request is about what is on the screen ("where is...", "how do I... in this \
+window", "click on...", "do it for me"), call look_at_screen: you get a picture of the \
+window the user is working in, in pixels.
+
 Then end with exactly one of:
 - a plain answer;
+- type_text when the user asks you to write something where they are ("écris-moi ... \
+ici", "rédige ..."): the full text, as long as needed, goes into their text field. \
+Only then do the short-answer rules not apply;
+- point_at to show where to click on the screen picture (a ring appears there), with one \
+sentence on what to do next;
+- click_at to click there for the user, or press_keys for a keyboard shortcut (e.g. \
+"ctrl+h"): the user confirms first; one step at a time, they can say "continue" for the \
+next one;
 - gnome_action for what it covers (volume, brightness, dark mode, do not disturb, wifi, \
 bluetooth, workspace, screenshot, lock, open an app, close windows): it runs at once;
 - propose_command for anything else that changes the system: the user confirms it first, \
@@ -145,7 +158,85 @@ TOOLS = [
         'strict': True,
     },
 ]
-FINAL_TOOLS = {'gnome_action', 'propose_command', 'power'}
+FINAL_TOOLS = {'gnome_action', 'propose_command', 'power', 'type_text', 'point_at', 'click_at', 'press_keys'}
+# What a question may still end with: showing is not changing.
+SHOWING_TOOLS = {'point_at'}
+
+SCREEN_TOOL = {
+    'name': 'look_at_screen',
+    'description': 'A picture of the window the user is working in (taken when they spoke). '
+                   'Coordinates in point_at / click_at are pixels of this picture.',
+    'input_schema': {'type': 'object', 'properties': {}, 'additionalProperties': False},
+}
+SCREEN_FINAL_TOOLS = [
+    {
+        'name': 'point_at',
+        'description': 'Show the user where to click: a ring appears at this point of the '
+                       'screen picture. Ends your turn.',
+        'input_schema': {
+            'type': 'object',
+            'properties': {
+                'x': {'type': 'integer'}, 'y': {'type': 'integer'},
+                'label': {'type': 'string', 'description': 'What is there, a few words.'},
+                'say': {'type': 'string', 'description': 'One sentence: what to do, and what next.'},
+            },
+            'required': ['x', 'y', 'label', 'say'],
+            'additionalProperties': False,
+        },
+        'strict': True,
+    },
+    {
+        'name': 'click_at',
+        'description': 'Click at this point of the screen picture for the user, after they '
+                       'confirm. One click per turn. Ends your turn.',
+        'input_schema': {
+            'type': 'object',
+            'properties': {
+                'x': {'type': 'integer'}, 'y': {'type': 'integer'},
+                'label': {'type': 'string', 'description': 'What is clicked, a few words.'},
+                'double': {'type': 'boolean'},
+                'say': {'type': 'string', 'description': 'One sentence for the user.'},
+            },
+            'required': ['x', 'y', 'label', 'double', 'say'],
+            'additionalProperties': False,
+        },
+        'strict': True,
+    },
+]
+TEXT_TOOLS = [
+    {
+        'name': 'type_text',
+        'description': 'Write this text where the user is (their focused text field). Use it '
+                       'when they ask you to write, draft or type something there. Plain text; '
+                       'line breaks and "- " lists are fine. Ends your turn.',
+        'input_schema': {
+            'type': 'object',
+            'properties': {
+                'text': {'type': 'string'},
+                'say': {'type': 'string', 'description': 'A few words for the pill.'},
+            },
+            'required': ['text', 'say'],
+            'additionalProperties': False,
+        },
+        'strict': True,
+    },
+    {
+        'name': 'press_keys',
+        'description': "Press a keyboard shortcut in the user's window, after they confirm, "
+                       'e.g. "ctrl+h", "ctrl+shift+t", "f11", "enter". Ends your turn.',
+        'input_schema': {
+            'type': 'object',
+            'properties': {
+                'keys': {'type': 'string'},
+                'label': {'type': 'string', 'description': 'What it does, a few words.'},
+            },
+            'required': ['keys', 'label'],
+            'additionalProperties': False,
+        },
+        'strict': True,
+    },
+]
+
 
 # A question gets an answer, never an action: "est-ce que mon pare-feu est
 # activé ?" once came back as `sudo ufw enable`. A request phrased as a
@@ -215,6 +306,12 @@ def _look(name, args):
     return 'unknown tool'
 
 
+def _look_or_screen(use, screen):
+    if use.name == 'look_at_screen':
+        return _screen_result(screen)
+    return _look(use.name, use.input)
+
+
 def _final(name, args):
     """The intent a final tool call stands for."""
     if name == 'gnome_action':
@@ -225,13 +322,41 @@ def _final(name, args):
     if name == 'propose_command':
         return {'action': 'run_shell', 'command': args.get('command', ''),
                 'summary': args.get('summary', ''), 'needs_confirmation': True}
+    if name == 'type_text':
+        return {'action': 'type_text', 'text': args.get('text', ''), 'say': args.get('say', '')}
+    if name == 'point_at':
+        return {'action': 'point', 'x': int(args.get('x', 0)), 'y': int(args.get('y', 0)),
+                'label': args.get('label', ''), 'say': args.get('say', '')}
+    if name == 'click_at':
+        return {'action': 'click', 'x': int(args.get('x', 0)), 'y': int(args.get('y', 0)),
+                'label': args.get('label', ''), 'double': bool(args.get('double')),
+                'say': args.get('say', ''), 'needs_confirmation': True}
+    if name == 'press_keys':
+        return {'action': 'keys', 'keys': args.get('keys', ''), 'label': args.get('label', ''),
+                'needs_confirmation': True}
     return {'action': 'power', 'power_action': args.get('power_action', ''), 'needs_confirmation': True}
 
 
-def interpret(text, *, provider='anthropic', model=DEFAULT_MODEL, client=None, key=None, context=None):
+def _screen_result(screen):
+    """The tool result of look_at_screen: the picture the extension took of
+    the focused window when the user spoke."""
+    try:
+        with open(screen['path'], 'rb') as f:
+            data = base64.standard_b64encode(f.read()).decode()
+    except (OSError, KeyError, TypeError):
+        return 'No screen picture is available.'
+    return [
+        {'type': 'image', 'source': {'type': 'base64', 'media_type': 'image/png', 'data': data}},
+        {'type': 'text', 'text': f"The user's window, {screen.get('width')}x{screen.get('height')} px."},
+    ]
+
+
+def interpret(text, *, provider='anthropic', model=DEFAULT_MODEL, client=None, key=None, context=None,
+              screen=None):
     """Intent dict for `text`, or raise CloudError. `context`: the previous
     exchange as [user text, assistant answer], so that "oui, vas-y" follows
-    « Voulez-vous que je l'active ? ».
+    « Voulez-vous que je l'active ? ». `screen`: {path, width, height} of a
+    picture of the focused window, sent only if the model asks for it.
     """
     if provider not in PROVIDERS:
         raise CloudError('cloud-provider-unsupported')
@@ -252,12 +377,13 @@ def interpret(text, *, provider='anthropic', model=DEFAULT_MODEL, client=None, k
         messages += [{'role': 'user', 'content': context[0]}, {'role': 'assistant', 'content': context[1]}]
     messages.append({'role': 'user', 'content': text})
     question = is_question(text)
+    tools = TOOLS + TEXT_TOOLS + ([SCREEN_TOOL] + SCREEN_FINAL_TOOLS if screen else [])
     t0 = time.monotonic()
     looked = []
     for _ in range(MAX_TURNS):
         if time.monotonic() - t0 > DEADLINE_S:
             raise CloudError('cloud-timeout')
-        kwargs = dict(model=model, max_tokens=4096, system=SYSTEM, tools=TOOLS, messages=messages,
+        kwargs = dict(model=model, max_tokens=8192, system=SYSTEM, tools=tools, messages=messages,
                       output_config={'effort': 'low'})
         try:
             if model in FALLBACK_MODELS:
@@ -283,12 +409,13 @@ def interpret(text, *, provider='anthropic', model=DEFAULT_MODEL, client=None, k
         uses = [b for b in msg.content if b.type == 'tool_use']
         said = ' '.join(b.text for b in msg.content if b.type == 'text').strip()
         final = next((u for u in uses if u.name in FINAL_TOOLS), None)
-        if final is not None and question:
+        if final is not None and question and final.name not in SHOWING_TOOLS:
             # Send it back: every tool call gets its result, the action none.
+            blocked = FINAL_TOOLS - SHOWING_TOOLS
             messages.append({'role': 'assistant', 'content': msg.content})
             messages.append({'role': 'user', 'content': [
-                {'type': 'tool_result', 'tool_use_id': u.id, 'is_error': u.name in FINAL_TOOLS,
-                 'content': NOT_NOW if u.name in FINAL_TOOLS else _look(u.name, u.input)}
+                {'type': 'tool_result', 'tool_use_id': u.id, 'is_error': u.name in blocked,
+                 'content': NOT_NOW if u.name in blocked else _look_or_screen(u, screen)}
                 for u in uses]})
             continue
         if final is not None:
@@ -303,6 +430,6 @@ def interpret(text, *, provider='anthropic', model=DEFAULT_MODEL, client=None, k
         results = []
         for u in uses:
             looked.append(u.name if u.name != 'check' else f"check:{u.input.get('topic')}")
-            results.append({'type': 'tool_result', 'tool_use_id': u.id, 'content': _look(u.name, u.input)})
+            results.append({'type': 'tool_result', 'tool_use_id': u.id, 'content': _look_or_screen(u, screen)})
         messages.append({'role': 'user', 'content': results})
     raise CloudError('cloud-timeout')

@@ -114,7 +114,9 @@ class Interpreter:
             intent['needs_confirmation'] = True
         elif action == 'answer' and intent.get('text') == 'time':
             intent['text'] = time.strftime('%H:%M')
-        elif action not in CLOSED and action not in ('answer', 'unknown'):
+        elif action in ('click', 'keys'):
+            intent['needs_confirmation'] = True
+        elif action not in CLOSED and action not in ('answer', 'unknown', 'type_text', 'point'):
             intent['action'] = 'unknown'
             intent['reason'] = f'unsupported action {action!r}'
         intent['transcript'] = text

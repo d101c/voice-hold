@@ -176,3 +176,38 @@ def test_the_previous_exchange_is_kept_for_a_follow_up():
     assert seen[0] is None
     assert seen[1] == ['Est-ce que mon pare-feu est activé ?', "Non. Voulez-vous que je l'active ?"]
     assert out['command'] == 'sudo ufw enable'
+
+
+def test_screen_and_text_tools(tmp_path):
+    shot = tmp_path / 'w.png'
+    shot.write_bytes(b'\x89PNG fake')
+    screen = {'path': str(shot), 'width': 800, 'height': 600}
+    c = FakeClient(msg(use('look_at_screen', {}), stop='tool_use'),
+                   msg(use('point_at', {'x': 10, 'y': 20, 'label': 'Fichier', 'say': 'Cliquez sur Fichier.'}), stop='tool_use'))
+    i = cloud.interpret("Où est l'export PDF ?", client=c, screen=screen)
+    assert i['action'] == 'point' and (i['x'], i['y']) == (10, 20), 'showing is allowed for a question'
+    names = [t['name'] for t in c.requests[0]['tools']]
+    assert 'look_at_screen' in names and 'click_at' in names
+    picture = c.requests[1]['messages'][-1]['content'][0]['content']
+    assert picture[0]['type'] == 'image'
+    # Without a picture, no screen tools.
+    c = FakeClient(msg(use('type_text', {'text': 'Pot-au-feu : ...', 'say': 'Recette écrite.'}), stop='tool_use'))
+    i = cloud.interpret('Écris-moi la recette du pot-au-feu ici', client=c)
+    assert i == {'action': 'type_text', 'text': 'Pot-au-feu : ...', 'say': 'Recette écrite.', 'looked': []}
+    assert 'look_at_screen' not in [t['name'] for t in c.requests[0]['tools']]
+
+
+def test_a_question_cannot_click():
+    c = FakeClient(msg(use('press_keys', {'keys': 'ctrl+h', 'label': 'fichiers cachés'}), stop='tool_use'),
+                   msg(text('Appuyez sur Ctrl+H.')))
+    assert cloud.interpret('Comment j’affiche les fichiers cachés ?', client=c)['action'] == 'answer'
+
+
+def test_interpreter_keeps_the_new_actions():
+    for intent in ({'action': 'type_text', 'text': 'x'}, {'action': 'point', 'x': 1, 'y': 2},
+                   {'action': 'click', 'x': 1, 'y': 2}, {'action': 'keys', 'keys': 'ctrl+h'}):
+        it = Interpreter(cloud_fn=lambda t, **kw: dict(intent), use_llm=False)
+        it.cloud = {'provider': 'anthropic', 'model': 'claude-sonnet-5-5'}
+        out = it.interpret('quelque chose de libre')
+        assert out['action'] == intent['action'], out
+    assert out['needs_confirmation'] is True
