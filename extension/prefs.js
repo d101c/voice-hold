@@ -186,7 +186,7 @@ export default class VoiceHoldPreferences extends ExtensionPreferences {
             title: _('Runs on this computer, offline'),
             subtitle: _('A separate helper program recognises your voice. The Installation page installs it for you; the command below does the same by hand.'),
         }));
-        const cmdRow = new Adw.ActionRow({title: _('Install command'), subtitle: INSTALL_CMD, subtitle_selectable: true});
+        const cmdRow = new Adw.ActionRow({title: _('Install command'), subtitle: GLib.markup_escape_text(INSTALL_CMD, -1), subtitle_selectable: true});
         cmdRow.add_css_class('property');
         const copy = new Gtk.Button({icon_name: 'edit-copy-symbolic', valign: Gtk.Align.CENTER, tooltip_text: _('Copy')});
         copy.add_css_class('flat');
