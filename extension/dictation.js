@@ -83,12 +83,14 @@ export class Dictation {
         this._paster = new Paster();
         this._history = new HistoryWriter();
         this._usage = new UsageWriter();
+        this._followIds = new Set();
         // A word of the last dictation retyped another way joins the
         // vocabulary (vocabLearn.js).
         this._learnFocus = null;
         this._learner = new VocabLearner({
             read: () => Main.inputMethod.getSurroundingText()?.[0] ?? null,
-            stillThere: () => !!this._learnFocus && Main.inputMethod.currentFocus === this._learnFocus,
+            stillThere: () => !!this._learnFocus && Main.inputMethod.currentFocus === this._learnFocus &&
+                global.display.focus_window === this._learnWindow,
             learn: (from, to) => this._learnWord(to),
         });
         this._pasteLastId = 0;
@@ -148,6 +150,7 @@ export class Dictation {
         this._endSession();
         this._learner.stop();
         this._learner = null;
+        this._clearFollow();
         this._wake.destroy();
         this._wake = null;
         this._keyHook.uninstall();
@@ -351,6 +354,9 @@ export class Dictation {
             clipboard: !this._sink.available,   // no field: pasted at the end
             text: '',                           // what was said, for pasteLast() and the history
             instruction: this._modeInstruction(global.display.focus_window),
+            // The words follow the cursor when the focus moves (_follow()).
+            follow: this._settings.get_string('focus-change') === 'follow',
+            held: [],                           // blocks waiting for a field
         };
         // Words held back until the end: no field to write into, or a mode.
         // "Accuracy first": the words show grey in the field while you speak,
@@ -568,18 +574,79 @@ export class Dictation {
 
     // -- focus ---------------------------------------------------------------
 
-    // The dictated text only ever goes to the window and field focused at
-    // start. A focus change cancels: the grey partial is dropped, blocks
-    // already committed stay.
+    // Where the words go when the focus moves during a dictation
+    // (`focus-change`):
+    //   follow  the dictation goes on and the words follow the cursor, into
+    //           the field focused when each block is ready (Alt+Tab to
+    //           another window, a click in another field). A block that
+    //           finds no field waits (session.held) for the next one, or is
+    //           pasted at the end.
+    //   stop    the text only ever goes to the window and field focused at
+    //           the start: a focus change cancels, the grey partial is
+    //           dropped, blocks already written stay.
     _focusKept() {
-        return !!this._session &&
-            global.display.focus_window === this._session.window &&
+        if (!this._session)
+            return false;
+        if (this._session.follow)
+            return true;
+        return global.display.focus_window === this._session.window &&
             (this._session.clipboard || this._sink.focused);
     }
 
     _onFocusWindow() {
-        if (this._live && !this._focusKept())
-            this._run(this._machine.external('cancel'));
+        if (!this._live)
+            return;
+        if (!this._session.follow) {
+            if (!this._focusKept())
+                this._run(this._machine.external('cancel'));
+            return;
+        }
+        // The new window's field takes the input focus a moment after the
+        // window does (and the window switcher holds it meanwhile).
+        this._follow();
+        for (const ms of [150, 600])
+            this._followLater(ms);
+    }
+
+    _followLater(ms) {
+        const session = this._session;
+        const id = GLib.timeout_add(GLib.PRIORITY_DEFAULT, ms, () => {
+            this._followIds.delete(id);
+            if (this._session === session && this._live)
+                this._follow();
+            return GLib.SOURCE_REMOVE;
+        });
+        this._followIds.add(id);
+    }
+
+    _clearFollow() {
+        for (const id of this._followIds)
+            GLib.Source.remove(id);
+        this._followIds.clear();
+    }
+
+    // Follow mode: aim at the field focused now, and write there the blocks
+    // that were waiting for one. True when a field takes the words.
+    _follow(session = this._session) {
+        if (!session?.follow)
+            return false;
+        const win = global.display.focus_window;
+        if (session.buffered) {
+            session.window = win;
+            session.focus = Main.inputMethod.currentFocus;
+            return false;                 // written or pasted at the end
+        }
+        // The input focus is one object for every window: a move shows in
+        // the focused window, not in it.
+        if (win !== session.window || !this._sink.focused) {
+            if (!win || !this._sink.retarget())
+                return false;
+            session.window = win;
+        }
+        session.focus = Main.inputMethod.currentFocus;
+        while (session.held.length && this._sink.commit(session.held[0]))
+            session.held.shift();
+        return session.held.length === 0;
     }
 
     // -- engine events -----------------------------------------------------
@@ -637,7 +704,18 @@ export class Dictation {
         const session = this._session;
         const shown = session.buffered
             ? session.text + joinBlock(this._lastChar(session), text, {firstOfSession: !session.text}) : text;
-        if (!this._focusKept() || (!session.buffered && !this._sink.partial(text)) ||
+        if (session.follow) {
+            // No field right now (the window switcher is up): the pill
+            // alone shows the words, nothing is lost.
+            const field = this._follow();
+            if (!session.buffered && field) {
+                this._sink.partial(text);
+            } else if (session.writeAtEnd) {
+                if (!this._sink.focused)
+                    this._sink.retarget();
+                this._sink.partial(shown);
+            }
+        } else if (!this._focusKept() || (!session.buffered && !this._sink.partial(text)) ||
             (session.writeAtEnd && !this._sink.partial(shown))) {
             this._run(this._machine.external('cancel'));
             return;
@@ -655,7 +733,11 @@ export class Dictation {
         if (!this._session)
             return;
         const session = this._session;
-        if (!this._focusKept() || (!session.buffered && !this._sink.commit(text))) {
+        if (session.follow) {
+            // A block that finds no field waits for the next one.
+            if (!session.buffered && !(this._follow() && this._sink.commit(text)))
+                session.held.push(text);
+        } else if (!this._focusKept() || (!session.buffered && !this._sink.commit(text))) {
             // Focus moved: this block goes nowhere rather than elsewhere.
             if (this._live)
                 this._run(this._machine.external('cancel'));
@@ -695,7 +777,16 @@ export class Dictation {
             this._watchCorrections(written, session);
             this._cues.play('stop');
         }
-        if (written && session.buffered && session.yielding) {
+        // Blocks that never found a field: one last try, then the clipboard.
+        this._clearFollow();
+        let held = '';
+        if (written && session.held.length) {
+            this._follow(session);
+            held = session.held.join(' ');
+        }
+        if (held && !session.yielding) {
+            this._deliver(this._pasteSpacing(held, global.display.focus_window), global.display.focus_window);
+        } else if (written && session.buffered && session.yielding) {
             // A voice command takes over: the words held back are not lost,
             // they wait in the clipboard.
             St.Clipboard.get_default().set_text(St.ClipboardType.CLIPBOARD, written);
@@ -740,6 +831,7 @@ export class Dictation {
         if (!this._settings.get_boolean('vocabulary-learn') || session.instruction || !session.focus)
             return;
         this._learnFocus = session.focus;
+        this._learnWindow = session.window;
         this._learner.watch(text);
     }
 

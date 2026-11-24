@@ -205,6 +205,15 @@
       <summary>Wake word on battery</summary>
       <description>Keep listening for the wake word on battery.</description>
     </key>
+    <key name="focus-change" type="s">
+      <choices>
+        <choice value="follow"/>
+        <choice value="stop"/>
+      </choices>
+      <default>'follow'</default>
+      <summary>When you change window while dictating</summary>
+      <description>follow: the dictation goes on and the words are written where the cursor is now. stop: the dictation is cancelled, so that the text only ever goes to the field it started in.</description>
+    </key>
     <key name="write-at-end" type="b">
       <default>false</default>
       <summary>Accuracy first</summary>

@@ -14,7 +14,9 @@
 //
 // Focus: the input focus is captured by begin(); partial() and commit()
 // refuse (return false) once it has moved, so a dialog or a notification
-// that steals the focus never receives the dictated text.
+// that steals the focus never receives the dictated text. The caller may
+// then follow the cursor with retarget(), when the user wants the dictation
+// to go on in the window they moved to.
 
 const NO_SPACE_AFTER = new Set([' ', '\n', '\t', '(', '[', '{', '«', '"', ' ', '’', "'", '/', '-']);
 
@@ -75,6 +77,7 @@ export class TextSink {
         this._blocks = 0;
         this._lastChar = null;
         this._focus = null;
+        this._stale = null;
     }
 
     destroy() {
@@ -97,7 +100,12 @@ export class TextSink {
         if (this._lastChar !== null)
             return this._lastChar;
         try {
-            return surroundingChar(this._im.getSurroundingText());
+            const around = this._im.getSurroundingText();
+            // After retarget(): still what the field we left reported. The
+            // new one said nothing (it is empty, or does not report): unknown.
+            if (this._stale !== null && JSON.stringify(around) === this._stale)
+                return null;
+            return surroundingChar(around);
         } catch {
             return null;
         }
@@ -108,6 +116,34 @@ export class TextSink {
         this._blocks = 0;
         this._lastChar = null;
         this._focus = focus;
+        this._stale = null;
+    }
+
+    // Write from now on into the field focused now (the user moved to
+    // another window): the grey text left in the old field is dropped, and
+    // the spacing starts again from what is before the new cursor. False
+    // when no field is focused.
+    retarget() {
+        if (!this.available)
+            return false;
+        this.clearPartial();
+        this._preedit = false;
+        try {
+            this._stale = JSON.stringify(this._im.getSurroundingText());
+        } catch {
+            this._stale = null;
+        }
+        this._focus = this._im.currentFocus;
+        this._lastChar = null;
+        this._blocks = 0;
+        // What the input method knows of the text around the cursor still
+        // describes the field we left: ask the new one for its own.
+        try {
+            this._im.request_surrounding();
+        } catch {
+            // not every input method answers; the spacing then assumes a word before
+        }
+        return true;
     }
 
     partial(text) {

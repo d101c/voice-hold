@@ -413,6 +413,16 @@ export default class VoiceHoldPreferences extends ExtensionPreferences {
         group.add(sounds);
         settings.bind('sounds', sounds, 'active', Gio.SettingsBindFlags.DEFAULT);
 
+        const focusModes = ['follow', 'stop'];
+        const focus = new Adw.ComboRow({
+            title: _('If you change window'),
+            subtitle: _('Alt+Tab or a click elsewhere while you dictate: the words go on where the cursor is now, or the dictation stops.'),
+            model: Gtk.StringList.new([_('Keep dictating there'), _('Stop the dictation')]),
+        });
+        focus.set_selected(Math.max(0, focusModes.indexOf(settings.get_string('focus-change'))));
+        focus.connect('notify::selected', () => settings.set_string('focus-change', focusModes[focus.get_selected()]));
+        group.add(focus);
+
         const mediaModes = ['pause', 'lower', 'nothing'];
         const media = new Adw.ComboRow({
             title: _('Music and videos'),

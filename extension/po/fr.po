@@ -1230,3 +1230,15 @@ msgid "%s word"
 msgid_plural "%s words"
 msgstr[0] "%s mot"
 msgstr[1] "%s mots"
+
+msgid "If you change window"
+msgstr "Si vous changez de fenêtre"
+
+msgid "Alt+Tab or a click elsewhere while you dictate: the words go on where the cursor is now, or the dictation stops."
+msgstr "Alt+Tab ou un clic ailleurs pendant la dictée : les mots continuent là où se trouve maintenant le curseur, ou la dictée s'arrête."
+
+msgid "Keep dictating there"
+msgstr "Continuer à dicter là-bas"
+
+msgid "Stop the dictation"
+msgstr "Arrêter la dictée"
