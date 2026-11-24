@@ -71,8 +71,6 @@ msgstr "Impossible de charger le modèle vocal : %s"
 msgid "Starting…"
 msgstr "Démarrage…"
 
-msgid "Loading the model… speak, nothing is lost"
-msgstr "Chargement du modèle… parlez, rien n'est perdu"
 
 msgid "Microphone unavailable"
 msgstr "Micro indisponible"
@@ -209,8 +207,6 @@ msgstr "« Lundi, non, mardi » devient « mardi ». Utilise le modèle de langu
 msgid "Hands-free — %s to finish"
 msgstr "Mains libres — %s pour finir"
 
-msgid "Ready"
-msgstr "Prêt"
 
 msgid "Space"
 msgstr "Espace"
@@ -1053,3 +1049,214 @@ msgstr "Appuyer"
 
 msgid "Unknown shortcut: %s"
 msgstr "Raccourci inconnu : %s"
+
+msgid "Listening…"
+msgstr "Écoute…"
+
+msgid "“%s” added to your vocabulary"
+msgstr "« %s » ajouté à votre vocabulaire"
+
+msgid "Dictation"
+msgstr "Dictée"
+
+msgid "The words appear where your cursor is, while you talk. Let go to stop, or tap once to keep your hands free."
+msgstr "Les mots s'écrivent là où se trouve votre curseur, pendant que vous parlez. Relâchez pour arrêter, ou appuyez une fois brièvement pour garder les mains libres."
+
+msgid "Choose a shortcut, hold it and speak"
+msgstr "Choisissez un raccourci, maintenez-le et parlez"
+
+msgid "Under the hood"
+msgstr "Sous le capot"
+
+msgid "Speech engine"
+msgstr "Moteur vocal"
+
+msgid "Runs on this computer, offline"
+msgstr "Fonctionne sur cet ordinateur, hors ligne"
+
+msgid "A separate helper program recognises your voice. The Installation page installs it for you; the command below does the same by hand."
+msgstr "Un petit programme à part reconnaît votre voix. La page Installation l'installe pour vous ; la commande ci-dessous fait la même chose à la main."
+
+msgid "Source code"
+msgstr "Code source"
+
+msgid "Report a problem"
+msgstr "Signaler un problème"
+
+msgid "Voice Hold %s"
+msgstr "Voice Hold %s"
+
+msgid "Dictate with the shortcut"
+msgstr "Dicter avec le raccourci"
+
+msgid "How you use it"
+msgstr "Votre façon de faire"
+
+msgid "Hold to talk, tap to keep your hands free, or both."
+msgstr "Maintenir pour parler, appuyer brièvement pour garder les mains libres, ou les deux."
+
+msgid "Tap only"
+msgstr "Appui bref seulement"
+
+msgid "Length of a tap"
+msgstr "Durée d'un appui bref"
+
+msgid "In milliseconds. A press shorter than this keeps listening, hands-free."
+msgstr "En millisecondes. Un appui plus court que cela laisse l'écoute ouverte, mains libres."
+
+msgid "Stop by itself after a silence"
+msgstr "Arrêt automatique après un silence"
+
+msgid "In seconds, when your hands are free. 0: never."
+msgstr "En secondes, en mode mains libres. 0 : jamais."
+
+msgid "Stay ready for"
+msgstr "Rester prêt pendant"
+
+msgid "Minutes after a dictation. Being ready takes about 1 GB of memory; later, the first words of the next dictation come a few seconds late."
+msgstr "Minutes après une dictée. Rester prêt occupe environ 1 Go de mémoire ; passé ce délai, les premiers mots de la dictée suivante arrivent avec quelques secondes de retard."
+
+msgid "Music and videos"
+msgstr "Musique et vidéos"
+
+msgid "Paused, or turned down to a quarter, while you speak; back as they were afterwards."
+msgstr "Mises en pause, ou baissées au quart du volume, pendant que vous parlez ; elles reprennent ensuite comme avant."
+
+msgid "Pause"
+msgstr "Mettre en pause"
+
+msgid "Turn down"
+msgstr "Baisser le son"
+
+msgid "Leave as they are"
+msgstr "Ne rien changer"
+
+msgid "Then, a language model"
+msgstr "Ensuite, un modèle de langage"
+
+msgid "None"
+msgstr "Aucun"
+
+msgid "On this computer"
+msgstr "Sur cet ordinateur"
+
+msgid "In the cloud"
+msgstr "Dans le cloud"
+
+msgid "Fillers such as “you know” and the corrections the rules miss. 2 to 3 seconds a sentence on a laptop; needs the language model of the voice commands."
+msgstr "Les mots de remplissage comme « du coup » et les corrections que les règles ne voient pas. 2 à 3 secondes par phrase sur un portable ; demande le modèle de langage des commandes vocales."
+
+msgid "Switch the cloud model on first, on the Cloud page. Until then only the rules apply."
+msgstr "Activez d'abord le modèle cloud, dans la page Cloud. En attendant, seules les règles s'appliquent."
+
+msgid "The most accurate, in under a second. The text of each sentence is sent with your own key; your voice never is."
+msgstr "Le plus juste, en moins d'une seconde. Le texte de chaque phrase est envoyé avec votre propre clé ; votre voix, jamais."
+
+msgid "The rules above only: instant, and nothing leaves this computer."
+msgstr "Seulement les règles ci-dessus : instantané, et rien ne quitte cet ordinateur."
+
+msgid "%d s"
+msgstr "%d s"
+
+msgid "%d min"
+msgstr "%d min"
+
+msgid "%d h %d min"
+msgstr "%d h %d min"
+
+msgid "%d h"
+msgstr "%d h"
+
+msgid "Usage"
+msgstr "Usage"
+
+msgid "words dictated"
+msgstr "mots dictés"
+
+msgid "saved, next to typing"
+msgstr "gagnées par rapport au clavier"
+
+msgid "The last 30 days"
+msgstr "Les 30 derniers jours"
+
+msgid "Today"
+msgstr "Aujourd'hui"
+
+msgid "This week"
+msgstr "Cette semaine"
+
+msgid "Your speaking speed"
+msgstr "Votre débit de parole"
+
+msgid "Dictations"
+msgstr "Dictées"
+
+msgid "Time spent dictating"
+msgstr "Temps passé à dicter"
+
+msgid "Counted on this computer. Only numbers are kept, one line a day: never your words, never your voice."
+msgstr "Compté sur cet ordinateur. Seuls des chiffres sont gardés, une ligne par jour : jamais vos mots, jamais votre voix."
+
+msgid "Count what I dictate"
+msgstr "Compter ce que je dicte"
+
+msgid "Start again from zero"
+msgstr "Repartir de zéro"
+
+msgid "Reset"
+msgstr "Remettre à zéro"
+
+msgid "%d words a minute, against about %d typed"
+msgstr "%d mots par minute, contre environ %d au clavier"
+
+msgid "Not enough yet"
+msgstr "Pas encore assez de dictées"
+
+msgid "Nothing yet. Hold the shortcut and say a sentence: the first bar appears here."
+msgstr "Rien pour l'instant. Maintenez le raccourci et dites une phrase : la première barre apparaîtra ici."
+
+msgid "Learn from my corrections"
+msgstr "Apprendre de mes corrections"
+
+msgid "Retype a word of what you just dictated, a name for instance: its spelling is added here by itself."
+msgstr "Retapez un mot de ce que vous venez de dicter, un nom par exemple : son orthographe s'ajoute ici toute seule."
+
+msgid "day in a row"
+msgid_plural "days in a row"
+msgstr[0] "jour d'affilée"
+msgstr[1] "jours d'affilée"
+
+msgid "%s word"
+msgid_plural "%s words"
+msgstr[0] "%s mot"
+msgstr[1] "%s mots"
+
+msgid "If you change window"
+msgstr "Si vous changez de fenêtre"
+
+msgid "Alt+Tab or a click elsewhere while you dictate: the words go on where the cursor is now, or the dictation stops."
+msgstr "Alt+Tab ou un clic ailleurs pendant la dictée : les mots continuent là où se trouve maintenant le curseur, ou la dictée s'arrête."
+
+msgid "Keep dictating there"
+msgstr "Continuer à dicter là-bas"
+
+msgid "Stop the dictation"
+msgstr "Arrêter la dictée"
+
+msgid "Voice Hold is ready"
+msgstr "Voice Hold est prêt"
+
+msgid "Click where you write, hold %s and speak."
+msgstr "Cliquez là où vous écrivez, maintenez %s et parlez."
+
+msgid "Try it now"
+msgstr "Essayer maintenant"
+
+msgid "While you dictate, a small pill floats at the bottom of the screen with the microphone level and the words."
+msgstr "Pendant la dictée, une petite pastille flotte en bas de l'écran avec le niveau du micro et les mots."
+
+msgid "That is all there is to it. It works the same wherever you write: click there, hold the shortcut, speak."
+msgstr "C'est tout. Ça marche de la même façon partout où vous écrivez : cliquez, maintenez le raccourci, parlez."
+
+msgid "Choose a shortcut in the preferences"
+msgstr "Choisissez un raccourci dans les préférences"

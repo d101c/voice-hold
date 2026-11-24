@@ -79,6 +79,16 @@ export function buildSetupPage(window, gettext, {components = ['voice'], title =
     const tryRow = new Adw.EntryRow({title: _('Try it here: click, hold the shortcut, say a sentence'), sensitive: false});
     tryRow.add_prefix(badge(3));
     group.add(tryRow);
+    // The first sentence that lands in the field: say that this is all,
+    // and where it works. Once per window.
+    let tried = false;
+    tryRow.connect('changed', () => {
+        if (tried || tryRow.get_text().trim().split(/\s+/).length < 2)
+            return;
+        tried = true;
+        banner.title = _('That is all there is to it. It works the same wherever you write: click there, hold the shortcut, speak.');
+        banner.button_label = null;
+    });
 
     if (picture) {
         const shot = Gtk.Picture.new_for_filename(picture);
@@ -87,7 +97,7 @@ export function buildSetupPage(window, gettext, {components = ['voice'], title =
         shot.add_css_class('card');
         shot.set_margin_top(18);
         shot.set_size_request(-1, 120);
-        const shotGroup = new Adw.PreferencesGroup({description: _('While you dictate, a small pill slides out of the top bar with the microphone level and the text.')});
+        const shotGroup = new Adw.PreferencesGroup({description: _('While you dictate, a small pill floats at the bottom of the screen with the microphone level and the words.')});
         shotGroup.add(shot);
         page.add(shotGroup);
     }
@@ -164,7 +174,9 @@ export function buildSetupPage(window, gettext, {components = ['voice'], title =
         }
         const ready = !!d && !left.length && !state.needLogout;
         tryRow.sensitive = ready;
-        if (ready && state.changed && !state.focused) {
+        // Ready: the cursor waits in the field, so that the shortcut can be
+        // tried at once.
+        if (ready && !state.focused) {
             state.focused = true;
             tryRow.grab_focus();
         }

@@ -43,10 +43,6 @@ const HIDE_DELAY_MS = 450;
 const MAX_CHARS = 240;
 
 const RESIZE_MS = 220;
-// The model's progress bar fills to this share of its width over the
-// expected load time, then waits for the engine: never full before it is.
-const PROGRESS_CAP = 0.9;
-const PROGRESS_W = 52;
 // The countdown ring the bars curl into (countdown()).
 const RING_RADIUS = 12;
 const DOT = 6;
@@ -73,8 +69,6 @@ export class Hud {
         this._label = null;
         this._ringTimeline = null;  // the countdown, while the bars are a ring
         this._morphed = false;
-        this._progress = null;
-        this._progressFill = null;
         this._accent = '';
         this._hideId = 0;
         this._hideAt = 0;       // when the pending hide fires (monotonic ms)
@@ -153,17 +147,6 @@ export class Hud {
         ct.set_ellipsize(Pango.EllipsizeMode.NONE);
         this._content.add_child(this._label);
 
-        this._progress = new St.Widget({
-            style_class: 'voice-hud-progress',
-            layout_manager: new Clutter.FixedLayout(),
-            y_align: Clutter.ActorAlign.CENTER,
-            visible: false,
-        });
-        this._progressFill = new St.Widget({style_class: 'voice-hud-progress-fill'});
-        this._progressFill.set_style(`background-color: ${this._accent};`);
-        this._progress.add_child(this._progressFill);
-        this._content.add_child(this._progress);
-
         Main.layoutManager.uiGroup.add_child(this._box);
         // Above everything, but never grabbing anything.
         Main.layoutManager.uiGroup.set_child_above_sibling(this._box, null);
@@ -183,8 +166,6 @@ export class Hud {
         this._ringTimeline?.stop();
         this._ringTimeline = null;
         this._morphed = false;
-        this._progress = null;
-        this._progressFill = null;
         this._bars = [];
         this._heights.fill(BAR_MIN);
         this._level = 0;
@@ -318,7 +299,6 @@ export class Hud {
         this._build();
         const fresh = this._box.opacity === 0;
         const leaving = this._leaving;
-        this._progress.visible = false;
         this._setIconState(pseudo);
         this._setText(status, 'hint');
         if (fresh || leaving) {
@@ -334,8 +314,6 @@ export class Hud {
     status(text, pseudo = '') {
         if (!this._box || this._leaving)
             return;
-        if (pseudo !== 'loading' && this._progress)
-            this._progress.visible = false;
         this._setIconState(pseudo);
         this._setText(text, 'hint');
         this._place(true);
@@ -344,8 +322,6 @@ export class Hud {
     live(text) {
         if (!this._box || this._leaving)
             return;
-        // Words: the model is there, whatever state the engine is in.
-        this._progress.visible = false;
         // Words again after a block that failed: the dictation goes on.
         if (this._showsError())
             this._setIconState('listening');
@@ -360,47 +336,10 @@ export class Hud {
         if (!this._box || this._leaving || this._showsError())
             return;                       // an error stays up until read
         this._setIconState('busy');
-        // Still loading: the hint and the bar say more than an ellipsis.
-        if (this._label.has_style_pseudo_class('hint') && !this.loadingShown) {
+        if (this._label.has_style_pseudo_class('hint')) {
             this._setText('…', 'hint');
             this._place(true);
         }
-    }
-
-    // The speech model is loading: the hint, and a bar that fills over the
-    // time the last load took (`expectMs`), short of full until ready().
-    loading(text, expectMs) {
-        if (!this._box || this._leaving)
-            return;
-        this.status(text, 'loading');
-        const fill = this._progressFill;
-        const width = Math.round(PROGRESS_W * this._scale);
-        this._progress.visible = true;
-        fill.remove_all_transitions();
-        fill.width = 0;
-        fill.ease({
-            width: Math.round(width * PROGRESS_CAP),
-            duration: Math.max(500, expectMs),
-            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
-        });
-        this._place(true);
-    }
-
-    // The model is there: the bar completes and goes, the icon turns blue
-    // with a short pop, and `text` says so until the first words.
-    ready(text) {
-        if (!this._box || this._leaving)
-            return;
-        this._progress.visible = false;
-        this._progressFill.remove_all_transitions();
-        this.status(text, 'listening');
-        this._meter.set_pivot_point(0.5, 0.5);
-        this._meter.set_scale(1.35, 1.35);
-        this._meter.ease({scale_x: 1, scale_y: 1, duration: 320, mode: Clutter.AnimationMode.EASE_OUT_BACK});
-    }
-
-    get loadingShown() {
-        return !!this._progress?.visible;
     }
 
     // Hands-free, the silence stop comes in `ms`: the bars, flat by now,

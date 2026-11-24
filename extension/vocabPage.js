@@ -5,6 +5,7 @@
 // (`replacements`). The engine applies both to each block (vocab.py).
 
 import Adw from 'gi://Adw';
+import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Gtk from 'gi://Gtk';
 
@@ -34,6 +35,12 @@ export function buildVocabPage(settings, gettext) {
         description: _('Names, brands and jargon, written your way. A word that sounds the same, or very close, is corrected after recognition.'),
     });
     page.add(words);
+    const learn = new Adw.SwitchRow({
+        title: _('Learn from my corrections'),
+        subtitle: _('Retype a word of what you just dictated, a name for instance: its spelling is added here by itself.'),
+    });
+    words.add(learn);
+    settings.bind('vocabulary-learn', learn, 'active', Gio.SettingsBindFlags.DEFAULT);
     const addWord = new Adw.EntryRow({title: _('Add a word'), show_apply_button: true});
     words.add(addWord);
     let wordRows = [];

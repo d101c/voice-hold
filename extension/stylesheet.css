@@ -32,8 +32,8 @@
 }
 .voice-hud-content-island { padding: 14px 26px 15px 26px; spacing: 14px; }
 
-/* No icon: the bars carry the state (hud.js). The active bars, the lock
-   and the progress bar take the system's accent colour, set inline
+/* No icon: the bars carry the state (hud.js). The active bars take
+   the system's accent colour, set inline
    (accentColor.js). */
 .voice-hud-bars {
     spacing: 4px;
@@ -48,17 +48,6 @@
     background-color: rgba(255,255,255,0.25);
 }
 
-/* The speech model loading (hud.js fills it over the expected time). */
-.voice-hud-progress {
-    width: 52px;
-    height: 5px;
-    border-radius: 2px;
-    background-color: rgba(255,255,255,0.2);
-}
-.voice-hud-progress-fill {
-    height: 5px;
-    border-radius: 2px;
-}
 /* The words wrap: the pill widens with them up to max-width, then grows
    downwards (hud.js keeps about three lines). */
 .voice-hud-text {

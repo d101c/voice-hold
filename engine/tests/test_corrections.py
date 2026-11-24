@@ -59,3 +59,15 @@ def test_empty():
 
 def test_leading_punctuation_is_kept():
     assert correct("... Rendez-vous à 9 h, non, 10 h.") == "... Rendez-vous à 10 h."
+
+
+def test_a_phrase_said_again_is_not_written_twice():
+    # The replacement repeats the start of what it replaces.
+    assert correct('Le train part à sept heures dix, non, sept heures vingt.') == \
+        'Le train part à sept heures vingt.'
+    assert correct('On avait dit trois mille francs, non pardon, trois mille cinq cents francs, livraison comprise.') == \
+        'On avait dit trois mille cinq cents francs, livraison comprise.'
+    assert correct('The budget is twenty thousand, sorry, twenty-five thousand dollars.') == \
+        'The budget is twenty-five thousand dollars.'
+    # Nothing repeated: as before.
+    assert correct('On se voit lundi, non pardon, mardi à quatorze heures.') == 'On se voit mardi à quatorze heures.'

@@ -54,6 +54,11 @@
       <summary>Your words</summary>
       <description>Names, brands and jargon written your way; words that sound alike are corrected after recognition.</description>
     </key>
+    <key name="vocabulary-learn" type="b">
+      <default>true</default>
+      <summary>Learn words from your corrections</summary>
+      <description>For 45 seconds after a dictation, in the field it went to: when one word of it is retyped another way (a name, a brand), the new spelling is added to the vocabulary.</description>
+    </key>
     <key name="replacements" type="a{ss}">
       <default>{}</default>
       <summary>Replacements</summary>
@@ -118,6 +123,21 @@
       <summary>Keep the dictations</summary>
       <description>Days the text of past dictations is kept on this computer. 0: not kept. -1: until cleared.</description>
     </key>
+    <key name="usage-stats" type="b">
+      <default>true</default>
+      <summary>Count what is dictated</summary>
+      <description>Keep, on this computer, the number of words and the time dictated each day (never the words themselves), for the Usage page.</description>
+    </key>
+    <key name="cleanup-model" type="s">
+      <choices>
+        <choice value="rules"/>
+        <choice value="local"/>
+        <choice value="cloud"/>
+      </choices>
+      <default>'rules'</default>
+      <summary>What cleans the text after the rules</summary>
+      <description>rules: nothing more, instant. local: the language model of the voice commands, on this computer (2 to 3 seconds a sentence on a laptop). cloud: a fast cloud model with your own key (under a second; the text of each block is sent, never the audio). An answer that is not a plausible cut of what was said is thrown away.</description>
+    </key>
     <key name="polish" type="b">
       <default>false</default>
       <summary>Self-corrections with the local LLM</summary>
@@ -154,6 +174,11 @@
       <summary>Keep the speech model loaded</summary>
       <description>Minutes the speech model (about 1 GB) stays in memory after the last dictation. The next dictation after that waits a few seconds for it to load.</description>
     </key>
+    <key name="prefs-page" type="s">
+      <default>''</default>
+      <summary>Page the preferences open on, once</summary>
+      <description>Set by the extension just before it opens the preferences ("setup": the page with the field to try the dictation in), and emptied by the preferences as they open.</description>
+    </key>
     <key name="welcome-shown" type="b">
       <default>false</default>
       <summary>Welcome shown</summary>
@@ -185,6 +210,15 @@
       <summary>Wake word on battery</summary>
       <description>Keep listening for the wake word on battery.</description>
     </key>
+    <key name="focus-change" type="s">
+      <choices>
+        <choice value="follow"/>
+        <choice value="stop"/>
+      </choices>
+      <default>'follow'</default>
+      <summary>When you change window while dictating</summary>
+      <description>follow: the dictation goes on and the words are written where the cursor is now. stop: the dictation is cancelled, so that the text only ever goes to the field it started in.</description>
+    </key>
     <key name="write-at-end" type="b">
       <default>false</default>
       <summary>Accuracy first</summary>
@@ -195,10 +229,20 @@
       <summary>Sounds</summary>
       <description>A short sound when listening starts and when the text is written (follows the system's event sounds setting).</description>
     </key>
+    <key name="media-during" type="s">
+      <choices>
+        <choice value="pause"/>
+        <choice value="lower"/>
+        <choice value="nothing"/>
+      </choices>
+      <default>'pause'</default>
+      <summary>Other sounds while dictating</summary>
+      <description>pause: the media players that are playing (MPRIS) pause when a dictation starts and resume afterwards. lower: everything that plays goes down to a quarter of its volume and comes back afterwards. nothing: left alone.</description>
+    </key>
     <key name="pause-media" type="b">
       <default>true</default>
-      <summary>Pause media while dictating</summary>
-      <description>Pause the media players that are playing (MPRIS) when a dictation starts, and resume them afterwards.</description>
+      <summary>Old switch, replaced by media-during</summary>
+      <description>Read once to carry an old choice over to media-during.</description>
     </key>
     <key name="paste-last-shortcut" type="as">
       <default>[]</default>

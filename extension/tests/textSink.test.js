@@ -152,5 +152,29 @@ eq(selectedText(['abc', 0, 9]), null, 'out of range');
 eq(selectedText(['a  b', 1, 3]), null, 'only spaces');
 eq(selectedText(null), null, 'nothing');
 
+// Moving to another window during a dictation: the words follow.
+{
+    const im = fakeIm({surrounding: ['', 0, 0]});
+    const sink = new TextSink(im, CLUTTER);
+    sink.begin();
+    sink.commit('Bonjour Anna.');
+    // The field we left still reports its text: it is not the new one's.
+    im.surrounding = ['Bonjour Anna.', 13, 13];
+    eq(sink.retarget(), true, 'a field is focused');
+    sink.commit('Merci.');
+    eq(im.commits[1], 'Merci.', 'no space at the start of the new field');
+    sink.commit('À bientôt.');
+    eq(im.commits[2], ' À bientôt.', 'then a space between two blocks');
+    // The new field has its own text and says so: the spacing uses it.
+    sink.retarget();
+    im.surrounding = ['Hello', 5, 5];
+    sink.commit('world.');
+    eq(im.commits[3], ' world.', 'a space after the word already there');
+    // No field at all (the window switcher): nothing to aim at.
+    im.currentFocus = null;
+    eq(sink.retarget(), false, 'no field');
+    eq(sink.commit('lost'), false, 'nothing written');
+}
+
 if (failures)
     imports.system.exit(1);

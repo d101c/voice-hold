@@ -50,9 +50,12 @@ MONTHS = {
 }
 NUMBER_WORDS = {
     'un', 'une', 'deux', 'trois', 'quatre', 'cinq', 'six', 'sept', 'huit', 'neuf', 'dix', 'onze', 'douze',
-    'vingt', 'trente', 'cent', 'mille', 'midi', 'minuit',
+    'treize', 'quatorze', 'quinze', 'seize', 'vingt', 'trente', 'quarante', 'cinquante', 'soixante',
+    'cent', 'cents', 'mille', 'midi', 'minuit',
     'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve',
-    'twenty', 'thirty', 'hundred', 'thousand', 'noon', 'midnight',
+    'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen',
+    'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety',
+    'hundred', 'thousand', 'noon', 'midnight',
 }
 _FUNCTION_WORDS = {
     'je', 'tu', 'il', 'elle', 'on', 'nous', 'vous', 'ils', 'elles', 'le', 'la', 'les', 'un', 'une', 'des',
@@ -62,7 +65,10 @@ _FUNCTION_WORDS = {
 
 def _kind(word, sentence_start=False):
     w = word.lower()
-    if any(c.isdigit() for c in w) or w in NUMBER_WORDS:
+    # "twenty-five", "dix-sept", "quatre-vingts": every part is a number.
+    parts = [p for p in re.split(r'-', w) if p]
+    if any(c.isdigit() for c in w) or w in NUMBER_WORDS or \
+            (len(parts) > 1 and all(p in NUMBER_WORDS or p.rstrip('s') in NUMBER_WORDS for p in parts)):
         return 'number'
     if w in WEEKDAYS:
         return 'weekday'
@@ -111,6 +117,22 @@ def _fix_sentence(sentence):
                 break
         if cut is None:
             continue
+        # The replacement often says the start of the phrase again ("sept
+        # heures dix, non, sept heures vingt"; "trois mille, pardon, trois
+        # mille cinq cents"): the cut goes back to that same first word, or
+        # the phrase would be written twice.
+        at = next(k for k, w in enumerate(words) if w.start() == cut)
+        for j in range(at - 1, max(-1, at - 4), -1):
+            if words[j].group(0).lower() == r0.lower():
+                at = j
+                break
+        # A number in several words is replaced whole ("twenty thousand,
+        # sorry, twenty-five thousand").
+        if kind == 'number':
+            while at > 0 and _kind(words[at - 1].group(0)) == 'number' and \
+                    not re.search(r'[,;:]', left[words[at - 1].end():words[at].start()]):
+                at -= 1
+        cut = words[at].start()
         out = left[:cut] + right[first.start():]
         if cut == 0 or not left[:cut].strip():
             lead = len(out) - len(out.lstrip())
