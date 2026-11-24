@@ -16,10 +16,14 @@ import os
 import time
 from concurrent.futures import ThreadPoolExecutor
 
+import numpy as np
 from dbus_fast import DBusError, Variant
 from dbus_fast.service import ServiceInterface, method, signal
 
 from . import INTERFACE, __version__, models, text as textmod
+from .corrections import correct
+from .lists import Lists
+from .vocab import Vocabulary
 from .audio import FileSource, MicSource
 from .segmenter import Segmenter, rms
 
@@ -35,6 +39,9 @@ BUSY_ERROR = 'org.griffit.VoiceHold.Error.Busy'
 
 # `Level` is emitted at most this often (the meter does not need more).
 LEVEL_PERIOD_S = 0.1
+# The final pass decodes the whole dictation at once up to this length
+# (Parakeet at RTF ~0.13: about 12 s of waiting at the very most).
+WHOLE_MAX_S = 90
 
 
 class Busy(Exception):
@@ -67,6 +74,8 @@ class Engine:
         self._source = None
         self._segmenter = None
         self._opts = {}
+        self._vocab = Vocabulary()
+        self._lists = Lists()
         self._pending = set()                 # futures of this session (decode, load, polish)
         self._inflight = 0                    # jobs on a worker, whatever their session
         self._partial_inflight = False
@@ -78,6 +87,9 @@ class Engine:
         self._starting = False
         self._speaking = False
         self._idle_handle = None
+        self._wake = None                     # wake.WakeListener while the wake word is listened for
+        self._wake_error = ''
+        self._wake_download = None            # the wake model being downloaded (a task)
         self.exit_event = asyncio.Event()
         self.quit_requested = False           # Quit(): exit even if busy
 
@@ -121,7 +133,94 @@ class Engine:
             'speaking': Variant('b', bool(self._speaker and self._speaker.speaking)),
             'model': Variant('s', self.model),
             'unload_in_s': Variant('d', self._unload_in()),
+            'wake': Variant('s', self._wake_state()),
         }
+
+    # -- wake word ---------------------------------------------------------------
+
+    def _wake_state(self):
+        if self._wake is not None and self._wake.running:
+            return 'listening'
+        if self._wake is not None and self._wake.failure:
+            return f'error: {self._wake.failure}'
+        if self._wake_download is not None:
+            return 'downloading'
+        return self._wake_error or 'off'
+
+    async def listen(self, options):
+        """Listen for the wake word, or stop. options: enabled (b), phrases
+        (JSON list), source (PipeWire node, '' = default), sensitivity (d).
+        Returns '' or why not ('wake-model-missing', 'audio: …')."""
+        self._cancel_idle()
+        self._stop_listening()
+        self._wake_error = ''
+        self._wake_wanted = options            # what to do once a download ends
+        if not bool(_opt(options, 'enabled', False)):
+            self._schedule_idle()
+            return ''
+        from . import wakeword
+        from .asr import SileroVad
+        from .wake import WakeListener
+        if wakeword.missing():
+            # The small model (~54 MB) comes the first time the word is
+            # switched on; listening starts once it is there.
+            if self._wake_download is None:
+                self._wake_download = self._loop.create_task(self._download_wake(options))
+            self._wake_error = 'wake-downloading'
+            return self._wake_error
+        try:
+            phrases = wakeword.phrases_from_json(str(_opt(options, 'phrases', '')))
+            detector = await self._loop.run_in_executor(
+                None, lambda: wakeword.Detector(phrases, sensitivity=float(_opt(options, 'sensitivity', 0.5))))
+            vad = SileroVad(threshold=0.5, min_silence_s=0.25, max_speech_s=6.0)
+        except Exception as e:
+            self._wake_error = f'wake: {e}'
+            self._schedule_idle()
+            return self._wake_error
+
+        def heard(phrase):
+            try:
+                self._loop.call_soon_threadsafe(self._on_wake, phrase)
+            except RuntimeError:
+                pass
+        listener = WakeListener(detector, heard, vad=vad, target=str(_opt(options, 'source', '')))
+        try:
+            listener.start()
+        except Exception as e:
+            self._wake_error = f'audio: {e}'
+            self._schedule_idle()
+            return self._wake_error
+        self._wake = listener
+        if self.active:
+            listener.suspend(True)
+        self._schedule_idle()
+        return ''
+
+    async def _download_wake(self, options):
+        try:
+            miss = await self._loop.run_in_executor(None, lambda: models.setup_wake(log=lambda _m: None))
+        except Exception as e:
+            miss = [str(e)]
+        self._wake_download = None
+        if miss:
+            self._wake_error = 'wake-model-missing'
+            self._schedule_idle()
+            return
+        wanted = getattr(self, '_wake_wanted', options)
+        if bool(_opt(wanted, 'enabled', False)):
+            await self.listen(wanted)
+        else:
+            self._schedule_idle()
+
+    def _stop_listening(self):
+        if self._wake is not None:
+            self._wake.stop()
+            self._wake = None
+
+    def _on_wake(self, phrase):
+        if self.active or self._starting:
+            return
+        self._emit('Wake', phrase)
 
     # -- text-to-speech -------------------------------------------------------
 
@@ -130,6 +229,20 @@ class Engine:
             from .tts import Speaker
             self._speaker = Speaker()
         return self._speaker
+
+    async def rewrite(self, text, instruction, cloud=None):
+        """`text` rewritten as `instruction` says (rewrite.py), or '' when
+        no language model could do it. On the polish worker: one LLM job at
+        a time, and never on the speech decoder's thread."""
+        from .rewrite import rewrite
+        self._cancel_idle()
+        self._inflight += 1
+        try:
+            return await self._loop.run_in_executor(
+                self._polish_executor, lambda: rewrite(text, instruction, cloud=cloud))
+        finally:
+            self._inflight -= 1
+            self._schedule_idle()
 
     async def speak(self, text, lang='fr', speed=1.0):
         """Say `text` aloud. Returns '' when it started, else why not
@@ -217,7 +330,21 @@ class Engine:
             'audio_file': str(_opt(options, 'audio-file', '')),
             'realtime': bool(_opt(options, 'realtime', True)),
             'source': str(_opt(options, 'source', '')),
+            'corrections': bool(_opt(options, 'corrections', True)),
+            'whole_pass': bool(_opt(options, 'whole-pass', False)),
+            # Off by default: on the bench, the 3 s of audio context cost
+            # more words at the block boundaries than they won (WER 10.9 %
+            # against 10.5 % on read French, contiguous blocks alone).
+            'context': bool(_opt(options, 'context', False)),
         }
+        # The whole dictation's audio, for the final pass (whole_text()).
+        self._audio = []
+        self._audio_len = 0
+        # Personal words and replacements (JSON strings), and the numbering
+        # of a spoken list, for this session.
+        self._vocab = Vocabulary.from_options(str(_opt(options, 'vocabulary', '')),
+                                              str(_opt(options, 'replacements', '')))
+        self._lists = Lists()
         # How long the model stays loaded once idle: the client's setting,
         # kept for the following sessions.
         keep = float(_opt(options, 'keep-loaded-s', -1.0))
@@ -251,8 +378,14 @@ class Engine:
             self._opts['audio_file'] = os.environ['VOICE_HOLD_AUDIO_FILE']
         if self._opts['audio_file']:
             source = FileSource(self._opts['audio_file'], on_chunk, realtime=self._opts['realtime'])
+        elif bool(_opt(options, 'from-wake', False)) and self._wake is not None and self._wake.woken:
+            # Started by the wake word: the listener's own stream, from the
+            # end of the word, so a sentence said in one breath is whole.
+            source = self._wake.lend(on_chunk)
         else:
             source = MicSource(on_chunk, target=self._opts['source'])
+            if self._wake is not None:
+                self._wake.suspend(True)      # the shortcut: no wake word in the middle of a dictation
         try:
             source.start()
         except Exception as e:
@@ -341,6 +474,8 @@ class Engine:
             while self._pending and gen == self._gen:
                 await asyncio.gather(*list(self._pending), return_exceptions=True)
                 await asyncio.sleep(0)
+            if self._opts.get('whole_pass') and gen == self._gen and self._audio:
+                await self._whole_pass(gen)
         except Exception:
             # A stop that dies must not keep the session "stopping" for ever,
             # nor the callers that wait for it: the next stop() starts over.
@@ -355,6 +490,38 @@ class Engine:
             return                            # finished meanwhile (the model failed to load)
         self._finish(reason)
 
+    async def _whole_pass(self, gen):
+        """The whole dictation decoded at once: the words of each block now
+        hear those around them (no word lost at a cut, sentences punctuated
+        as one). Emitted as Whole(text) before Stopped; the client uses it
+        where it held the text back. Too long (WHOLE_MAX_S): nothing."""
+        if self._audio_len >= WHOLE_MAX_S * 16000:
+            return
+        audio = np.concatenate(self._audio)
+        self._audio = []
+        self._set_state(DECODING)
+        self._inflight += 1
+        try:
+            raw = await self._loop.run_in_executor(self._executor, self._recognizer.transcribe, audio)
+        except Exception as e:
+            self._emit('Error', f'decode: {e}')
+            return
+        finally:
+            self._inflight -= 1
+        if gen != self._gen:
+            return
+        self._emit('Whole', self._shape(raw, Lists(), final=True))
+
+    def _shape(self, raw, lists, final):
+        """The text clean-up of a decoded block (or of the whole dictation)."""
+        if raw and self._opts['tidy']:
+            raw = textmod.tidy(raw)
+        if raw and self._opts.get('corrections'):
+            raw = correct(raw)
+        if raw:
+            raw = self._vocab.apply(raw)
+        return lists.format(textmod.clean(raw), final) if raw else ''
+
     def cancel(self):
         if not self.active:
             return
@@ -365,6 +532,8 @@ class Engine:
         if self._source is not None:
             self._source.stop()
             self._source = None
+        if self._wake is not None:
+            self._wake.suspend(False)
         if self._speaking:
             self._speaking = False
             self._emit('Speech', False)
@@ -399,6 +568,9 @@ class Engine:
         if now - self._level_emitted >= LEVEL_PERIOD_S:
             self._level_emitted = now
             self._emit('Level', round(self._last_level, 3))
+        if self._opts.get('whole_pass') and self._audio_len < WHOLE_MAX_S * 16000:
+            self._audio.append(chunk)
+            self._audio_len += len(chunk)
         for ev in self._segmenter.feed(chunk):
             self._handle_event(gen, ev)
         speaking = self._segmenter.in_speech
@@ -419,15 +591,18 @@ class Engine:
             if not self._partial_inflight and not self._pending:
                 self._submit(gen, ev[1], final=False)
         elif kind == 'final':
-            self._submit(gen, ev[1], final=True)
+            self._submit(gen, ev[1], final=True, context=ev[2] if len(ev) > 2 else None)
 
     # -- decoding -----------------------------------------------------------
 
-    def _submit(self, gen, samples, final):
+    def _submit(self, gen, samples, final, context=None):
         if not final:
             self._partial_inflight = True
         self._inflight += 1
-        fut = self._loop.run_in_executor(self._executor, self._recognizer.transcribe, samples)
+        if context is not None and len(context) and self._opts.get('context', False):
+            fut = self._loop.run_in_executor(self._executor, self._recognizer.transcribe, samples, context)
+        else:
+            fut = self._loop.run_in_executor(self._executor, self._recognizer.transcribe, samples)
         self._pending.add(fut)
         fut.add_done_callback(lambda f: self._on_decoded(gen, final, f))
 
@@ -445,6 +620,10 @@ class Engine:
             return
         if raw and self._opts['tidy']:
             raw = textmod.tidy(raw)
+        if raw and self._opts.get('corrections'):
+            raw = correct(raw)
+        if raw:
+            raw = self._vocab.apply(raw)
         if final and raw and self._opts['polish']:
             from .polish import polish
             self._inflight += 1
@@ -466,7 +645,7 @@ class Engine:
         self._emit_text(out or raw, True)
 
     def _emit_text(self, raw, final):
-        text = textmod.clean(raw)
+        text = self._lists.format(textmod.clean(raw), final)
         if not text:
             return
         if final:
@@ -497,6 +676,8 @@ class Engine:
             self.unload()
             self._emit('State', IDLE)
             self._schedule_idle()
+        elif (self._wake is not None and self._wake.running) or self._wake_download is not None:
+            self._schedule_idle()             # listening for the wake word, or fetching its model: stay
         else:
             self.exit_event.set()
 
@@ -612,6 +793,24 @@ class VoiceHoldInterface(ServiceInterface):
                                         float(_opt(options, 'speed', 1.0)))
 
     @method()
+    async def Rewrite(self, text: 's', instruction: 's', options: 'a{sv}') -> 's':
+        """`text` rewritten as `instruction` says; '' when no language model
+        could. options: cloud (b), cloud-provider, cloud-model."""
+        self._engine.exit_event.clear()
+        cloud = None
+        if bool(_opt(options, 'cloud', False)):
+            cloud = {'provider': str(_opt(options, 'cloud-provider', 'anthropic')),
+                     'model': str(_opt(options, 'cloud-model', ''))}
+        return await self._engine.rewrite(text, instruction, cloud)
+
+    @method()
+    async def Listen(self, options: 'a{sv}') -> 's':
+        """Listen for the wake word (options: enabled, phrases as JSON,
+        source, sensitivity), or stop with enabled false. '' or why not."""
+        self._engine.exit_event.clear()
+        return await self._engine.listen(options)
+
+    @method()
     def StopSpeaking(self):
         self._engine.stop_speaking()
 
@@ -662,6 +861,14 @@ class VoiceHoldInterface(ServiceInterface):
         return speaking
 
     @signal()
+    def Whole(self, text: 's') -> 's':
+        return text
+
+    @signal()
+    def Wake(self, phrase: 's') -> 's':
+        return phrase
+
+    @signal()
     def Error(self, message: 's') -> 's':
         return message
 
@@ -704,5 +911,6 @@ async def serve():
         break
     if engine.active:
         engine.cancel()
+    engine._stop_listening()
     gone.cancel()
     bus.disconnect()

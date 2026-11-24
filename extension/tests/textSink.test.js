@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 // Run: gjs -m extension/tests/textSink.test.js
-import {joinBlock, surroundingChar, TextSink} from '../textSink.js';
+import {joinBlock, selectedText, surroundingChar, TextSink} from '../textSink.js';
 
 let failures = 0;
 function eq(actual, expected, msg) {
@@ -143,5 +143,14 @@ function fakeIm({surrounding = null} = {}) {
 }
 
 print(failures ? `${failures} failure(s)` : 'all passed');
+// -- selectedText ---------------------------------------------------------
+eq(selectedText(['Bonjour Léa, à jeudi.', 8, 11]), 'Léa', 'selection forwards');
+eq(selectedText(['Bonjour Léa, à jeudi.', 11, 8]), 'Léa', 'selection backwards');
+eq(selectedText(['Bonjour', 3, 3]), null, 'no selection');
+eq(selectedText(['Bonjour', 3]), null, 'GNOME 45: no anchor');
+eq(selectedText(['abc', 0, 9]), null, 'out of range');
+eq(selectedText(['a  b', 1, 3]), null, 'only spaces');
+eq(selectedText(null), null, 'nothing');
+
 if (failures)
     imports.system.exit(1);

@@ -31,12 +31,13 @@ const BREATHE_MS = 700;
 const BUSY_STATES = ['loading', 'listening', 'decoding'];
 export const VoiceHoldIndicator = GObject.registerClass(
 class VoiceHoldIndicator extends PanelMenu.Button {
-    _init(settings, iconPath, openPreferences, gettext) {
+    _init(settings, iconPath, openPreferences, gettext, getDictation = () => null) {
         const _ = gettext;
         super._init(0.0, _('Voice Hold'));
 
         this._settings = settings;
         this._openPreferences = openPreferences;
+        this._getDictation = getDictation;
         this._gettext = _;
         this._commands = null;
         this._recentMenu = null;
@@ -87,6 +88,11 @@ class VoiceHoldIndicator extends PanelMenu.Button {
         }, this);
         this.menu.addMenuItem(this._toggle);
 
+        // The menu closes first, so the paste goes to the window under it.
+        this._pasteItem = new PopupMenu.PopupMenuItem(_('Paste the last dictation'));
+        this._pasteItem.connectObject('activate', () => this._getDictation()?.pasteLast(), this);
+        this.menu.addMenuItem(this._pasteItem);
+
         this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
 
         // Microphone submenu, filled from the engine each time the menu opens.
@@ -94,6 +100,7 @@ class VoiceHoldIndicator extends PanelMenu.Button {
         this.menu.addMenuItem(this._micMenu);
         this.menu.connectObject('open-state-changed', (_m, open) => {
             if (open) {
+                this._pasteItem.visible = !!this._getDictation()?.hasLast;
                 this._refreshStatus();
                 this._fillMicrophones(_);
                 this._fillRecent();
@@ -273,8 +280,8 @@ class VoiceHoldIndicator extends PanelMenu.Button {
     }
 });
 
-export function addIndicator(uuid, settings, iconPath, openPreferences, gettext) {
-    const indicator = new VoiceHoldIndicator(settings, iconPath, openPreferences, gettext);
+export function addIndicator(uuid, settings, iconPath, openPreferences, gettext, getDictation = () => null) {
+    const indicator = new VoiceHoldIndicator(settings, iconPath, openPreferences, gettext, getDictation);
     Main.panel.addToStatusArea(uuid, indicator);
     return indicator;
 }

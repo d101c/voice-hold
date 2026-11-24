@@ -91,5 +91,15 @@ test('focus change stops', () => {
 });
 
 print(failures ? `${failures} failure(s)` : 'all passed');
+test('the wake word starts hands-free, only when idle', () => {
+    const m = new HoldMachine({mode: 'auto', tapMs: 500});
+    check(kinds(m.wake()) === 'start', 'start');
+    check(m.state === TOGGLE, 'hands-free');
+    check(kinds(m.wake()) === '', 'already listening');
+    check(kinds(m.shortcut(10)) === 'stop', 'the shortcut ends it');
+    const h = new HoldMachine({mode: 'hold'});
+    check(kinds(h.wake()) === 'start', 'even in hold-only mode');
+});
+
 if (failures)
     imports.system.exit(1);

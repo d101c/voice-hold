@@ -9,28 +9,42 @@ Press-and-hold dictation for GNOME, fully offline.
 
 - **Hold `Ctrl+Space`** and talk; release to stop. **Tap** it instead to dictate
   hands-free (tap again, `Esc`, or a few seconds of silence stop it).
+- Or say the **wake word** (optional, off by default; *"Hé Kodiak"* unless you
+  choose another): a hands-free dictation starts without touching the keyboard. The word is recognised on your
+  computer; listening pauses while the screen is locked or another
+  application records.
 - The text lands **in the field under your cursor**, block by block, while
-  you speak: a grey live preview, then each phrase is typed for good.
-- A pill slides out of the top bar while you dictate, with the microphone
-  level and the words, and goes back into it when you stop. Always in the
-  same place; it can follow the text cursor instead (settings).
+  you speak: a grey live preview, then each phrase is typed for good. In
+  applications that do not take dictated text directly (many Electron apps),
+  it is pasted at the end and stays in the clipboard.
+- A pill floats at the bottom of the screen, above the dock, with the
+  microphone level and the words. It can hang from the top bar or follow the
+  text cursor instead (settings). Short sounds mark the start and the end;
+  music and videos pause while you speak.
 - **Offline.** French, English and 23 other European languages, with
   punctuation and capitals, recognised on your CPU by Parakeet TDT 0.6B
   "Ultra" (via sherpa-onnx). No account, no network, no cloud. It works on a plane.
-- Say *nouvelle ligne* / *new line* / *new paragraph* for a line break: on
-  its own, or at the end of a phrase ("see you tomorrow, new line"). Inside
-  a sentence it stays text ("the new line of products").
-- Optional: the local LLM of the voice commands can polish each block. Off
-  by default.
+- Spoken commands: *nouvelle ligne* / *new line* / *new paragraph*;
+  self-corrections (*"at 2, no, I mean 3"* gives *"at 3"*, *"scratch that"*
+  drops the sentence); lists (*"firstly… secondly…"*).
+- **Your vocabulary:** names and jargon written your way, and replacements
+  (*"my address"* becomes the full address).
+- **Modes** per kind of application (email, chat, code, other): as said,
+  clean message, email, notes or your own instruction. A mode has a language
+  model rewrite the whole text: the local one, or a cloud model if you switch
+  it on (only the text is sent; your voice never leaves the computer).
 - Optional: **voice commands**, off by default (settings, *Commands* page).
   A second shortcut (Ctrl+Alt+Space): hold it, say what to do, release. Opening an
   application, the volume, dark mode, a workspace… are done at once; a
-  shell command is shown first and only runs once you confirm it. Requests
+  shell command is shown first and only runs once you confirm it. With text
+  selected, what you say rewrites it (*"shorter"*, *"in English"*). Requests
   the rules do not know go to a small language model that the engine runs
-  on your computer (llama.cpp); it is a separate download
+  on your computer (llama.cpp), a separate download
   (`voice-hold-engine setup --commands`, or the Install button of that page).
-- Nothing runs when you are not dictating; the model leaves memory after
-  5 minutes of inactivity.
+- History of the last dictations, on your computer only (off by default),
+  and *Paste the last dictation* in the top bar menu.
+- Nothing runs when you are not dictating (unless the wake word is on); the
+  model leaves memory after a few minutes of inactivity.
 
 Second member of the *Hold* family after
 [Accent Hold](https://github.com/d101c/accent-hold).
@@ -102,8 +116,10 @@ the pipx environment, whose path does not change. `voice-hold-engine status
 
 ## Settings
 
-Shortcut, gesture (hold / tap / both), tap threshold, silence timeout,
-optional polish by the local LLM, pill (on or off, under the top bar or
+Shortcut, gesture (hold / tap / both), tap threshold, silence timeout, wake
+word, sounds, music pause, text clean-up (hesitations, self-corrections,
+optional polish by the local LLM), vocabulary and replacements, modes per
+application, history, pill (on or off; at the bottom, under the top bar or
 next to the text cursor) and top-bar indicator. The settings page also shows
 the engine status and the install command. The engine's `Speak` method
 (text, language) is there for other programs on the session bus;
@@ -168,6 +184,7 @@ What the engine uses:
 | Component | Licence | Notes |
 |---|---|---|
 | [Parakeet Ultra](https://huggingface.co/moondream/parakeet-ultra) (int8 export by sherpa-onnx) | CC-BY-4.0, Moondream, post-trained from NVIDIA's [Parakeet TDT 0.6B v3](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3) | Downloaded by you at `setup` from the sherpa-onnx releases; not redistributed here. Attribution: Moondream, NVIDIA NeMo. |
+| Kroko French streaming zipformer (`sherpa-onnx-streaming-zipformer-fr-kroko-2025-08-06`) | CC-BY-SA-4.0, Banafo (Kroko ASR) | Optional, wake word: downloaded by the engine the first time the wake word is switched on (or `setup --wake`); not redistributed here. |
 | [llama.cpp](https://github.com/ggml-org/llama.cpp) (release b12284) | MIT | Optional, voice commands and polish: the server binary is downloaded by you at `setup --commands`; not redistributed here. |
 | [Qwen3.5-2B](https://huggingface.co/unsloth/Qwen3.5-2B-GGUF) (Q4_K_M GGUF) | Apache-2.0, Alibaba Cloud | Optional, same download; not redistributed here. |
 | [Silero VAD](https://github.com/snakers4/silero-vad) | MIT | Downloaded by you at `setup`; not redistributed here. |

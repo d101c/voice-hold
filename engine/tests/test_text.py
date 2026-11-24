@@ -40,7 +40,7 @@ def test_command_inside_a_sentence_is_text():
     assert clean('il a une nouvelle ligne de vêtements') == 'il a une nouvelle ligne de vêtements'
     assert clean('the new line of products') == 'the new line of products'
     assert clean('Bonjour nouvelle ligne ça va') == 'Bonjour nouvelle ligne ça va'
-    assert clean('Hello. New paragraph. How are you') == 'Hello. New paragraph. How are you'
+    assert clean('Hello. New paragraph of the book') == 'Hello. New paragraph of the book'
 
 
 def test_command_inside_a_word_is_left_alone():
@@ -48,3 +48,25 @@ def test_command_inside_a_word_is_left_alone():
     assert clean('la ligne à suivre') == 'la ligne à suivre'
     assert clean("l'alignement") == "l'alignement"
     assert clean('newlines') == 'newlines'
+
+
+def test_command_between_two_sentences():
+    assert clean("Un café, s'il vous plaît. Nouvelle ligne. Merci beaucoup.") == \
+        "Un café, s'il vous plaît.\nMerci beaucoup."
+    assert clean("See you. New paragraph. Best, Julien") == "See you.\n\nBest, Julien"
+
+
+def test_command_between_two_clauses_takes_a_capital():
+    assert clean("Bonjour Léa, à la ligne, merci pour ton message.") == \
+        "Bonjour Léa\nMerci pour ton message."
+
+
+def test_command_words_between_punctuation_inside_a_sentence_need_both_sides():
+    assert clean("Il a lancé une nouvelle ligne, très belle.") == "Il a lancé une nouvelle ligne, très belle."
+    assert clean("La ligne 12. Nouvelle ligne de bus.") == "La ligne 12. Nouvelle ligne de bus."
+
+
+def test_command_after_a_determiner_is_a_noun():
+    assert clean("We just launched a new line.") == "We just launched a new line."
+    assert clean("Voici ma nouvelle ligne") == "Voici ma nouvelle ligne"
+    assert clean("Voici, nouvelle ligne") == "Voici\n"

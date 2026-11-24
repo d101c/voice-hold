@@ -38,6 +38,13 @@ export function buildCloudPage(window, settings, gettext) {
     // The model, among the provider's; filled again when the provider changes.
     const modelRow = new Adw.ComboRow({title: _('Model')});
     intro.add(modelRow);
+
+    const screenRow = new Adw.SwitchRow({
+        title: _('Let it see the active window'),
+        subtitle: _('For “where is…” and “click on…”: a picture of the window you are working in, sent only when the model needs to look. Never the whole screen.'),
+    });
+    intro.add(screenRow);
+    settings.bind('cloud-screen', screenRow, 'active', Gio.SettingsBindFlags.DEFAULT);
     let models = [];
     const fillModels = () => {
         models = MODELS[settings.get_string('cloud-provider')] ?? [];

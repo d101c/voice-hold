@@ -3,6 +3,7 @@
 import Clutter from 'gi://Clutter';
 import GLib from 'gi://GLib';
 import IBus from 'gi://IBus';
+import St from 'gi://St';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 import {modifierMask} from '../dictation.js';
@@ -10,11 +11,16 @@ import {EngineClient} from '../engine.js';
 import {HoldMachine, IDLE, TOGGLE} from '../holdMachine.js';
 import {installKeyHook} from '../keyHook.js';
 import {llmLowMemory, speechLowMemory} from '../memoryText.js';
+import {accentColor} from '../accentColor.js';
+import {Paster} from '../paste.js';
+import {selectedText} from '../textSink.js';
 import {Actions} from './actions.js';
 import {CommandEngineClient, commandHistory} from './commandEngine.js';
 import {CommandHud} from './commandHud.js';
-import {confirm} from './confirmDialog.js';
 import {dispatch} from './dispatch.js';
+import {Pointer} from './pointer.js';
+import {captureWindow} from './screen.js';
+import {keyLabel, toScreen} from './screenMap.js';
 import {RECENT, recentLabel} from './recent.js';
 
 // The voice commands, an optional second gesture of Voice Hold: hold the
@@ -41,6 +47,8 @@ export class Commander {
     constructor(settings, iconPath, gettext) {
         this._settings = settings;
         this._ = gettext;
+        this._pointer = new Pointer();
+        this._paster = new Paster();
         this._machine = new HoldMachine(this._machineOptions());
         this._hud = new CommandHud(iconPath, this._, () => this._settings.get_string('hud-position'),
             () => this._settings.get_string('hud-effect'));
@@ -83,6 +91,10 @@ export class Commander {
     }
 
     destroy() {
+        this._pointer?.destroy();
+        this._pointer = null;
+        this._paster?.destroy();
+        this._paster = null;
         this._run(this._machine.external('cancel'));
         this._endSession();
         this._closeDialog?.();
@@ -216,7 +228,17 @@ export class Commander {
             this._queued = true;
             return;
         }
-        const session = {ending: false, texts: [], window: global.display.focus_window};
+        const session = {ending: false, texts: [], window: global.display.focus_window,
+            focus: Main.inputMethod.currentFocus, selection: this._selection()};
+        // A picture of the window, for the cloud assistant: taken now, before
+        // anything changes, sent only if the model asks to look.
+        session.shot = this._settings.get_boolean('cloud-enabled') && this._settings.get_boolean('cloud-screen')
+            ? captureWindow(session.window).catch(e => {
+                logError(e, 'voice-hold: window picture');
+                return null;
+            })
+            : null;
+        this._pointer.hide();
         this._session = session;
         this._voice.stopSpeaking();
         if (this._settings.get_boolean('show-hud'))
@@ -424,7 +446,81 @@ export class Commander {
             this._hud.hide(1500);
             return;
         }
-        this._interpret(text, session.window);
+        if (session.selection)
+            this._commandOrRewrite(text, session);
+        else
+            this._interpret(text, session.window, session.shot);
+    }
+
+    // With text selected, a known command ("open the settings", "volume
+    // down") is still a command: the rules alone are asked first, and only
+    // what they do not know rewrites the selection.
+    async _commandOrRewrite(text, session) {
+        const epoch = this._epoch;
+        const res = await this._engine.interpret(text, {'llm': false, 'cloud': false,
+            'work-dir': this._settings.get_string('command-work-dir')});
+        if (this._stale(epoch))
+            return;
+        const action = res.ok ? res.value?.action : '';
+        if (action && action !== 'unknown' && action !== 'run_shell')
+            this._interpret(text, session.window, session.shot);
+        else
+            this._rewriteSelection(text, session);
+    }
+
+    // The text selected in the focused field, when the application reports
+    // it (GNOME 46+, input-method fields), else null.
+    _selection() {
+        try {
+            return selectedText(Main.inputMethod.getSurroundingText());
+        } catch {
+            return null;
+        }
+    }
+
+    // Text selected when the shortcut was pressed: what was said is an
+    // instruction for it ("shorter", "in English", "more polite"). The
+    // rewritten text replaces the selection if it is still there; a question
+    // ("what does it mean?") is answered in the pill and changes nothing.
+    async _rewriteSelection(said, session) {
+        const epoch = this._epoch;
+        this._busy = true;
+        const question = /\?\s*$/.test(said);
+        this._hud.status(question ? this._('Thinking…') : this._('Rewriting the selection…'), 'loading');
+        const cloud = this._settings.get_boolean('cloud-enabled') &&
+            this._settings.get_string('cloud-provider') === 'anthropic'
+            ? {provider: 'anthropic', model: this._settings.get_string('cloud-model')} : null;
+        const instruction = question
+            ? `Answer this question about the text, in at most three short sentences, in the language of the question: ${said}`
+            : said;
+        try {
+            const out = (await this._voice.rewrite(session.selection, instruction, cloud)).trim();
+            if (this._stale(epoch))
+                return;
+            if (!out) {
+                this._hud.error(this._('No language model answered: switch on the cloud model or install the local one'));
+                return;
+            }
+            if (question) {
+                this._hud.result(said, out);
+                this._hud.hide(15000);
+                return;
+            }
+            const still = global.display.focus_window === session.window &&
+                Main.inputMethod.currentFocus === session.focus && this._selection() === session.selection;
+            if (still) {
+                Main.inputMethod.commit(out);
+                this._hud.status(this._('Selection rewritten'), 'listening');
+                this._hud.hide(1200);
+            } else {
+                St.Clipboard.get_default().set_text(St.ClipboardType.CLIPBOARD, out);
+                this._hud.status(this._('The selection changed: the new text is in the clipboard'), 'listening');
+                this._hud.hide(3500);
+            }
+        } finally {
+            if (epoch === this._epoch)
+                this._busy = false;
+        }
     }
 
     _onVoiceError(message) {
@@ -456,7 +552,7 @@ export class Commander {
 
     // -- understanding and execution ------------------------------------------
 
-    async _interpret(text, window) {
+    async _interpret(text, window, shot = null) {
         const epoch = this._epoch;
         this._busy = true;
         this._hud.status(this._('Thinking…'), 'loading');
@@ -469,6 +565,12 @@ export class Commander {
             'cloud-model': this._settings.get_string('cloud-model'),
         };
         try {
+            const screen = shot ? await shot : null;
+            if (screen) {
+                options['screen-path'] = screen.path;
+                options['screen-width'] = screen.width;
+                options['screen-height'] = screen.height;
+            }
             const res = await this._engine.interpret(text, options);
             if (this._gone || epoch !== this._epoch)
                 return;                   // dropped for a dictation meanwhile
@@ -476,7 +578,7 @@ export class Commander {
                 this._showEngineError(res.error);
                 return;
             }
-            await this._execute(res.value, text, window, epoch);
+            await this._execute(res.value, text, window, epoch, screen);
         } catch (e) {
             logError(e, 'voice-hold: interpret');
             this._hud?.error(e.message);
@@ -497,7 +599,7 @@ export class Commander {
         return !this._hud;
     }
 
-    async _execute(intent, text, window, epoch = this._epoch) {
+    async _execute(intent, text, window, epoch = this._epoch, screen = null) {
         const result = await dispatch(intent, this._actions);
         if (this._stale(epoch))
             return;
@@ -531,6 +633,26 @@ export class Commander {
         case 'quiet':
             await this._runQuiet(result.intent, text, epoch);
             return;
+        case 'type':
+            await this._type(intent, window, epoch);
+            return;
+        case 'point': {
+            const at = toScreen(screen, intent.x, intent.y);
+            if (!at) {
+                this._hud.error(this._('No picture of the window to point at'));
+                return;
+            }
+            this._pointer.show(...at, intent.label, accentColor());
+            const say = intent.say || intent.label;
+            this._hud.status(say, 'listening');
+            this._hud.hide(SHOW_ANSWER_MS);
+            this._engine.note(id, say);
+            this._speak(say);
+            return;
+        }
+        case 'input':
+            await this._input(intent, text, window, screen, epoch);
+            return;
         case 'confirm':
             break;
         }
@@ -538,7 +660,7 @@ export class Commander {
         const i = result.intent;
         if (i.action === 'power') {
             const names = {suspend: this._('Suspend'), reboot: this._('Restart'), shutdown: this._('Power off'), logout: this._('Log out')};
-            const ok = await confirm({
+            const ok = await this._hud.confirm({
                 title: this._('Voice Hold heard: “%s”').format(text),
                 command: names[i.power_action] ?? i.power_action,
                 warning: '',
@@ -551,7 +673,7 @@ export class Commander {
                 this._actions.power(i.power_action);
             return;
         }
-        const ok = await confirm({
+        const ok = await this._hud.confirm({
             title: this._('Voice Hold heard: “%s”').format(text),
             summary: i.summary ?? '',
             command: `$ ${i.command}`,
@@ -572,6 +694,69 @@ export class Commander {
             return;
         }
         this._jobs.set(run.value, {command: i.command, id});
+    }
+
+    // Text the assistant wrote on request ("écris-moi ... ici"): pasted where
+    // the user was when they spoke, or left in the clipboard if that window
+    // lost the focus or takes no paste.
+    async _type(intent, window, epoch) {
+        const how = await this._paster.deliver(String(intent.text ?? ''), window);
+        if (this._stale(epoch))
+            return;
+        const say = how === 'pasted'
+            ? intent.say || this._('Written')
+            : this._('Copied — paste it with Ctrl+V');
+        this._hud.status(say, 'listening');
+        this._hud.hide(SHOW_RESULT_MS);
+        this._engine.note(intent.id ?? '', say);
+    }
+
+    // A click or a shortcut done for the user, one step, after they say yes
+    // in the island; the ring shows where the click will land.
+    async _input(intent, text, window, screen, epoch) {
+        const click = intent.action === 'click';
+        const at = click ? toScreen(screen, intent.x, intent.y) : null;
+        if (click && !at) {
+            this._hud.error(this._('No picture of the window to click on'));
+            return;
+        }
+        if (at)
+            this._pointer.show(...at, intent.label, accentColor());
+        const ok = await this._hud.confirm({
+            title: this._('Voice Hold heard: “%s”').format(text),
+            summary: intent.say || '',
+            command: click
+                ? this._('Click: %s').format(intent.label || '?')
+                : this._('Keys: %s (%s)').format(keyLabel(intent.keys), intent.label || ''),
+            runLabel: click ? this._('Click') : this._('Press'),
+            cancelLabel: this._('Cancel'),
+            onOpen: close => (this._closeDialog = close),
+        });
+        this._closeDialog = null;
+        if (!ok || this._stale(epoch)) {
+            this._pointer.hide();
+            return;
+        }
+        this._hud.hideNow();
+        // Back to the user's window, then the input, once the island has let
+        // go of the keyboard.
+        if (window && global.display.focus_window !== window)
+            window.activate(global.get_current_time());
+        await new Promise(r => GLib.timeout_add(GLib.PRIORITY_DEFAULT, 150, () => {
+            r();
+            return GLib.SOURCE_REMOVE;
+        }));
+        if (this._stale(epoch))
+            return;
+        const done = click ? (this._pointer.click(...at, !!intent.double), true) : this._pointer.keys(intent.keys);
+        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 700, () => {
+            this._pointer?.hide();
+            return GLib.SOURCE_REMOVE;
+        });
+        const say = done ? this._('Done') : this._('Unknown shortcut: %s').format(intent.keys);
+        this._engine.note(intent.id ?? '', say);
+        if (!done)
+            this._hud.error(say);
     }
 
     // A read-only command: the engine runs it, the pill shows the output

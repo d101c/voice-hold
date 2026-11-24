@@ -102,7 +102,7 @@ def test_run_readonly_filter():
 def test_interpreter_rules_first_then_cloud_then_local_when_offline():
     calls = []
 
-    def fake_cloud(text, **kw):
+    def fake_cloud(text, context=None, **kw):
         calls.append(kw)
         raise cloud.CloudError('cloud-unreachable')
 
@@ -115,7 +115,7 @@ def test_interpreter_rules_first_then_cloud_then_local_when_offline():
 
 
 def test_interpreter_reports_a_rejected_key():
-    def fake_cloud(text, **kw):
+    def fake_cloud(text, context=None, **kw):
         raise cloud.CloudError('cloud-key-rejected')
     it = Interpreter(cloud_fn=fake_cloud, llm_fn=lambda t: {'action': 'answer', 'text': 'local'})
     it.cloud = {'provider': 'anthropic', 'model': 'claude-sonnet-5-5'}
@@ -140,3 +140,74 @@ def test_root_encryption_is_found_through_luks():
         {'name': 'luks', 'type': 'crypt', 'children': [{'name': 'root', 'type': 'lvm', 'mountpoints': ['/']}]}]}]}]
     assert probes._root_encrypted(plain) is False
     assert probes._root_encrypted(luks) is True
+
+
+def test_questions_and_requests():
+    for q in ["Est-ce que mon porfeu est activé?", "combien de place il me reste", "Quel Wi-Fi ?",
+              "is my firewall on", "mon pare-feu est activé ?"]:
+        assert cloud.is_question(q), q
+    for r in ["Active le pare-feu", "Est-ce que tu peux activer le pare-feu ?", "peux-tu vider le cache ?",
+              "fais-moi de la place", "can you turn on the firewall?"]:
+        assert not cloud.is_question(r), r
+
+
+def test_a_question_never_ends_in_an_action():
+    c = FakeClient(msg(use('propose_command', {'command': 'sudo ufw enable', 'summary': 'Activer.'}), stop='tool_use'),
+                   msg(text("Non, il est désactivé. Voulez-vous que je l'active ?")))
+    intent = cloud.interpret('Est-ce que mon pare-feu est activé ?', client=c)
+    assert intent['action'] == 'answer' and 'désactivé' in intent['text']
+    sent_back = c.requests[1]['messages'][-1]['content'][0]
+    assert sent_back['is_error'] and 'question' in sent_back['content']
+
+
+def test_the_previous_exchange_is_kept_for_a_follow_up():
+    seen = []
+
+    def fake_cloud(text, context=None, **kw):
+        seen.append(context)
+        if text.startswith('Est-ce'):
+            return {'action': 'answer', 'text': "Non. Voulez-vous que je l'active ?"}
+        return {'action': 'run_shell', 'command': 'sudo ufw enable', 'summary': 'Activer le pare-feu.'}
+
+    it = Interpreter(cloud_fn=fake_cloud, use_llm=False)
+    it.cloud = {'provider': 'anthropic', 'model': 'claude-sonnet-5-5'}
+    it.interpret('Est-ce que mon pare-feu est activé ?')
+    out = it.interpret('oui vas-y')
+    assert seen[0] is None
+    assert seen[1] == ['Est-ce que mon pare-feu est activé ?', "Non. Voulez-vous que je l'active ?"]
+    assert out['command'] == 'sudo ufw enable'
+
+
+def test_screen_and_text_tools(tmp_path):
+    shot = tmp_path / 'w.png'
+    shot.write_bytes(b'\x89PNG fake')
+    screen = {'path': str(shot), 'width': 800, 'height': 600}
+    c = FakeClient(msg(use('look_at_screen', {}), stop='tool_use'),
+                   msg(use('point_at', {'x': 10, 'y': 20, 'label': 'Fichier', 'say': 'Cliquez sur Fichier.'}), stop='tool_use'))
+    i = cloud.interpret("Où est l'export PDF ?", client=c, screen=screen)
+    assert i['action'] == 'point' and (i['x'], i['y']) == (10, 20), 'showing is allowed for a question'
+    names = [t['name'] for t in c.requests[0]['tools']]
+    assert 'look_at_screen' in names and 'click_at' in names
+    picture = c.requests[1]['messages'][-1]['content'][0]['content']
+    assert picture[0]['type'] == 'image'
+    # Without a picture, no screen tools.
+    c = FakeClient(msg(use('type_text', {'text': 'Pot-au-feu : ...', 'say': 'Recette écrite.'}), stop='tool_use'))
+    i = cloud.interpret('Écris-moi la recette du pot-au-feu ici', client=c)
+    assert i == {'action': 'type_text', 'text': 'Pot-au-feu : ...', 'say': 'Recette écrite.', 'looked': []}
+    assert 'look_at_screen' not in [t['name'] for t in c.requests[0]['tools']]
+
+
+def test_a_question_cannot_click():
+    c = FakeClient(msg(use('press_keys', {'keys': 'ctrl+h', 'label': 'fichiers cachés'}), stop='tool_use'),
+                   msg(text('Appuyez sur Ctrl+H.')))
+    assert cloud.interpret('Comment j’affiche les fichiers cachés ?', client=c)['action'] == 'answer'
+
+
+def test_interpreter_keeps_the_new_actions():
+    for intent in ({'action': 'type_text', 'text': 'x'}, {'action': 'point', 'x': 1, 'y': 2},
+                   {'action': 'click', 'x': 1, 'y': 2}, {'action': 'keys', 'keys': 'ctrl+h'}):
+        it = Interpreter(cloud_fn=lambda t, **kw: dict(intent), use_llm=False)
+        it.cloud = {'provider': 'anthropic', 'model': 'claude-sonnet-5-5'}
+        out = it.interpret('quelque chose de libre')
+        assert out['action'] == intent['action'], out
+    assert out['needs_confirmation'] is True

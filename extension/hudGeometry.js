@@ -30,6 +30,36 @@ export function islandPosition(monitor, panel, width) {
     return [Math.round(cx - width / 2), Math.round(islandTop(monitor, panel) - ISLAND_OVERLAP)];
 }
 
+// -- bottom ------------------------------------------------------------------
+
+export const BOTTOM_GAP = 20;       // px between the pill and what is under it
+
+// Top-left corner of a pill `width` x `height` floating at the bottom of
+// `monitor`: centred on it, `gap` px above the lowest of what it must not
+// cover. That is the bottom of the work area (a fixed dock or panel reserves
+// its room there), and any `obstacle` near the bottom edge that reserves
+// nothing (a dock that hides itself and is showing). Obstacles are rects in
+// stage coordinates; only those in the monitor's bottom quarter and across
+// the pill's width count. Kept inside the work area.
+export function bottomPosition({monitor, workArea = null, obstacles = [], width, height, gap = BOTTOM_GAP}) {
+    if (!monitor)
+        return [0, 0];
+    const area = workArea ?? monitor;
+    const monitorBottom = monitor.y + monitor.height;
+    let x = monitor.x + (monitor.width - width) / 2;
+    x = Math.max(area.x, Math.min(x, area.x + area.width - width));
+    let floor = Math.min(area.y + area.height, monitorBottom);
+    for (const o of obstacles ?? []) {
+        const inBottom = o.y >= monitor.y + monitor.height * 3 / 4 && o.y < monitorBottom;
+        const across = o.x < x + width && o.x + o.width > x &&
+            o.x < monitor.x + monitor.width && o.x + o.width > monitor.x;
+        if (inBottom && across && o.height > 0)
+            floor = Math.min(floor, o.y);
+    }
+    const y = Math.max(area.y, floor - gap - height);
+    return [Math.round(x), Math.round(y)];
+}
+
 // The monitor that contains the point, else `fallback`.
 export function monitorAt(monitors, x, y, fallback = null) {
     return (monitors ?? []).find(m =>
@@ -57,6 +87,25 @@ export function cursorPosition({cursor, pointer, monitors, primary, width, heigh
         y = Math.max(monitor.y, y);
     }
     return [Math.round(x), Math.round(y)];
+}
+
+// The countdown ring the level bars curl into (hud.js countdown()). `bars`
+// are the bars' boxes in the meter ({x, width}), `width` and `height` the
+// meter's. Each bar becomes a dot and, being centred vertically by the
+// meter, ends up on its middle line whatever height it had a moment ago:
+// only its x matters. Returns the translation of each bar so that the dots
+// sit clockwise from twelve o'clock on a circle of `radius` around the
+// centre of the meter.
+export function ringOffsets(bars, width, height, radius) {
+    const n = bars.length;
+    const cx = width / 2;
+    return bars.map((bar, i) => {
+        const a = -Math.PI / 2 + 2 * Math.PI * i / n;
+        return {
+            x: Math.round(cx + radius * Math.cos(a) - (bar.x + bar.width / 2)),
+            y: Math.round(radius * Math.sin(a)),
+        };
+    });
 }
 
 // The last `max` characters of `text` (code points, not UTF-16 units), with

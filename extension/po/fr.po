@@ -10,8 +10,6 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n > 1);\n"
 
-msgid "Click in a text field first"
-msgstr "Cliquez d'abord dans un champ texte"
 
 msgid "press again or Esc to stop"
 msgstr "appuyez encore ou Échap pour arrêter"
@@ -202,17 +200,14 @@ msgstr "Retirer les hésitations"
 msgid "“euh”, “uh”, “hum” and words said twice in a row. Instant."
 msgstr "« euh », « uh », « hum » et les mots dits deux fois de suite. Instantané."
 
-msgid "Self-corrections with the local LLM"
-msgstr "Autocorrections par le LLM local"
+msgid "More self-corrections with the local LLM"
+msgstr "Plus d'autocorrections par le LLM local"
 
 msgid "“Monday, no, Tuesday” becomes “Tuesday”. Needs the language model of the voice commands. Slow on a laptop (2 to 6 s per sentence) and approximate: the text is kept as it is when the answer looks wrong."
 msgstr "« Lundi, non, mardi » devient « mardi ». Utilise le modèle de langue des commandes vocales. Lent sur un portable (2 à 6 s par phrase) et approximatif : le texte reste tel quel quand la réponse semble fausse."
 
 msgid "Hands-free — %s to finish"
 msgstr "Mains libres — %s pour finir"
-
-msgid "Stopping in %d s — speak to go on"
-msgstr "Arrêt dans %d s — parlez pour continuer"
 
 msgid "Ready"
 msgstr "Prêt"
@@ -240,6 +235,12 @@ msgstr "Sous la barre du haut : elle glisse hors de la barre, toujours au même 
 
 msgid "Under the top bar"
 msgstr "Sous la barre du haut"
+
+msgid "At the bottom of the screen"
+msgstr "En bas de l'écran"
+
+msgid "At the bottom: it floats above the dock, always in the same place."
+msgstr "En bas : elle flotte au-dessus du dock, toujours au même endroit."
 
 msgid "Next to the text cursor"
 msgstr "À côté du curseur de texte"
@@ -804,3 +805,251 @@ msgstr "Le modèle cloud a refusé cette demande"
 
 msgid "Cloud model error (%s)"
 msgstr "Erreur du modèle cloud (%s)"
+
+msgid "Copied — paste it with Ctrl+V"
+msgstr "Copié — collez avec Ctrl+V"
+
+msgid "Paste the last dictation"
+msgstr "Coller la dernière dictée"
+
+msgid "While dictating"
+msgstr "Pendant la dictée"
+
+msgid "In applications that do not take dictated text directly, the text is pasted at the end and stays in the clipboard."
+msgstr "Dans les applications qui ne reçoivent pas directement le texte dicté, il est collé à la fin et reste dans le presse-papiers."
+
+msgid "Sounds"
+msgstr "Sons"
+
+msgid "A short sound when listening starts and when the text is written."
+msgstr "Un son bref quand l'écoute commence et quand le texte est écrit."
+
+msgid "Pause music and videos"
+msgstr "Mettre en pause musique et vidéos"
+
+msgid "Players that are playing pause while you speak and resume afterwards."
+msgstr "Les lecteurs en cours de lecture se mettent en pause pendant que vous parlez, puis reprennent."
+
+msgid "Also in the menu of the top bar icon."
+msgstr "Aussi dans le menu de l'icône de la barre du haut."
+
+msgid "Spoken self-corrections"
+msgstr "Autocorrections parlées"
+
+msgid "“At 2, no, I mean 3” becomes “at 3”; “scratch that” drops the sentence before. Instant, by rules."
+msgstr "« À 14 h, non, je veux dire 15 h » devient « à 15 h » ; « oublie ça » efface la phrase d'avant. Instantané, par règles."
+
+msgid "Vocabulary"
+msgstr "Vocabulaire"
+
+msgid "Your words"
+msgstr "Vos mots"
+
+msgid "Names, brands and jargon, written your way. A word that sounds the same, or very close, is corrected after recognition."
+msgstr "Noms, marques et jargon, écrits à votre façon. Un mot qui sonne pareil, ou presque, est corrigé après la reconnaissance."
+
+msgid "Add a word"
+msgstr "Ajouter un mot"
+
+msgid "Remove"
+msgstr "Retirer"
+
+msgid "Replacements"
+msgstr "Remplacements"
+
+msgid "Say a phrase, get a text: an address, a signature, a symbol. Whole words, whatever the case. Type \\n for a new line."
+msgstr "Dites une expression, obtenez un texte : une adresse, une signature, un symbole. Mots entiers, majuscules ou non. Tapez \\n pour aller à la ligne."
+
+msgid "When I say"
+msgstr "Quand je dis"
+
+msgid "Write"
+msgstr "Écrire"
+
+msgid "Rewriting…"
+msgstr "Réécriture…"
+
+msgid "No language model for this mode: written as said"
+msgstr "Aucun modèle de langue pour ce mode : écrit tel quel"
+
+msgid "Modes"
+msgstr "Modes"
+
+msgid "Modes by application"
+msgstr "Modes par application"
+
+msgid "“As said” writes your words as they come. The other modes wait for the end of the dictation and have a language model rewrite the whole text: the cloud model when it is switched on (only the text is sent), else the local one of the voice commands. Without either, the text is written as said."
+msgstr "« Tel quel » écrit vos mots au fur et à mesure. Les autres modes attendent la fin de la dictée et font réécrire tout le texte par un modèle de langue : celui du cloud s'il est activé (seul le texte est envoyé), sinon le modèle local des commandes vocales. Sans l'un ni l'autre, le texte est écrit tel quel."
+
+msgid "As said"
+msgstr "Tel quel"
+
+msgid "Clean message"
+msgstr "Message soigné"
+
+msgid "Email"
+msgstr "Courriel"
+
+msgid "Notes"
+msgstr "Notes"
+
+msgid "Your mode"
+msgstr "Votre mode"
+
+msgid "Thunderbird, Evolution, Geary; Gmail, Outlook and Proton Mail in a browser"
+msgstr "Thunderbird, Evolution, Geary ; Gmail, Outlook et Proton Mail dans un navigateur"
+
+msgid "Chat"
+msgstr "Messagerie"
+
+msgid "Slack, Discord, Signal, Telegram, WhatsApp, Element…"
+msgstr "Slack, Discord, Signal, Telegram, WhatsApp, Element…"
+
+msgid "Code and terminals"
+msgstr "Code et terminaux"
+
+msgid "VS Code, Zed, JetBrains, Builder, terminals"
+msgstr "VS Code, Zed, JetBrains, Builder, terminaux"
+
+msgid "Other applications"
+msgstr "Autres applications"
+
+msgid "Everything else"
+msgstr "Tout le reste"
+
+msgid "Your mode: the instruction"
+msgstr "Votre mode : la consigne"
+
+msgid "History"
+msgstr "Historique"
+
+msgid "The text of your last dictations, kept on this computer only."
+msgstr "Le texte de vos dernières dictées, gardé sur cet ordinateur uniquement."
+
+msgid "Keep the dictations"
+msgstr "Garder les dictées"
+
+msgid "Not kept"
+msgstr "Pas gardées"
+
+msgid "1 day"
+msgstr "1 jour"
+
+msgid "7 days"
+msgstr "7 jours"
+
+msgid "30 days"
+msgstr "30 jours"
+
+msgid "Until cleared"
+msgstr "Jusqu'à effacement"
+
+msgid "Clear the history"
+msgstr "Effacer l'historique"
+
+msgid "Clear"
+msgstr "Effacer"
+
+msgid "Rewriting the selection…"
+msgstr "Réécriture de la sélection…"
+
+msgid "No language model answered: switch on the cloud model or install the local one"
+msgstr "Aucun modèle de langue n'a répondu : activez le modèle cloud ou installez le modèle local"
+
+msgid "Selection rewritten"
+msgstr "Sélection réécrite"
+
+msgid "The selection changed: the new text is in the clipboard"
+msgstr "La sélection a changé : le nouveau texte est dans le presse-papiers"
+
+msgid "Rewrite a selection"
+msgstr "Réécrire une sélection"
+
+msgid "Select text, hold the shortcut and say what to do with it: “shorter”, “in English”, “more polite”. Ask a question to get an answer instead."
+msgstr "Sélectionnez du texte, maintenez le raccourci et dites quoi en faire : « plus court », « en anglais », « plus poli ». Posez une question pour obtenir une réponse à la place."
+
+msgid "Wake word"
+msgstr "Mot de réveil"
+
+msgid "Say the word, then speak: a hands-free dictation starts without touching the keyboard, and stops after a silence. The microphone stays open meanwhile and GNOME shows it; the word is recognised on this computer. Paused while the screen is locked and while another application records (a call)."
+msgstr "Dites le mot, puis parlez : une dictée mains libres démarre sans toucher au clavier, et s'arrête après un silence. Le micro reste ouvert pendant ce temps et GNOME l'indique ; le mot est reconnu sur cet ordinateur. En pause quand l'écran est verrouillé et quand une autre application enregistre (un appel)."
+
+msgid "Listen for the wake word"
+msgstr "Écouter le mot de réveil"
+
+msgid "The word to say"
+msgstr "Le mot à dire"
+
+msgid "Sensitivity"
+msgstr "Sensibilité"
+
+msgid "Higher hears the word more easily, and wakes by mistake more often."
+msgstr "Plus haute, elle entend le mot plus facilement, et se réveille plus souvent par erreur."
+
+msgid "Low"
+msgstr "Basse"
+
+msgid "Normal"
+msgstr "Normale"
+
+msgid "High"
+msgstr "Haute"
+
+msgid "Also on battery"
+msgstr "Aussi sur batterie"
+
+msgid "Listening costs a little power: the word is only looked for while someone speaks."
+msgstr "L'écoute consomme un peu d'énergie : le mot n'est cherché que quand quelqu'un parle."
+
+msgid "State"
+msgstr "État"
+
+
+msgid "The small model of the wake word could not be downloaded: check the network, then switch the wake word off and on."
+msgstr "Le petit modèle du mot de réveil n'a pas pu être téléchargé : vérifiez le réseau, puis éteignez et rallumez le mot de réveil."
+
+msgid "Downloading the small model of the wake word (54 MB)…"
+msgstr "Téléchargement du petit modèle du mot de réveil (54 Mo)…"
+
+msgid "Not listening: %s"
+msgstr "Pas à l'écoute : %s"
+
+msgid "Not listening"
+msgstr "Pas à l'écoute"
+
+msgid "Accuracy first: write the text at the end"
+msgstr "Précision d'abord : écrire le texte à la fin"
+
+msgid "The words show grey in the field while you speak; when you stop, the whole dictation is recognised again at once, with all its context, and written in their place. A second or two more at the end."
+msgstr "Les mots s'affichent en gris dans le champ pendant que vous parlez ; à l'arrêt, toute la dictée est reconnue à nouveau d'un bloc, avec tout son contexte, et écrite à leur place. Une ou deux secondes de plus à la fin."
+
+msgid "Let it see the active window"
+msgstr "Lui laisser voir la fenêtre active"
+
+msgid "For “where is…” and “click on…”: a picture of the window you are working in, sent only when the model needs to look. Never the whole screen."
+msgstr "Pour « où est… » et « clique sur… » : une capture de la fenêtre où vous travaillez, envoyée seulement quand le modèle a besoin de regarder. Jamais l'écran entier."
+
+msgid "No picture of the window to point at"
+msgstr "Pas de capture de la fenêtre pour montrer l'endroit"
+
+msgid "No picture of the window to click on"
+msgstr "Pas de capture de la fenêtre pour cliquer"
+
+msgid "Written"
+msgstr "Écrit"
+
+
+msgid "Click: %s"
+msgstr "Clic : %s"
+
+msgid "Keys: %s (%s)"
+msgstr "Touches : %s (%s)"
+
+msgid "Click"
+msgstr "Cliquer"
+
+msgid "Press"
+msgstr "Appuyer"
+
+msgid "Unknown shortcut: %s"
+msgstr "Raccourci inconnu : %s"

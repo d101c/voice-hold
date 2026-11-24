@@ -12,6 +12,8 @@ import {buildCloudPage} from './cloudPage.js';
 import {buildCommandsPage} from './commands/prefsPage.js';
 import {listSources} from './engine.js';
 import {buildSetupPage} from './setupPage.js';
+import {buildModesPage} from './modesPage.js';
+import {buildVocabPage} from './vocabPage.js';
 
 const BUS_NAME = 'org.griffit.VoiceHold';
 const OBJECT_PATH = '/org/griffit/VoiceHold';
@@ -42,7 +44,9 @@ export default class VoiceHoldPreferences extends ExtensionPreferences {
             picture: `${this.path}/icons/pill.png`,
         });
         window.add(setup);
-        // Optional voice commands: their own page, after the two of the
+        window.add(buildVocabPage(settings, _));
+        window.add(buildModesPage(settings, _));
+        // Optional voice commands: their own page, after those of the
         // dictation.
         window.add(buildCommandsPage(window, settings, _, (s, key) => this._shortcutRow(s, key)));
         window.add(buildCloudPage(window, settings, _));
@@ -52,6 +56,8 @@ export default class VoiceHoldPreferences extends ExtensionPreferences {
         });
         this._buildEngineGroup(page, window);
         this._buildGestureGroup(page, settings);
+        this._buildWakeGroup(page, settings);
+        this._buildDuringGroup(page, settings);
         this._buildMicrophoneGroup(page, settings);
         this._buildPolishGroup(page, settings);
         this._buildAppearanceGroup(page, settings);
@@ -187,6 +193,128 @@ export default class VoiceHoldPreferences extends ExtensionPreferences {
         settings.bind('keep-loaded-min', keepRow, 'value', Gio.SettingsBindFlags.DEFAULT);
     }
 
+    // -- wake word --------------------------------------------------------
+
+    _buildWakeGroup(page, settings) {
+        const group = new Adw.PreferencesGroup({
+            title: _('Wake word'),
+            description: _('Say the word, then speak: a hands-free dictation starts without touching the keyboard, and stops after a silence. The microphone stays open meanwhile and GNOME shows it; the word is recognised on this computer. Paused while the screen is locked and while another application records (a call).'),
+        });
+        page.add(group);
+
+        const enabled = new Adw.SwitchRow({title: _('Listen for the wake word')});
+        group.add(enabled);
+        settings.bind('wake-enabled', enabled, 'active', Gio.SettingsBindFlags.DEFAULT);
+
+        const phrase = new Adw.EntryRow({title: _('The word to say'), show_apply_button: true});
+        phrase.set_text(settings.get_string('wake-phrase'));
+        phrase.connect('apply', () => {
+            const text = phrase.get_text().trim();
+            if (text)
+                settings.set_string('wake-phrase', text);
+            else
+                phrase.set_text(settings.get_string('wake-phrase'));
+        });
+        group.add(phrase);
+
+        const levels = [0.3, 0.5, 0.7];
+        const sensitivity = new Adw.ComboRow({
+            title: _('Sensitivity'),
+            subtitle: _('Higher hears the word more easily, and wakes by mistake more often.'),
+            model: Gtk.StringList.new([_('Low'), _('Normal'), _('High')]),
+        });
+        const current = settings.get_double('wake-sensitivity');
+        sensitivity.set_selected(levels.reduce((best, v, i) =>
+            Math.abs(v - current) < Math.abs(levels[best] - current) ? i : best, 0));
+        sensitivity.connect('notify::selected', () =>
+            settings.set_double('wake-sensitivity', levels[sensitivity.get_selected()]));
+        group.add(sensitivity);
+
+        const battery = new Adw.SwitchRow({
+            title: _('Also on battery'),
+            subtitle: _('Listening costs a little power: the word is only looked for while someone speaks.'),
+        });
+        group.add(battery);
+        settings.bind('wake-on-battery', battery, 'active', Gio.SettingsBindFlags.DEFAULT);
+
+        const state = new Adw.ActionRow({title: _('State')});
+        group.add(state);
+        const refresh = () => this._wakeState().then(text => state.set_subtitle(text));
+        settings.connect('changed::wake-enabled', () => {
+            state.set_subtitle('…');
+            GLib.timeout_add(GLib.PRIORITY_DEFAULT, 2000, () => {
+                refresh();
+                return GLib.SOURCE_REMOVE;
+            });
+        });
+        page.connect('map', refresh);
+        refresh();
+
+        for (const row of [phrase, sensitivity, battery, state])
+            settings.bind('wake-enabled', row, 'sensitive', Gio.SettingsBindFlags.GET);
+    }
+
+    // What the engine says about the wake word; never starts it.
+    _wakeState() {
+        return new Promise(resolve => {
+            Gio.DBus.session.call(BUS_NAME, OBJECT_PATH, INTERFACE, 'Status', null,
+                new GLib.VariantType('(a{sv})'), Gio.DBusCallFlags.NO_AUTO_START, 5000, null, (conn, res) => {
+                    let wake = 'off';
+                    try {
+                        wake = conn.call_finish(res).deepUnpack()[0].wake?.deepUnpack() ?? 'off';
+                    } catch {
+                        // not running: not listening
+                    }
+                    if (wake === 'listening')
+                        resolve(_('Listening'));
+                    else if (wake === 'downloading' || wake === 'wake-downloading')
+                        resolve(_('Downloading the small model of the wake word (54 MB)…'));
+                    else if (wake === 'wake-model-missing')
+                        resolve(_('The small model of the wake word could not be downloaded: check the network, then switch the wake word off and on.'));
+                    else if (wake.startsWith('error') || wake.startsWith('audio') || wake.startsWith('wake:'))
+                        resolve(_('Not listening: %s').format(wake));
+                    else
+                        resolve(_('Not listening'));
+                });
+        });
+    }
+
+    // -- while dictating ---------------------------------------------------
+
+    _buildDuringGroup(page, settings) {
+        const group = new Adw.PreferencesGroup({
+            title: _('While dictating'),
+            description: _('In applications that do not take dictated text directly, the text is pasted at the end and stays in the clipboard.'),
+        });
+        page.add(group);
+
+        const atEnd = new Adw.SwitchRow({
+            title: _('Accuracy first: write the text at the end'),
+            subtitle: _('The words show grey in the field while you speak; when you stop, the whole dictation is recognised again at once, with all its context, and written in their place. A second or two more at the end.'),
+        });
+        group.add(atEnd);
+        settings.bind('write-at-end', atEnd, 'active', Gio.SettingsBindFlags.DEFAULT);
+
+        const sounds = new Adw.SwitchRow({
+            title: _('Sounds'),
+            subtitle: _('A short sound when listening starts and when the text is written.'),
+        });
+        group.add(sounds);
+        settings.bind('sounds', sounds, 'active', Gio.SettingsBindFlags.DEFAULT);
+
+        const media = new Adw.SwitchRow({
+            title: _('Pause music and videos'),
+            subtitle: _('Players that are playing pause while you speak and resume afterwards.'),
+        });
+        group.add(media);
+        settings.bind('pause-media', media, 'active', Gio.SettingsBindFlags.DEFAULT);
+
+        const last = this._shortcutRow(settings, 'paste-last-shortcut');
+        last.title = _('Paste the last dictation');
+        last.subtitle = _('Also in the menu of the top bar icon.');
+        group.add(last);
+    }
+
     // The editor of a shortcut stored as a strv under `key`.
     _shortcutRow(settings, key = 'dictation-shortcut') {
         const row = new Adw.ActionRow({title: _('Shortcut'), activatable: true});
@@ -300,8 +428,15 @@ export default class VoiceHoldPreferences extends ExtensionPreferences {
         group.add(tidy);
         settings.bind('tidy', tidy, 'active', Gio.SettingsBindFlags.DEFAULT);
 
+        const corrections = new Adw.SwitchRow({
+            title: _('Spoken self-corrections'),
+            subtitle: _('“At 2, no, I mean 3” becomes “at 3”; “scratch that” drops the sentence before. Instant, by rules.'),
+        });
+        group.add(corrections);
+        settings.bind('corrections', corrections, 'active', Gio.SettingsBindFlags.DEFAULT);
+
         const sw = new Adw.SwitchRow({
-            title: _('Self-corrections with the local LLM'),
+            title: _('More self-corrections with the local LLM'),
             subtitle: _('“Monday, no, Tuesday” becomes “Tuesday”. Needs the language model of the voice commands. Slow on a laptop (2 to 6 s per sentence) and approximate: the text is kept as it is when the answer looks wrong.'),
         });
         group.add(sw);
@@ -321,11 +456,11 @@ export default class VoiceHoldPreferences extends ExtensionPreferences {
         group.add(hud);
         settings.bind('show-hud', hud, 'active', Gio.SettingsBindFlags.DEFAULT);
 
-        const positions = ['island', 'cursor'];
+        const positions = ['bottom', 'island', 'cursor'];
         const position = new Adw.ComboRow({
             title: _('Pill position'),
-            subtitle: _('Under the top bar: it slides out of the bar, always in the same place.'),
-            model: Gtk.StringList.new([_('Under the top bar'), _('Next to the text cursor')]),
+            subtitle: _('At the bottom: it floats above the dock, always in the same place.'),
+            model: Gtk.StringList.new([_('At the bottom of the screen'), _('Under the top bar'), _('Next to the text cursor')]),
         });
         position.set_selected(Math.max(0, positions.indexOf(settings.get_string('hud-position'))));
         position.connect('notify::selected', () => {

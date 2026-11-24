@@ -51,6 +51,22 @@ export function surroundingChar(result) {
     return chars[cursor - 1];
 }
 
+// The selected text from a getSurroundingText() result ([text, cursor,
+// anchor], GNOME 46+), or null: no selection, or not reported.
+export function selectedText(result) {
+    if (!Array.isArray(result) || result.length < 3)
+        return null;
+    const [text, cursor, anchor] = result;
+    if (typeof text !== 'string' || typeof cursor !== 'number' || typeof anchor !== 'number' || cursor === anchor)
+        return null;
+    const chars = Array.from(text);
+    const [from, to] = cursor < anchor ? [cursor, anchor] : [anchor, cursor];
+    if (from < 0 || to > chars.length)
+        return null;
+    const sel = chars.slice(from, to).join('');
+    return sel.trim() ? sel : null;
+}
+
 export class TextSink {
     constructor(inputMethod, clutter) {
         this._im = inputMethod;
@@ -87,10 +103,11 @@ export class TextSink {
         }
     }
 
-    begin() {
+    // `focus`: the field to write into, by default the one focused now.
+    begin(focus = this._im?.currentFocus ?? null) {
         this._blocks = 0;
         this._lastChar = null;
-        this._focus = this._im?.currentFocus ?? null;
+        this._focus = focus;
     }
 
     partial(text) {

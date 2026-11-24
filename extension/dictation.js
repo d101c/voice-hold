@@ -3,6 +3,7 @@
 import Clutter from 'gi://Clutter';
 import GLib from 'gi://GLib';
 import IBus from 'gi://IBus';
+import St from 'gi://St';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 import {accelLabel} from './accelLabel.js';
@@ -11,7 +12,14 @@ import {HoldMachine, IDLE, TOGGLE} from './holdMachine.js';
 import {Hud} from './hud.js';
 import {speechLowMemory} from './memoryText.js';
 import {installKeyHook} from './keyHook.js';
-import {TextSink} from './textSink.js';
+import {HistoryWriter} from './history.js';
+import {MediaPause} from './media.js';
+import {categoryOf, instructionFor} from './modes.js';
+import {Paster} from './paste.js';
+import {isTerminal} from './pasteKeys.js';
+import {Cues} from './sounds.js';
+import {joinBlock, TextSink} from './textSink.js';
+import {WakeControl} from './wakeControl.js';
 
 // Glue between the gesture (holdMachine), the engine (D-Bus), the text field
 // (textSink) and the pill (hud).
@@ -22,6 +30,14 @@ import {TextSink} from './textSink.js';
 // not reset. If the engine never answers (process died, Error without
 // Stopped, Stop acknowledged but no Stopped within END_GUARD_MS) the session
 // is ended locally: preedit cleared, pill hidden, timers stopped.
+//
+// No text field takes input-method text (many Electron and X11 apps, or no
+// window at all): the dictation goes on, the words show in the pill only,
+// and at the end the whole text goes to the clipboard and is pasted into the
+// window that had the focus (paste.js).
+//
+// A dictation mode other than "as said" (modes.js) also holds the words back:
+// at the end the whole text is rewritten by a language model, then written.
 
 const WATCH_MS = 50;
 const END_GUARD_MS = 3000;
@@ -33,6 +49,11 @@ const HINT_MS = 2500;
 // In hands-free mode, the last seconds before the silence stop are counted.
 const COUNTDOWN_MS = 3000;
 const SILENCE_TICK_MS = 250;
+// A paste this soon after the previous one into the same window follows it.
+const PASTE_FOLLOW_MS = 30 * 1000;
+// "Paste the last dictation" from the menu waits for the menu to close and
+// the focus to go back to the window.
+const MENU_PASTE_DELAY_MS = 250;
 
 // Engine errors after which no further signal is to be expected.
 const FATAL_ERRORS = ['models-missing', 'low-memory:', 'audio:', 'model:'];
@@ -53,8 +74,15 @@ export function modifierMask(accel) {
 }
 
 export class Dictation {
-    constructor(settings, gettext, openSetup = null) {
+    constructor(settings, gettext, openSetup = null, dir = '.') {
         this._settings = settings;
+        this._cues = new Cues(dir, settings);
+        this._media = new MediaPause(settings);
+        this._paster = new Paster();
+        this._history = new HistoryWriter();
+        this._pasteLastId = 0;
+        this._last = '';             // the text of the last dictation, see pasteLast()
+        this._lastPaste = null;      // {window, at, char}: the last text pasted at the end of a dictation
         this._openSetup = openSetup;
         this._ = gettext;
         this._machine = new HoldMachine(this._machineOptions());
@@ -72,12 +100,16 @@ export class Dictation {
             Partial: t => this._onPartial(t),
             Final: t => this._onFinal(t),
             Stopped: r => this._onStopped(r),
+            Wake: p => this._onWake(p),
+            Whole: t => this._onWhole(t),
             Error: m => this._onError(m),
         });
+        this._fromWake = false;      // the next start was asked by the wake word
+        this._wake = new WakeControl(settings, this._engine);
         this._watchId = 0;
         this._silenceId = 0;
         this._silenceDeadline = 0;
-        this._countdown = 0;         // seconds shown, 0 = none
+        this._countdown = 0;         // 1 while the ring runs
         this._hintId = 0;
         this._hint = false;          // a status hint is up, no words yet
         this._handsFreeShown = false;
@@ -105,6 +137,8 @@ export class Dictation {
         this._run(this._machine.external('cancel'));
         this._dropQueuedStart();
         this._endSession();
+        this._wake.destroy();
+        this._wake = null;
         this._keyHook.uninstall();
         this._keyHook = null;
         global.display.disconnectObject(this);
@@ -114,6 +148,12 @@ export class Dictation {
         this._engine = null;
         this._sink.destroy();
         this._sink = null;
+        this._paster.destroy();
+        this._paster = null;
+        if (this._pasteLastId) {
+            GLib.Source.remove(this._pasteLastId);
+            this._pasteLastId = 0;
+        }
         this._hud.destroy();
         this._hud = null;
         this._settings = null;
@@ -139,14 +179,8 @@ export class Dictation {
     // stops one, nor when there is no text field): the voice commands give
     // way then (extension.js).
     shortcut(beforeStart = null) {
-        if (this._machine.state === IDLE) {
-            if (!this._sink.available) {
-                this._hud.show(this._('Click in a text field first'), 'error');
-                this._hud.hide(1800);
-                return;
-            }
+        if (this._machine.state === IDLE)
             beforeStart?.();
-        }
         this._run(this._machine.shortcut(GLib.get_monotonic_time() / 1000));
     }
 
@@ -231,7 +265,6 @@ export class Dictation {
         if (this._machine.state !== TOGGLE || !this._live || this._handsFreeShown)
             return;
         this._handsFreeShown = true;
-        this._hud.setLocked(true);
         if (this._engineState !== 'loading')
             this._showHint(this._handsFreeHint(), 'listening');
         this._armSilence();
@@ -305,22 +338,40 @@ export class Dictation {
             ending: false,
             window: global.display.focus_window,
             focus: Main.inputMethod.currentFocus,
+            clipboard: !this._sink.available,   // no field: pasted at the end
+            text: '',                           // what was said, for pasteLast() and the history
+            instruction: this._modeInstruction(global.display.focus_window),
         };
+        // Words held back until the end: no field to write into, or a mode.
+        // "Accuracy first": the words show grey in the field while you speak,
+        // and the whole dictation, decoded again at once, replaces them.
+        session.writeAtEnd = !session.clipboard && !session.instruction &&
+            this._settings.get_boolean('write-at-end');
+        session.buffered = session.clipboard || !!session.instruction || session.writeAtEnd;
+        session.whole = '';
         this._session = session;
         this._engineState = '';
         this._handsFreeShown = false;
         this._clearHint();
         this._sink.begin();
+        this._cues.play('start');
+        this._media.pause();
         if (this._settings.get_boolean('show-hud')) {
             this._hud.show(this._('Starting…'), 'loading');
-            this._hud.setLocked(false);
         }
         const options = {
             'silence-stop-s': 0,
             'polish': this._settings.get_boolean('polish'),
             'tidy': this._settings.get_boolean('tidy'),
+            'corrections': this._settings.get_boolean('corrections'),
+            'vocabulary': JSON.stringify(this._settings.get_strv('vocabulary')),
+            'replacements': JSON.stringify(this._settings.get_value('replacements').deepUnpack()),
             'keep-loaded-s': this._settings.get_int('keep-loaded-min') * 60,
             'source': this._settings.get_string('microphone'),
+            'from-wake': this._fromWake,
+            // Words held back anyway: the whole dictation is decoded again at
+            // the end, with all its context (Whole signal).
+            'whole-pass': session.buffered,
         };
         this._engine.start(options).then(err => {
             if (!err || this._session !== session || session.ending)
@@ -408,6 +459,8 @@ export class Dictation {
         const had = !!this._session;
         this._session = null;
         this._sink.end();
+        if (had)
+            this._media.resume();
         if (had && !this._startQueued)
             this._onIdle?.();
     }
@@ -461,8 +514,8 @@ export class Dictation {
 
     // -- silence timer (toggle mode) ---------------------------------------
 
-    // The last COUNTDOWN_MS are counted down in the pill, so the stop
-    // never comes as a surprise.
+    // In the last COUNTDOWN_MS a ring empties in the pill, so the stop
+    // never comes as a surprise; speaking again takes it away.
     _armSilence() {
         this._stopSilence();
         const s = this._settings.get_double('silence-stop-s');
@@ -479,10 +532,9 @@ export class Dictation {
                 this._run(this._machine.external('silence'));
                 return GLib.SOURCE_REMOVE;
             }
-            const n = Math.ceil(left / 1000);
-            if (left <= COUNTDOWN_MS && n !== this._countdown) {
-                this._countdown = n;
-                this._hud.status(this._('Stopping in %d s — speak to go on').format(n), 'listening');
+            if (left <= COUNTDOWN_MS && !this._countdown) {
+                this._countdown = 1;
+                this._hud.countdown(left);
             }
             return GLib.SOURCE_CONTINUE;
         });
@@ -495,8 +547,7 @@ export class Dictation {
         }
         if (this._countdown) {
             this._countdown = 0;
-            if (this._live)
-                this._hud.status('', 'listening');
+            this._hud.stopCountdown();
         }
     }
 
@@ -508,7 +559,7 @@ export class Dictation {
     _focusKept() {
         return !!this._session &&
             global.display.focus_window === this._session.window &&
-            this._sink.focused;
+            (this._session.clipboard || this._sink.focused);
     }
 
     _onFocusWindow() {
@@ -518,7 +569,19 @@ export class Dictation {
 
     // -- engine events -----------------------------------------------------
 
+    // The engine heard the wake word: a hands-free dictation, as after a tap
+    // of the shortcut, on the engine's own listening stream.
+    _onWake(_phrase) {
+        if (!this._settings.get_boolean('wake-enabled') || this._machine.state !== IDLE ||
+            this._session || this._startQueued || this._elsewhere?.())
+            return;
+        this._fromWake = true;
+        this._run(this._machine.wake());
+        this._fromWake = false;
+    }
+
     _onOwner(hasOwner) {
+        this._wake?.engineOwner(hasOwner);
         if (hasOwner || !this._session)
             return;
         this._hud.error(this._('Engine stopped unexpectedly'));
@@ -565,25 +628,45 @@ export class Dictation {
     _onPartial(text) {
         if (!this._live)
             return;
-        if (!this._focusKept() || !this._sink.partial(text)) {
+        const session = this._session;
+        const shown = session.buffered
+            ? session.text + joinBlock(this._lastChar(session), text, {firstOfSession: !session.text}) : text;
+        if (!this._focusKept() || (!session.buffered && !this._sink.partial(text)) ||
+            (session.writeAtEnd && !this._sink.partial(shown))) {
             this._run(this._machine.external('cancel'));
             return;
         }
         this._clearHint();
-        this._hud.live(text);
+        this._hud.live(shown);
+    }
+
+    // The last character written in this session ('' before the first block).
+    _lastChar(session) {
+        return Array.from(session.text).pop() ?? '';
     }
 
     _onFinal(text) {
         if (!this._session)
             return;
-        if (!this._focusKept() || !this._sink.commit(text)) {
+        const session = this._session;
+        if (!this._focusKept() || (!session.buffered && !this._sink.commit(text))) {
             // Focus moved: this block goes nowhere rather than elsewhere.
             if (this._live)
                 this._run(this._machine.external('cancel'));
             return;
         }
+        session.text += joinBlock(this._lastChar(session), text, {firstOfSession: !session.text});
+        if (session.writeAtEnd)
+            this._sink.partial(session.text);
         this._clearHint();
-        this._hud.live(text);
+        this._hud.live(session.buffered ? session.text : text);
+    }
+
+    // The whole dictation decoded again at the end (whole-pass): it replaces
+    // the blocks where the words were held back.
+    _onWhole(text) {
+        if (this._session)
+            this._session.whole = text;
     }
 
     _onStopped(reason) {
@@ -597,14 +680,160 @@ export class Dictation {
         // Stop/Cancel it is already idle, or in the next gesture.
         if (!wasEnding)
             this._run(this._machine.external('engine'));
-        if (reason === 'error')
-            this._hud.hide(2500);
-        else if (session.yielding)
-            this._hud.hideNow();          // the command's pill takes its place
-        else
+        const said = session.whole.trim() ? session.whole : session.text;
+        const written = reason !== 'cancel' && reason !== 'error' && said.trim() ? said : '';
+        if (written && (!session.instruction || session.yielding)) {
+            this._last = written;
+            this._remember(written, session.window);
+            this._cues.play('stop');
+        }
+        if (written && session.buffered && session.yielding) {
+            // A voice command takes over: the words held back are not lost,
+            // they wait in the clipboard.
+            St.Clipboard.get_default().set_text(St.ClipboardType.CLIPBOARD, written);
+            this._hud.hideNow();
+        } else if (written && session.instruction) {
+            this._rewriteAndWrite(written, session);
+        } else if (written && session.writeAtEnd) {
+            this._writeLate(written, session);
             this._hud.hide();
+        } else if (written && session.clipboard) {
+            this._deliver(this._pasteSpacing(written, session.window), session.window);
+        } else if (reason === 'error') {
+            this._hud.hide(2500);
+        } else if (session.yielding) {
+            this._hud.hideNow();          // the command's pill takes its place
+        } else {
+            this._hud.hide();
+        }
         if (this._startQueued)
             this._startNow();
+    }
+
+    // The mode of the application the text goes to: its instruction, or ''.
+    _modeInstruction(window) {
+        const cat = categoryOf(window?.get_wm_class?.() ?? '', window?.get_title?.() ?? '');
+        return instructionFor(this._settings.get_string(`text-mode-${cat}`),
+            this._settings.get_string('text-mode-custom'));
+    }
+
+    _remember(text, window) {
+        this._history.add(text, window?.get_wm_class?.() ?? '', this._settings.get_int('history-days'));
+    }
+
+    // The cloud model, when it is switched on and its provider is one the
+    // engine can talk to; else null (the local model).
+    _cloud() {
+        if (!this._settings.get_boolean('cloud-enabled') || this._settings.get_string('cloud-provider') !== 'anthropic')
+            return null;
+        return {provider: 'anthropic', model: this._settings.get_string('cloud-model')};
+    }
+
+    // A new dictation has started meanwhile: what ends late keeps away from
+    // its pill and its field.
+    get _busyAgain() {
+        return !!this._session || this._startQueued;
+    }
+
+    // The pill for a status of our own, unless the user turned it off
+    // (errors always show).
+    _say(text, pseudo, hideMs) {
+        if (this._busyAgain || (pseudo !== 'error' && !this._settings.get_boolean('show-hud')))
+            return;
+        this._hud.show(text, pseudo);
+        this._hud.hide(hideMs);
+    }
+
+    // A mode: the whole text goes to the language model, and what comes back
+    // is written where the dictation started (as said when no model could).
+    async _rewriteAndWrite(said, session) {
+        if (this._settings.get_boolean('show-hud'))
+            this._hud.show(this._('Rewriting…'), 'loading');
+        const out = ((await this._engine?.rewrite(said, session.instruction, this._cloud())) || '').trim();
+        if (!this._hud)
+            return;
+        const text = out || said;
+        this._last = text;
+        this._remember(text, session.window);
+        this._cues.play('stop');
+        if (this._busyAgain) {
+            // Never into the new dictation's field: the clipboard.
+            St.Clipboard.get_default().set_text(St.ClipboardType.CLIPBOARD, text);
+            return;
+        }
+        if (!out)
+            this._say(this._('No language model for this mode: written as said'), 'error', 3500);
+        if (this._writeLate(text, session) && out)
+            this._hud.hide();
+    }
+
+    // Write the text of an ended session where it started: into its field if
+    // it still has the focus, else by the clipboard. True when typed.
+    _writeLate(text, session) {
+        const late = new TextSink(Main.inputMethod, Clutter);
+        late.begin(session.focus);
+        const typed = !session.clipboard && global.display.focus_window === session.window && late.focused;
+        if (typed)
+            late.commit(text);
+        late.destroy();
+        if (!typed)
+            this._deliver(this._pasteSpacing(text, session.window), session.window);
+        return typed;
+    }
+
+    // Clipboard, then a virtual paste into `window` when it still has the
+    // focus; the pill says which.
+    _deliver(text, window) {
+        this._paster.deliver(text, window).then(how => {
+            if (!this._hud || this._busyAgain)
+                return;
+            if (how === 'pasted')
+                this._hud.hide();
+            else
+                this._say(this._('Copied — paste it with Ctrl+V'), 'listening', 2500);
+        });
+    }
+
+    // A pasted text cannot see what is before the cursor: when the previous
+    // paste went to the same window a moment ago, the cursor is most likely
+    // right after it, and a space separates the two.
+    _pasteSpacing(text, window) {
+        const prev = this._lastPaste;
+        const now = GLib.get_monotonic_time() / 1000;
+        const follows = prev && prev.window === window && now - prev.at < PASTE_FOLLOW_MS &&
+            !isTerminal(window?.get_wm_class?.() ?? '');
+        const out = follows ? joinBlock(prev.char, text) : text;
+        this._lastPaste = {window, at: now, char: Array.from(out).pop() ?? ''};
+        return out;
+    }
+
+    // The menu's "Paste the last dictation" (and its optional shortcut):
+    // into the focused field when there is one, else as above.
+    // From the menu, `delayed`: once it has closed and given the focus back.
+    pasteLast(delayed = false) {
+        if (!this._last || this._session)
+            return;
+        if (delayed) {
+            if (this._pasteLastId)
+                GLib.Source.remove(this._pasteLastId);
+            this._pasteLastId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, MENU_PASTE_DELAY_MS, () => {
+                this._pasteLastId = 0;
+                this.pasteLast(false);
+                return GLib.SOURCE_REMOVE;
+            });
+            return;
+        }
+        if (this._sink.available) {
+            this._sink.begin();
+            this._sink.commit(this._last);
+            this._sink.end();
+        } else {
+            this._deliver(this._last, global.display.focus_window);
+        }
+    }
+
+    get hasLast() {
+        return !!this._last;
     }
 
     _onError(message) {

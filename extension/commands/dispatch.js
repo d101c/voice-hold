@@ -11,7 +11,8 @@
 //
 // dispatch() returns {kind: 'done', say} | {kind: 'confirm', intent} |
 // {kind: 'quiet', intent} (a read-only command: run silently, show the output) |
-// {kind: 'refused', reason} | {kind: 'unknown', reason} | {kind: 'answer', text}.
+// {kind: 'refused', reason} | {kind: 'unknown', reason} | {kind: 'answer', text} |
+// {kind: 'type' | 'point' | 'input', intent} (the cloud assistant's).
 
 const CLOSED = {
     open_app: (a, i) => a.openApp(i.app_id, i.name),
@@ -59,6 +60,13 @@ export async function dispatch(intent, actions) {
     }
     if (action === 'power')
         return {kind: 'confirm', intent};
+    // The cloud assistant's: write text, show a place, click or press keys.
+    if (action === 'type_text')
+        return intent.text ? {kind: 'type', intent} : {kind: 'unknown', reason: 'empty text'};
+    if (action === 'point')
+        return {kind: 'point', intent};
+    if (action === 'click' || action === 'keys')
+        return {kind: 'input', intent};
     const fn = CLOSED[action];
     if (!fn)
         return {kind: 'unknown', reason: `unsupported ${action}`};

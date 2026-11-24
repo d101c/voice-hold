@@ -11,33 +11,49 @@ hors-ligne.
 - **Maintenez `Ctrl+Espace`** et parlez ; relâchez pour arrêter. **Tapez**-le
   brièvement pour dicter mains libres (un second appui, `Échap` ou quelques
   secondes de silence arrêtent).
+- Ou dites le **mot de réveil** (en option, éteint par défaut ; « Hé Kodiak »
+  sauf si vous en choisissez un autre) : une dictée mains libres démarre sans
+  toucher au clavier. Le mot est reconnu sur votre
+  ordinateur ; l'écoute se met en pause quand l'écran est verrouillé ou
+  qu'une autre application enregistre.
 - Le texte arrive **dans le champ sous le curseur**, bloc par bloc, pendant
   que vous parlez : un aperçu gris en direct, puis chaque phrase est tapée
-  pour de bon.
-- Une pastille glisse hors de la barre du haut pendant la dictée, avec le
-  niveau du micro et les mots, et y rentre quand vous arrêtez. Toujours au
-  même endroit ; elle peut aussi suivre le curseur de texte (réglages).
+  pour de bon. Dans les applications qui ne reçoivent pas directement le
+  texte dicté (beaucoup d'applications Electron), il est collé à la fin et
+  reste dans le presse-papiers.
+- Une pilule flotte en bas de l'écran, au-dessus du dock, avec le niveau du
+  micro et les mots. Elle peut aussi pendre sous la barre du haut ou suivre
+  le curseur de texte (réglages). Un son bref marque le début et la fin ;
+  musique et vidéos se mettent en pause pendant que vous parlez.
 - **Hors-ligne.** Français, anglais et 23 autres langues européennes, avec
   ponctuation et majuscules, reconnus sur votre processeur par Parakeet TDT
   0.6B « Ultra » (via sherpa-onnx). Ni compte, ni réseau, ni cloud. Ça marche dans
   l'avion.
-- Dites *nouvelle ligne* / *à la ligne* / *nouveau paragraphe* pour un saut
-  de ligne : seul, ou en fin de phrase (« à demain, nouvelle ligne »). Au
-  milieu d'une phrase, ça reste du texte (« il a une nouvelle ligne de
-  vêtements »).
-- En option : le LLM local des commandes vocales peut polir chaque bloc.
-  Éteint par défaut.
+- Commandes parlées : *nouvelle ligne* / *à la ligne* / *nouveau
+  paragraphe* ; autocorrections (« à 14 h, non, je veux dire 15 h » donne
+  « à 15 h », « oublie ça » efface la phrase) ; listes (« premièrement…
+  deuxièmement… »).
+- **Votre vocabulaire :** noms et jargon écrits à votre façon, et
+  remplacements (« mon adresse » devient l'adresse complète).
+- **Modes** selon le type d'application (courriel, messagerie, code,
+  autres) : tel quel, message soigné, courriel, notes ou votre propre
+  consigne. Un mode fait réécrire tout le texte par un modèle de langue : le
+  modèle local, ou un modèle cloud si vous l'activez (seul le texte part ;
+  votre voix ne quitte jamais l'ordinateur).
 - En option : des **commandes vocales**, éteintes par défaut (réglages, page
   *Commandes*). Un second raccourci (Ctrl+Alt+Espace) : maintenez-le, dites quoi
   faire, relâchez. Ouvrir une application, le volume, le mode sombre, un
   espace de travail… se font aussitôt ; une commande shell est d'abord
-  affichée et ne s'exécute qu'après votre confirmation. Les demandes que les
-  règles ne connaissent pas passent par un petit modèle de langage que le
-  moteur fait tourner sur votre ordinateur (llama.cpp) ; c'est un
-  téléchargement à part (`voice-hold-engine setup --commands`, ou le bouton
-  Installer de cette page).
-- Rien ne tourne quand vous ne dictez pas ; le modèle quitte la mémoire après
-  5 minutes d'inactivité.
+  affichée et ne s'exécute qu'après votre confirmation. Avec du texte
+  sélectionné, ce que vous dites le réécrit (« plus court », « en
+  anglais »). Les demandes que les règles ne connaissent pas passent par un
+  petit modèle de langage que le moteur fait tourner sur votre ordinateur
+  (llama.cpp), un téléchargement à part (`voice-hold-engine setup --commands`,
+  ou le bouton Installer de cette page).
+- Historique des dernières dictées, sur votre ordinateur seulement (éteint
+  par défaut), et *Coller la dernière dictée* dans le menu de la barre du haut.
+- Rien ne tourne quand vous ne dictez pas (sauf si le mot de réveil est
+  activé) ; le modèle quitte la mémoire après quelques minutes d'inactivité.
 
 Deuxième membre de la famille *Hold* après
 [Accent Hold](https://github.com/d101c/accent-hold).
@@ -116,9 +132,11 @@ leurs empreintes.
 ## Réglages
 
 Raccourci, geste (maintien / appui / les deux), seuil d'appui, délai de
-silence, polissage facultatif par le LLM local, pastille (affichée ou
-non, sous la barre du haut ou à côté du curseur de texte) et indicateur de
-barre supérieure. La page de réglages montre aussi l'état du moteur et la
+silence, mot de réveil, sons, pause de la musique, nettoyage du texte
+(hésitations, autocorrections, polissage facultatif par le LLM local),
+vocabulaire et remplacements, modes par application, historique, pilule
+(affichée ou non ; en bas, sous la barre du haut ou à côté du curseur de
+texte) et indicateur de barre supérieure. La page de réglages montre aussi l'état du moteur et la
 commande d'installation. La méthode `Speak` du moteur (texte, langue) est à
 la disposition des autres programmes du bus de session ;
 `voice-hold-engine status` liste les voix installées.

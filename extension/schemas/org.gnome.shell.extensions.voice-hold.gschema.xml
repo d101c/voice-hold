@@ -44,6 +44,80 @@
       <summary>Remove hesitations</summary>
       <description>Drop hesitations (euh, uh, hum) and words said twice in a row from the dictated text. Instant, by rules.</description>
     </key>
+    <key name="corrections" type="b">
+      <default>true</default>
+      <summary>Spoken self-corrections</summary>
+      <description>"at 2, no, I mean 3" becomes "at 3", by rules, in French and English.</description>
+    </key>
+    <key name="vocabulary" type="as">
+      <default>[]</default>
+      <summary>Your words</summary>
+      <description>Names, brands and jargon written your way; words that sound alike are corrected after recognition.</description>
+    </key>
+    <key name="replacements" type="a{ss}">
+      <default>{}</default>
+      <summary>Replacements</summary>
+      <description>A spoken phrase and the text written in its place.</description>
+    </key>
+    <key name="text-mode-email" type="s">
+      <choices>
+        <choice value="as-said"/>
+        <choice value="message"/>
+        <choice value="email"/>
+        <choice value="notes"/>
+        <choice value="custom"/>
+      </choices>
+      <default>'as-said'</default>
+      <summary>Mode for email applications</summary>
+      <description>as-said: the words as they come. message, email, notes, custom: the whole text is rewritten by a language model at the end of the dictation.</description>
+    </key>
+    <key name="text-mode-chat" type="s">
+      <choices>
+        <choice value="as-said"/>
+        <choice value="message"/>
+        <choice value="email"/>
+        <choice value="notes"/>
+        <choice value="custom"/>
+      </choices>
+      <default>'as-said'</default>
+      <summary>Mode for chat applications</summary>
+      <description>as-said: the words as they come. message, email, notes, custom: the whole text is rewritten by a language model at the end of the dictation.</description>
+    </key>
+    <key name="text-mode-code" type="s">
+      <choices>
+        <choice value="as-said"/>
+        <choice value="message"/>
+        <choice value="email"/>
+        <choice value="notes"/>
+        <choice value="custom"/>
+      </choices>
+      <default>'as-said'</default>
+      <summary>Mode for code editors and terminals</summary>
+      <description>as-said: the words as they come. message, email, notes, custom: the whole text is rewritten by a language model at the end of the dictation.</description>
+    </key>
+    <key name="text-mode-other" type="s">
+      <choices>
+        <choice value="as-said"/>
+        <choice value="message"/>
+        <choice value="email"/>
+        <choice value="notes"/>
+        <choice value="custom"/>
+      </choices>
+      <default>'as-said'</default>
+      <summary>Mode for other applications</summary>
+      <description>as-said: the words as they come. message, email, notes, custom: the whole text is rewritten by a language model at the end of the dictation.</description>
+    </key>
+    <key name="text-mode-custom" type="s">
+      <default>''</default>
+      <summary>Your mode</summary>
+      <description>The instruction of the "custom" mode, given to the language model with the dictated text.</description>
+    </key>
+    <key name="history-days" type="i">
+      <default>0</default>
+      <range min="-1" max="365"/>
+      <summary>Keep the dictations</summary>
+      <description>Days the text of past dictations is kept on this computer. 0: not kept. -1: until cleared.</description>
+    </key>
     <key name="polish" type="b">
       <default>false</default>
       <summary>Self-corrections with the local LLM</summary>
@@ -63,6 +137,11 @@
       <default>'anthropic'</default>
       <summary>Cloud provider</summary>
       <description>Which provider's model is used when cloud-enabled is on.</description>
+    </key>
+    <key name="cloud-screen" type="b">
+      <default>true</default>
+      <summary>Let the cloud model see the active window</summary>
+      <description>When on, a picture of the window you are working in is taken when you give a voice command, and sent to the cloud model only if it needs to look ("where is...", "click on..."). Never the whole screen.</description>
     </key>
     <key name="cloud-model" type="s">
       <default>'claude-sonnet-5-5'</default>
@@ -85,6 +164,47 @@
       <summary>Top-bar indicator</summary>
       <description>Show an icon and menu in the GNOME Shell top bar.</description>
     </key>
+    <key name="wake-enabled" type="b">
+      <default>false</default>
+      <summary>Wake word</summary>
+      <description>Listen all the time for the wake word, and start a hands-free dictation when it is heard. The microphone stays open (the system shows it).</description>
+    </key>
+    <key name="wake-phrase" type="s">
+      <default>'Hé Kodiak'</default>
+      <summary>Wake phrase</summary>
+      <description>The word or phrase to say; several, separated by commas.</description>
+    </key>
+    <key name="wake-sensitivity" type="d">
+      <default>0.5</default>
+      <range min="0.0" max="1.0"/>
+      <summary>Wake sensitivity</summary>
+      <description>Higher hears the word more easily, and wakes by mistake more often.</description>
+    </key>
+    <key name="wake-on-battery" type="b">
+      <default>true</default>
+      <summary>Wake word on battery</summary>
+      <description>Keep listening for the wake word on battery.</description>
+    </key>
+    <key name="write-at-end" type="b">
+      <default>false</default>
+      <summary>Accuracy first</summary>
+      <description>The words show grey in the field while you speak; at the end the whole dictation, recognised again at once with all its context, is written in their place.</description>
+    </key>
+    <key name="sounds" type="b">
+      <default>true</default>
+      <summary>Sounds</summary>
+      <description>A short sound when listening starts and when the text is written (follows the system's event sounds setting).</description>
+    </key>
+    <key name="pause-media" type="b">
+      <default>true</default>
+      <summary>Pause media while dictating</summary>
+      <description>Pause the media players that are playing (MPRIS) when a dictation starts, and resume them afterwards.</description>
+    </key>
+    <key name="paste-last-shortcut" type="as">
+      <default>[]</default>
+      <summary>Paste the last dictation</summary>
+      <description>Shortcut that writes the last dictation again where the cursor is. Empty: none.</description>
+    </key>
     <key name="show-hud" type="b">
       <default>true</default>
       <summary>Show the pill</summary>
@@ -92,12 +212,13 @@
     </key>
     <key name="hud-position" type="s">
       <choices>
+        <choice value="bottom"/>
         <choice value="island"/>
         <choice value="cursor"/>
       </choices>
-      <default>'island'</default>
+      <default>'bottom'</default>
       <summary>Pill position</summary>
-      <description>island: a capsule that slides out of the top bar, always in the same place. cursor: next to the text cursor (the pointer when the application does not report one).</description>
+      <description>bottom: a pill floating at the bottom of the screen, above the dock. island: a capsule that slides out of the top bar, always in the same place. cursor: next to the text cursor (the pointer when the application does not report one).</description>
     </key>
     <key name="hud-effect" type="s">
       <choices>
@@ -108,7 +229,7 @@
       </choices>
       <default>'drop'</default>
       <summary>Pill animation</summary>
-      <description>How the pill appears and disappears. swell: a bump swells out of the bar. drop: a drop falls from the bar and springs open. spring: the capsule zooms out of the bar and wobbles. glow: swell with a halo.</description>
+      <description>How the pill appears and disappears (at the bottom of the screen it always rises; glow adds its halo there). swell: a bump swells out of the bar. drop: a drop falls from the bar and springs open. spring: the capsule zooms out of the bar and wobbles. glow: swell with a halo.</description>
     </key>
     <key name="hud-preview" type="i">
       <default>0</default>

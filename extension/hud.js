@@ -8,7 +8,8 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 import {accentColor} from './accentColor.js';
 import * as effects from './hudEffects.js';
-import {cursorPosition, islandPosition, levelCurve, trailing, ISLAND_OVERLAP} from './hudGeometry.js';
+import {cursorPosition, islandPosition, levelCurve, ringOffsets, trailing, ISLAND_OVERLAP} from './hudGeometry.js';
+import {anchorMonitor, bottomAnchor, PILL_NAME} from './hudPlacement.js';
 import {systemFontCss} from './systemFont.js';
 
 // The pill: level bars, and a line of text (status, then the
@@ -46,17 +47,21 @@ const RESIZE_MS = 220;
 // expected load time, then waits for the engine: never full before it is.
 const PROGRESS_CAP = 0.9;
 const PROGRESS_W = 52;
+// The countdown ring the bars curl into (countdown()).
+const RING_RADIUS = 12;
+const DOT = 6;
+const MORPH_MS = 380;
 const PANEL_OPAQUE_ALPHA = 200;   // below this the bar is see-through (Blur my Shell…): use black
 const MONITOR_MARGIN = 24;        // the capsule never comes closer than this to the monitor's edges
 
 export class Hud {
-    // getPosition: () => 'island' | 'cursor' and getEffect: () => one of
+    // getPosition: () => 'bottom' | 'island' | 'cursor' and getEffect: () => one of
     // hudEffects.EFFECTS, both read each time the pill opens.
-    constructor(gettext, getPosition = () => 'island', getEffect = () => effects.DEFAULT_EFFECT) {
+    constructor(gettext, getPosition = () => 'bottom', getEffect = () => effects.DEFAULT_EFFECT) {
         this._getEffect = getEffect;
         this._ = gettext;
         this._getPosition = getPosition;
-        this._island = true;
+        this._where = 'bottom';  // 'bottom' | 'island' | 'cursor', fixed while the pill is up
         this._scale = 1;
         this._box = null;       // outer capsule
         this._clip = null;      // clipping box
@@ -66,10 +71,10 @@ export class Hud {
         this._bars = [];
         this._heights = new Array(BARS).fill(BAR_MIN);
         this._label = null;
-        this._lock = null;
+        this._ringTimeline = null;  // the countdown, while the bars are a ring
+        this._morphed = false;
         this._progress = null;
         this._progressFill = null;
-        this._locked = false;
         this._accent = '';
         this._hideId = 0;
         this._hideAt = 0;       // when the pending hide fires (monotonic ms)
@@ -89,7 +94,8 @@ export class Hud {
     _build() {
         if (this._box)
             return;
-        this._island = this._getPosition() !== 'cursor';
+        const where = this._getPosition();
+        this._where = ['island', 'cursor'].includes(where) ? where : 'bottom';
         // Sizes set from here are in physical pixels; the stylesheet's are
         // scaled by St.
         this._scale = St.ThemeContext.get_for_stage(global.stage).scale_factor || 1;
@@ -97,24 +103,25 @@ export class Hud {
         this._accent = accentColor();
 
         this._box = new St.Widget({
-            style_class: `voice-hud-capsule ${this._island ? 'voice-hud-island' : 'voice-hud-cursor'}`,
+            style_class: `voice-hud-capsule voice-hud-${this._where}`,
+            name: PILL_NAME,
             layout_manager: new Clutter.BinLayout(),
             reactive: false,
             opacity: 0,
         });
         // The system's interface font, and for the island the bar's colour.
-        this._box.set_style(systemFontCss() + (this._island ? ` background-color: ${this._panelColor()};` : ''));
+        this._box.set_style(systemFontCss() + (this._where === 'island' ? ` background-color: ${this._panelColor()};` : ''));
 
         this._clip = new St.Widget({
             layout_manager: new Clutter.FixedLayout(),
-            clip_to_allocation: this._island,
+            clip_to_allocation: this._where !== 'cursor',
             x_expand: true,
             y_expand: true,
         });
         this._box.add_child(this._clip);
 
         this._content = new St.BoxLayout({
-            style_class: `voice-hud ${this._island ? 'voice-hud-content-island' : ''}`,
+            style_class: `voice-hud voice-hud-content-${this._where}`,
         });
         this._content.add_constraint(new Clutter.AlignConstraint({
             source: this._clip,
@@ -137,16 +144,6 @@ export class Hud {
         }
         this._content.add_child(bars);
 
-        // Hands-free: a lock after the level, the dictation goes on without
-        // the keys held.
-        this._lock = new St.Icon({
-            icon_name: 'changes-prevent-symbolic',
-            style_class: 'voice-hud-lock',
-            y_align: Clutter.ActorAlign.CENTER,
-            visible: this._locked,
-        });
-        this._lock.set_style(`color: ${this._accent};`);
-        this._content.add_child(this._lock);
 
         this._label = new St.Label({style_class: 'voice-hud-text', y_align: Clutter.ActorAlign.CENTER});
         const ct = this._label.clutter_text;
@@ -183,10 +180,11 @@ export class Hud {
         this._meter = null;
         this._state = '';
         this._label = null;
-        this._lock = null;
+        this._ringTimeline?.stop();
+        this._ringTimeline = null;
+        this._morphed = false;
         this._progress = null;
         this._progressFill = null;
-        this._locked = false;
         this._bars = [];
         this._heights.fill(BAR_MIN);
         this._level = 0;
@@ -213,7 +211,7 @@ export class Hud {
     // given that size: left to the clip's FixedLayout, it would get the
     // height of one line, and a wrapped second line would be cut off.
     _natural() {
-        const monitor = Main.layoutManager.primaryMonitor;
+        const monitor = this._where === 'bottom' ? anchorMonitor() : Main.layoutManager.primaryMonitor;
         const maxW = monitor ? monitor.width - 2 * MONITOR_MARGIN * this._scale : 10000;
         this._content.set_size(-1, -1);
         let [, w] = this._content.get_preferred_width(-1);
@@ -221,7 +219,7 @@ export class Hud {
         let [, h] = this._content.get_preferred_height(w);
         h = Math.ceil(h);
         this._content.set_size(w, h);
-        return [w, h + (this._island ? ISLAND_OVERLAP : 0)];
+        return [w, h + (this._where === 'island' ? ISLAND_OVERLAP : 0)];
     }
 
     // Where the capsule hangs from: centred under the primary monitor's bar,
@@ -233,23 +231,30 @@ export class Hud {
         return islandPosition(lm.primaryMonitor, panel, width);
     }
 
-    _place(animate = false) {
-        if (this._island)
-            this._placeIsland(animate);
-        else
-            this._placeAtCursor();
+    // Bottom: centred on the focused monitor, above the dock (hudPlacement.js).
+    _anchor(w, h) {
+        return this._where === 'island' ? this._islandAnchor(w) : bottomAnchor(w, h, this._scale);
     }
 
-    // Island: ease the capsule to its new natural size, keeping it centred,
-    // so a longer text makes it grow from both ends.
-    _placeIsland(animate) {
+    _place(animate = false) {
+        if (this._where === 'cursor')
+            this._placeAtCursor();
+        else
+            this._placeAnchored(animate);
+    }
+
+    // Island or bottom: ease the capsule to its new natural size, keeping it
+    // centred, so a longer text makes it grow from both ends; at the bottom
+    // its lower edge stays put and it grows upwards.
+    _placeAnchored(animate) {
         const [w, h] = this._natural();
-        const [x, y] = this._islandAnchor(w);
-        for (const prop of ['x', 'width', 'height'])
+        const [x, y] = this._anchor(w, h);
+        for (const prop of ['x', 'y', 'width', 'height'])
             this._box.remove_transition(prop);
-        this._box.set_y(y);
+        if (this._where === 'island')
+            this._box.set_y(y);
         if (animate && this._box.opacity > 0 && !this._leaving) {
-            this._box.ease({x, width: w, height: h, duration: RESIZE_MS, mode: Clutter.AnimationMode.EASE_OUT_CUBIC});
+            this._box.ease({x, y, width: w, height: h, duration: RESIZE_MS, mode: Clutter.AnimationMode.EASE_OUT_CUBIC});
         } else {
             this._box.set_position(x, y);
             this._box.set_size(w, h);
@@ -288,17 +293,17 @@ export class Hud {
     _enter() {
         this._leaving = false;
         let geo = null;
-        if (this._island) {
+        if (this._where !== 'cursor') {
             const [w, h] = this._natural();
-            const [x, y] = this._islandAnchor(w);
+            const [x, y] = this._anchor(w, h);
             geo = {x, y, w, h};
         }
-        effects.enter(this._parts(), geo, this._getEffect(), this._island);
+        effects.enter(this._parts(), geo, this._getEffect(), this._where);
     }
 
     _leave(onComplete) {
         this._leaving = true;
-        effects.leave(this._parts(), this._getEffect(), this._island, onComplete);
+        effects.leave(this._parts(), this._getEffect(), this._where, onComplete);
     }
 
     // -- public ----------------------------------------------------------
@@ -318,7 +323,7 @@ export class Hud {
         this._setText(status, 'hint');
         if (fresh || leaving) {
             // New, or caught on its way out: (re)open.
-            if (!this._island)
+            if (this._where === 'cursor')
                 this._place();
             this._enter();
         } else {
@@ -398,14 +403,67 @@ export class Hud {
         return !!this._progress?.visible;
     }
 
-    // Hands-free (true) or held (false).
-    setLocked(locked) {
-        this._locked = locked;
-        if (!this._lock || this._lock.visible === locked)
+    // Hands-free, the silence stop comes in `ms`: the bars, flat by now,
+    // glide into a ring of dots in the accent colour, which then go out one
+    // after the other around it, each with a fade. stopCountdown() unrolls
+    // the ring back into bars.
+    countdown(ms) {
+        if (!this._meter || this._leaving)
             return;
-        this._lock.visible = locked;
-        if (this._box && !this._leaving)
-            this._place(true);
+        this.stopCountdown(false);
+        this._morphed = true;
+        const n = this._bars.length;
+        const radius = RING_RADIUS * this._scale;
+        const dot = DOT * this._scale;
+        const box = this._meter.get_allocation_box();
+        // Before the bars shrink: their x and the meter's size (ringOffsets()).
+        const offsets = ringOffsets(this._bars.map(b => ({x: b.x, width: b.width})),
+            box.x2 - box.x1, box.y2 - box.y1, radius);
+        this._bars.forEach((bar, i) => {
+            bar.remove_all_transitions();
+            bar.set_style(`background-color: ${this._accent};`);
+            bar.set_height(Math.round(dot));
+            bar.ease({
+                translation_x: offsets[i].x,
+                translation_y: offsets[i].y,
+                duration: MORPH_MS,
+                delay: i * 18,
+                mode: Clutter.AnimationMode.EASE_OUT_CUBIC,
+            });
+        });
+        this._ringTimeline = new Clutter.Timeline({actor: this._meter, duration: Math.max(MORPH_MS + 200, Math.round(ms))});
+        const morphShare = MORPH_MS / this._ringTimeline.get_duration();
+        this._ringTimeline.connect('new-frame', tl => {
+            // After the morph, dot i fades out over its own slice of the time.
+            const p = Math.max(0, (tl.get_progress() - morphShare) / (1 - morphShare));
+            this._bars.forEach((bar, i) => {
+                const lit = 1 - Math.min(1, Math.max(0, p * n - i));
+                bar.opacity = Math.round(45 + 210 * lit);
+            });
+        });
+        this._ringTimeline.start();
+    }
+
+    stopCountdown(animate = true) {
+        this._ringTimeline?.stop();
+        this._ringTimeline = null;
+        if (!this._morphed)
+            return;
+        this._morphed = false;
+        for (const bar of this._bars) {
+            bar.remove_all_transitions();
+            bar.opacity = 255;
+            bar.set_style(null);
+            bar.add_style_pseudo_class('quiet');
+            bar.set_height(Math.round(BAR_MIN * this._scale));
+            if (animate) {
+                bar.ease({translation_x: 0, translation_y: 0, duration: MORPH_MS,
+                    mode: Clutter.AnimationMode.EASE_OUT_CUBIC});
+            } else {
+                bar.translation_x = 0;
+                bar.translation_y = 0;
+            }
+        }
     }
 
     error(text) {
@@ -499,6 +557,8 @@ export class Hud {
     }
 
     _paintBars() {
+        if (this._morphed)
+            return;                   // the bars are the countdown ring
         for (let i = 0; i < this._bars.length; i++) {
             const target = BAR_MIN + (BAR_MAX - BAR_MIN) * this._level * BAR_WEIGHTS[i] *
                 (0.85 + 0.3 * Math.random());

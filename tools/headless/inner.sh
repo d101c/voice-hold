@@ -14,10 +14,20 @@ gnome-extensions enable voice-hold@griffit.gmail.com
 # HUD=cursor: the pill next to the text cursor instead of the island.
 [ -n "${HUD:-}" ] && gsettings --schemadir "$T/data/gnome-shell/extensions/voice-hold@griffit.gmail.com/schemas" \
     set org.gnome.shell.extensions.voice-hold hud-position "$HUD"
+# SET="key value|key value": any other settings, e.g. SET="vocabulary ['Noëlle']".
+if [ -n "${SET:-}" ]; then
+    IFS='|' read -ra KV <<< "$SET"
+    for kv in "${KV[@]}"; do
+        gsettings --schemadir "$T/data/gnome-shell/extensions/voice-hold@griffit.gmail.com/schemas" \
+            set org.gnome.shell.extensions.voice-hold "${kv%% *}" "${kv#* }"
+    done
+fi
 # COMMANDS=1: the voice commands switched on (Ctrl+Alt+Space).
 [ "${COMMANDS:-0}" = 1 ] && gsettings --schemadir "$T/data/gnome-shell/extensions/voice-hold@griffit.gmail.com/schemas" \
     set org.gnome.shell.extensions.voice-hold commands-enabled true
 [ "${SNAP:-0}" = 1 ] && gnome-extensions enable snap@test
+# MPRIS=1: a media player that is playing; its Pause / Play go to mpris.log.
+[ "${MPRIS:-0}" = 1 ] && { "$S/../../engine/.venv/bin/python" "$S/fake_mpris.py" "$T/mpris.log" & MP=$!; }
 sleep 1
 # APP="libreoffice --writer": that application instead of the test client.
 if [ -n "${APP:-}" ]; then
@@ -47,5 +57,6 @@ python3 "$S/inject.py" "$SEQ"
 sleep 0.5
 dbus-send --session --print-reply --dest=org.griffit.VoiceHold /org/griffit/VoiceHold org.griffit.VoiceHold.Quit >/dev/null 2>&1
 kill $SH; wait $SH 2>/dev/null
+[ -n "${MP:-}" ] && kill $MP
 echo "=== client.log"; cat "$T/client.log"
 echo "=== shell.log (voice-hold lines)"; grep -i -E "voice-hold|JS ERROR|Extension .*voice" "$T/shell.log" | tail -20

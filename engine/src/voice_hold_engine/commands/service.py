@@ -122,6 +122,14 @@ class CommandsInterface(ServiceInterface):
                 'provider': str(_opt(options, 'cloud-provider', 'anthropic')),
                 'model': str(_opt(options, 'cloud-model', '')) or cloud.DEFAULT_MODEL,
             }
+            # A picture of the focused window the extension took, if allowed.
+            path = str(_opt(options, 'screen-path', ''))
+            if path:
+                self._interpreter.cloud['screen'] = {
+                    'path': path,
+                    'width': int(float(_opt(options, 'screen-width', 0))),
+                    'height': int(float(_opt(options, 'screen-height', 0))),
+                }
         else:
             self._interpreter.cloud = None
         intent = await self._loop.run_in_executor(self._executor, self._interpreter.interpret, text)

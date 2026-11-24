@@ -85,3 +85,28 @@ def test_silence_only_gives_no_final(tmp_path):
     events = _collect(str(path))
     assert not [e for e in events if e[0] in ('Final', 'Partial')]
     assert events[-1] == ('Stopped', 'end-of-audio')
+
+
+@needs_models
+def test_whole_pass_comes_before_stopped():
+    events = _collect(str(SAMPLE), **{'whole-pass': True})
+    names = [e[0] for e in events]
+    assert 'Whole' in names and names[-1] == 'Stopped'
+    assert names.index('Whole') > max(i for i, n in enumerate(names) if n == 'Final')
+    whole = next(e[1] for e in events if e[0] == 'Whole')
+    assert 'café' in whole.lower() or 'cafe' in whole.lower()
+
+
+@needs_models
+def test_no_whole_pass_unless_asked():
+    assert 'Whole' not in [e[0] for e in _collect(str(SAMPLE))]
+
+
+def test_words_after_the_context():
+    from voice_hold_engine.asr import words_after
+    toks = ['▁les', '▁pous', 'se', '▁à', '▁faire']
+    times = [0.2, 0.9, 1.1, 1.5, 1.8]
+    assert words_after(toks, times, 1.0) == 'à faire'
+    assert words_after(toks, times, 0.95) == 'pousse à faire'
+    assert words_after(toks, times, 0.0) == 'les pousse à faire'
+    assert words_after(toks, times, 5.0) == ''

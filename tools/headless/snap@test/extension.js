@@ -55,9 +55,9 @@ export default class Snap {
             this._t0 = GLib.get_monotonic_time();
             const w = global.display.focus_window;
             const r = w.get_frame_rect();
-            // From the top of the screen (the island), with room below the
-            // window for the pill when it follows the cursor.
-            this._rect = [r.x, 0, r.width, r.y + r.height + 70];
+            // From the top of the screen (the island) to the bottom (the
+            // bottom pill), across the window.
+            this._rect = [r.x, 0, r.width, global.stage.height];
             GLib.file_set_contents(`${this._dir}/rect`, this._rect.join(' '));
         }
         this._busy = true;

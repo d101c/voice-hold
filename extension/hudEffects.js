@@ -9,9 +9,14 @@
 //   glow    swell, with a halo in the accent colour that flashes as it
 //           opens and closes
 //
+// At the bottom of the screen there is no bar to come out of: whatever the
+// effect, the pill rises a little while it grows to full size (with the
+// halo for glow), and sinks back when it goes.
+//
 // `parts` is {box, content, bars, scale, accent}; `geo` is {x, y, w, h}: where the
-// open capsule sits. Everything is done with eases, so with animations off
-// (or the actor off stage) each step ends at once.
+// open capsule sits; `where` is 'island', 'bottom' or 'cursor'. Everything is
+// done with eases, so with animations off (or the actor off stage) each step
+// ends at once.
 import Clutter from 'gi://Clutter';
 import GLib from 'gi://GLib';
 
@@ -20,7 +25,8 @@ import {rgba} from './accentColor.js';
 export const EFFECTS = ['swell', 'drop', 'spring', 'glow'];
 export const DEFAULT_EFFECT = 'drop';
 
-const SEED_W = 64;           // width of the bump or drop the capsule opens from
+const SEED_W = 64;
+const RISE = 18;             // px the bottom pill rises as it appears           // width of the bump or drop the capsule opens from
 const FADE_MS = 160;
 const M = Clutter.AnimationMode;
 
@@ -72,6 +78,7 @@ function reset(parts) {
     unglow(parts);
     box.set_pivot_point(0.5, 0);
     box.set_scale(1, 1);
+    box.translation_y = 0;
     content.translation_y = 0;
     for (const bar of bars ?? []) {
         bar.remove_transition('scale-y');
@@ -104,11 +111,25 @@ function seed(parts, geo) {
     return seedW;
 }
 
-export function enter(parts, geo, name, island = true) {
+export function enter(parts, geo, name, where = 'island') {
     const effect = effectOf(name);
-    const {box, content} = parts;
+    const {box, content, scale} = parts;
     reset(parts);
-    if (!island) {
+    if (where === 'bottom') {
+        box.set_position(geo.x, geo.y);
+        box.set_size(geo.w, geo.h);
+        box.set_pivot_point(0.5, 1);
+        box.set_scale(0.92, 0.92);
+        box.translation_y = RISE * scale;
+        content.opacity = 255;
+        box.ease({opacity: 255, scale_x: 1, scale_y: 1, translation_y: 0, duration: 260, mode: M.EASE_OUT_EXPO});
+        if (effect !== 'swell')
+            reveal(parts, 60, 4);
+        if (effect === 'glow')
+            glow(parts, 520);
+        return;
+    }
+    if (where === 'cursor') {
         // Next to the cursor there is no bar to come out of: a fade, with a
         // small pop for the livelier effects.
         content.opacity = 255;
@@ -148,13 +169,19 @@ export function enter(parts, geo, name, island = true) {
     }
 }
 
-export function leave(parts, name, island, onComplete) {
+export function leave(parts, name, where, onComplete) {
     const effect = effectOf(name);
     const {box, content, scale} = parts;
     cancel(parts);
     box.remove_all_transitions();
     content.remove_all_transitions();
-    if (!island) {
+    if (where === 'bottom') {
+        box.set_pivot_point(0.5, 1);
+        box.ease({opacity: 0, scale_x: 0.95, scale_y: 0.95, translation_y: 12 * scale, duration: 180,
+            mode: M.EASE_IN_QUAD, onComplete});
+        return;
+    }
+    if (where === 'cursor') {
         box.set_pivot_point(0.5, 0.5);
         const to = effect === 'swell' ? 1 : 0.85;
         box.ease({opacity: 0, scale_x: to, scale_y: to, duration: 150, mode: M.EASE_OUT_QUAD, onComplete});

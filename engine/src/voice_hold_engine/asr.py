@@ -39,15 +39,36 @@ class Recognizer:
     def unload(self):
         self._rec = None
 
-    def transcribe(self, samples):
+    def transcribe(self, samples, context=None):
+        """Text of `samples`. With `context` (the audio just before them),
+        the model hears it first and only the words that start after it are
+        kept: the first words of a block are then recognised, punctuated and
+        capitalised as the rest of the sentence they belong to."""
         self.load()
         samples = np.asarray(samples, dtype=np.float32)
         if samples.size < SAMPLE_RATE // 10:
             return ''
+        ctx = np.asarray(context, dtype=np.float32) if context is not None else np.zeros(0, np.float32)
         s = self._rec.create_stream()
-        s.accept_waveform(SAMPLE_RATE, samples)
+        s.accept_waveform(SAMPLE_RATE, np.concatenate([ctx, samples]) if ctx.size else samples)
         self._rec.decode_stream(s)
-        return s.result.text.strip()
+        if not ctx.size:
+            return s.result.text.strip()
+        return words_after(list(s.result.tokens), list(s.result.timestamps), ctx.size / SAMPLE_RATE)
+
+
+# A token that starts this little before the boundary still belongs to the
+# block: the model stamps a word slightly before its sound.
+BOUNDARY_SLACK_S = 0.08
+
+
+def words_after(tokens, times, t0):
+    """The text of the tokens from the first word that starts at or after t0
+    seconds (a word starts with a token beginning with a space or '▁')."""
+    for i, (tok, t) in enumerate(zip(tokens, times)):
+        if t >= t0 - BOUNDARY_SLACK_S and tok[:1] in (' ', '▁'):
+            return ''.join(tokens[i:]).replace('▁', ' ').strip()
+    return ''
 
 
 def release_memory():
@@ -86,10 +107,12 @@ class SileroVad:
         self.in_speech = False
 
     def _drain(self):
+        """(start sample, samples) of each finished segment, the start
+        counted from the last reset()."""
         out = []
         while not self._vad.empty():
             seg = self._vad.front
-            out.append(np.asarray(seg.samples, dtype=np.float32))
+            out.append((int(seg.start), np.asarray(seg.samples, dtype=np.float32)))
             self._vad.pop()
         return out
 

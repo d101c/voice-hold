@@ -53,7 +53,7 @@ const CALL_TIMEOUT_MS = 15000;
 const STOP_TIMEOUT_MS = 60000;
 
 export class EngineClient {
-    // handlers: {Owner, State, Model, Source, Level, Speech, Partial, Final, Stopped, Error}
+    // handlers: {Owner, State, Model, Source, Level, Speech, Partial, Final, Stopped, Wake, Error}
     // `Owner(hasOwner)` is called when the engine appears on or leaves the bus.
     constructor(handlers) {
         this._handlers = handlers;
@@ -165,6 +165,33 @@ export class EngineClient {
         });
     }
 
+    // `text` rewritten as `instruction` says, by the cloud model when
+    // `cloud` is {provider, model}, else the local one. Resolves to the new
+    // text, or '' when no model could (or on any error).
+    rewrite(text, instruction, cloud = null) {
+        return new Promise(resolve => {
+            if (!this._proxy) {
+                resolve('');
+                return;
+            }
+            const options = {cloud: GLib.Variant.new_boolean(!!cloud)};
+            if (cloud) {
+                options['cloud-provider'] = GLib.Variant.new_string(cloud.provider ?? 'anthropic');
+                options['cloud-model'] = GLib.Variant.new_string(cloud.model ?? '');
+            }
+            const args = new GLib.Variant('(ssa{sv})', [text, instruction, options]);
+            this._proxy.call('Rewrite', args, Gio.DBusCallFlags.NONE, STOP_TIMEOUT_MS, this._cancellable,
+                (proxy, res) => {
+                    try {
+                        resolve(proxy.call_finish(res).deepUnpack()[0] ?? '');
+                    } catch (e) {
+                        classify(e, false);
+                        resolve('');
+                    }
+                });
+        });
+    }
+
     // Load the speech model now (the menu's "Load now"); starts the engine.
     // Resolves to '' or why not (an engine error message or a code above).
     load(keepLoadedS) {
@@ -222,6 +249,19 @@ export class EngineClient {
                     }
                 });
         });
+    }
+
+    // Listen for the wake word ({enabled, phrases: [..], source, sensitivity}),
+    // or stop. Stopping never starts the engine. Resolves to '' or why not.
+    listen({enabled, phrases = [], source = '', sensitivity = 0.5}) {
+        if (!enabled && !this._proxy?.g_name_owner)
+            return Promise.resolve('');
+        return this._callFor('Listen', new GLib.Variant('(a{sv})', [{
+            'enabled': GLib.Variant.new_boolean(!!enabled),
+            'phrases': GLib.Variant.new_string(JSON.stringify(phrases)),
+            'source': GLib.Variant.new_string(source),
+            'sensitivity': GLib.Variant.new_double(sensitivity),
+        }]), STOP_TIMEOUT_MS);
     }
 
     // Never starts the engine: when it is not running, nothing is speaking.
