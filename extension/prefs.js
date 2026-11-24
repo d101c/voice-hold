@@ -5,13 +5,13 @@ import Gdk from 'gi://Gdk';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Gtk from 'gi://Gtk';
-import Pango from 'gi://Pango';
 
-import {ExtensionPreferences, gettext as _} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
+import {ExtensionPreferences, gettext as _, ngettext} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 import {buildCloudPage} from './cloudPage.js';
 import {buildCommandsPage} from './commands/prefsPage.js';
 import {listSources} from './engine.js';
 import {buildSetupPage} from './setupPage.js';
+import {buildUsagePage} from './usagePage.js';
 import {buildModesPage} from './modesPage.js';
 import {buildVocabPage} from './vocabPage.js';
 
@@ -20,11 +20,57 @@ const OBJECT_PATH = '/org/griffit/VoiceHold';
 const INTERFACE = 'org.griffit.VoiceHold';
 const INSTALL_CMD = 'pipx install git+https://github.com/d101c/voice-hold#subdirectory=engine && voice-hold-engine setup';
 
+// The pill, drawn: a dark capsule and its nine bars in the accent colour,
+// moving as when one speaks. Still when animations are switched off.
+function pillPreview() {
+    const W = 168, H = 56, BARS = 9;
+    const area = new Gtk.DrawingArea({content_width: W, content_height: H, halign: Gtk.Align.CENTER});
+    let t = 0;
+    area.set_draw_func((a, cr, w, h) => {
+        const [hasAccent, accent] = a.get_style_context().lookup_color('accent_bg_color');
+        const r = h / 2;
+        cr.newPath();
+        cr.arc(r, r, r, Math.PI / 2, 1.5 * Math.PI);
+        cr.arc(w - r, r, r, 1.5 * Math.PI, Math.PI / 2);
+        cr.closePath();
+        cr.setSourceRGBA(0.11, 0.11, 0.11, 1);
+        cr.fill();
+        const bw = 5, gap = 4, x0 = (w - (BARS * bw + (BARS - 1) * gap)) / 2;
+        if (hasAccent)
+            cr.setSourceRGBA(accent.red, accent.green, accent.blue, 1);
+        else
+            cr.setSourceRGBA(1, 1, 1, 1);
+        for (let i = 0; i < BARS; i++) {
+            const mid = 1 - Math.abs(i - 4) / 6;
+            const level = 0.5 + 0.5 * Math.sin(t * 5 + i * 1.3) * Math.sin(t * 1.7 + i * 0.6);
+            const bh = 5 + 27 * mid * level;
+            const x = x0 + i * (bw + gap), y = (h - bh) / 2;
+            cr.newPath();
+            cr.arc(x + bw / 2, y + bw / 2, bw / 2, Math.PI, 2 * Math.PI);
+            cr.arc(x + bw / 2, y + bh - bw / 2, bw / 2, 0, Math.PI);
+            cr.closePath();
+            cr.fill();
+        }
+        cr.$dispose();
+    });
+    if (Gtk.Settings.get_default()?.gtk_enable_animations ?? true) {
+        // Runs only while the widget is on screen.
+        area.add_tick_callback((a, clock) => {
+            t = clock.get_frame_time() / 1e6;
+            a.queue_draw();
+            return GLib.SOURCE_CONTINUE;
+        });
+    } else {
+        t = 0.9;
+    }
+    return area;
+}
+
 export default class VoiceHoldPreferences extends ExtensionPreferences {
     fillPreferencesWindow(window) {
         const settings = this.getSettings();
         const page = new Adw.PreferencesPage({
-            title: _('Voice Hold'),
+            title: _('Dictation'),
             icon_name: 'audio-input-microphone-symbolic',
         });
         window.add(page);
@@ -43,42 +89,100 @@ export default class VoiceHoldPreferences extends ExtensionPreferences {
             accelerator: shortcut ? accel : null,
             picture: `${this.path}/icons/pill.png`,
         });
-        window.add(setup);
-        window.add(buildVocabPage(settings, _));
-        window.add(buildModesPage(settings, _));
+        const vocab = buildVocabPage(settings, _);
+        const modes = buildModesPage(settings, _);
+        window.add(vocab);
+        window.add(modes);
         // Optional voice commands: their own page, after those of the
         // dictation.
-        window.add(buildCommandsPage(window, settings, _, (s, key) => this._shortcutRow(s, key)));
-        window.add(buildCloudPage(window, settings, _));
+        const commands = buildCommandsPage(window, settings, _, (s, key) => this._shortcutRow(s, key));
+        const cloud = buildCloudPage(window, settings, _);
+        const usage = buildUsagePage(settings, _, ngettext);
+        window.add(commands);
+        window.add(cloud);
+        window.add(usage);
+        window.add(setup);
+        // The test bench opens a given page (tools/headless): its number,
+        // from 0, in VOICE_HOLD_PREFS_PAGE.
+        const pages = [page, vocab, modes, commands, cloud, usage, setup];
+        const wanted = pages[parseInt(GLib.getenv('VOICE_HOLD_PREFS_PAGE') ?? '', 10)];
         this._engineStatus().then(s => {
-            if (!s.installed)
+            if (wanted)
+                window.set_visible_page(wanted);
+            else if (!s.installed)
                 window.set_visible_page(setup);
         });
-        this._buildEngineGroup(page, window);
+        // What one does first, first; how it is made, last and folded.
+        this._buildWelcomeGroup(page, settings);
         this._buildGestureGroup(page, settings);
-        this._buildWakeGroup(page, settings);
         this._buildDuringGroup(page, settings);
-        this._buildMicrophoneGroup(page, settings);
         this._buildPolishGroup(page, settings);
         this._buildAppearanceGroup(page, settings);
+        this._buildMicrophoneGroup(page, settings);
+        this._buildWakeGroup(page, settings);
+        this._buildEngineGroup(page, window);
+        this._buildAboutGroup(page);
     }
 
     // -- engine -----------------------------------------------------------
 
-    _buildEngineGroup(page, window) {
-        const group = new Adw.PreferencesGroup({
-            title: _('Engine'),
-            description: _('Speech recognition runs on this computer, offline, in a separate helper program. The Installation page installs it for you; the command below does the same by hand.'),
+    // -- welcome ----------------------------------------------------------
+
+    // The gesture, said once, large: what the shortcut is and what to do
+    // with it. It follows the shortcut when it is changed below.
+    _buildWelcomeGroup(page, settings) {
+        const group = new Adw.PreferencesGroup();
+        page.add(group);
+        const box = new Gtk.Box({
+            orientation: Gtk.Orientation.VERTICAL,
+            spacing: 10,
+            margin_top: 6,
+            margin_bottom: 6,
+            halign: Gtk.Align.CENTER,
         });
+        box.append(pillPreview());
+        const title = new Gtk.Label({css_classes: ['title-1'], wrap: true, justify: Gtk.Justification.CENTER, margin_top: 8});
+        const caption = new Gtk.Label({
+            label: _('The words appear where your cursor is, while you talk. Let go to stop, or tap once to keep your hands free.'),
+            css_classes: ['dim-label'],
+            wrap: true,
+            max_width_chars: 52,
+            justify: Gtk.Justification.CENTER,
+        });
+        box.append(title);
+        box.append(caption);
+        group.add(box);
+        const say = () => {
+            const [accel] = settings.get_strv('dictation-shortcut');
+            const [ok, key, mods] = accel ? Gtk.accelerator_parse(accel) : [false, 0, 0];
+            title.label = ok && key
+                ? _('Hold %s and speak').format(Gtk.accelerator_get_label(key, mods))
+                : _('Choose a shortcut, hold it and speak');
+        };
+        const id = settings.connect('changed::dictation-shortcut', say);
+        group.connect('destroy', () => settings.disconnect(id));
+        say();
+    }
+
+    // -- engine -----------------------------------------------------------
+
+    // How it is made, for who wants to know: one folded row at the bottom.
+    _buildEngineGroup(page, window) {
+        const group = new Adw.PreferencesGroup({title: _('Under the hood')});
         page.add(group);
 
-        const statusRow = new Adw.ActionRow({title: _('Status'), subtitle: _('Checking…')});
+        const engine = new Adw.ExpanderRow({title: _('Speech engine'), subtitle: _('Checking…')});
         const refresh = new Gtk.Button({icon_name: 'view-refresh-symbolic', valign: Gtk.Align.CENTER, tooltip_text: _('Check again')});
         refresh.add_css_class('flat');
-        statusRow.add_suffix(refresh);
-        group.add(statusRow);
+        engine.add_suffix(refresh);
+        group.add(engine);
 
-        const cmdRow = new Adw.ActionRow({title: _('Install command')});
+        engine.add_row(new Adw.ActionRow({
+            title: _('Runs on this computer, offline'),
+            subtitle: _('A separate helper program recognises your voice. The Installation page installs it for you; the command below does the same by hand.'),
+        }));
+        const cmdRow = new Adw.ActionRow({title: _('Install command'), subtitle: INSTALL_CMD, subtitle_selectable: true});
+        cmdRow.add_css_class('property');
         const copy = new Gtk.Button({icon_name: 'edit-copy-symbolic', valign: Gtk.Align.CENTER, tooltip_text: _('Copy')});
         copy.add_css_class('flat');
         copy.connect('clicked', () => {
@@ -87,27 +191,35 @@ export default class VoiceHoldPreferences extends ExtensionPreferences {
             window.add_toast(new Adw.Toast({title: _('Copied'), timeout: 2}));
         });
         cmdRow.add_suffix(copy);
-        group.add(cmdRow);
-        const cmdLabel = new Gtk.Label({
-            label: INSTALL_CMD,
-            selectable: true,
-            wrap: true,
-            wrap_mode: Pango.WrapMode.WORD_CHAR,
-            xalign: 0,
-            margin_top: 6,
-            margin_start: 12,
-            margin_end: 12,
-        });
-        cmdLabel.add_css_class('monospace');
-        cmdLabel.add_css_class('dim-label');
-        group.add(cmdLabel);
+        engine.add_row(cmdRow);
 
         const check = () => {
-            statusRow.set_subtitle(_('Checking…'));
-            this._engineStatus().then(s => statusRow.set_subtitle(s.text));
+            engine.set_subtitle(_('Checking…'));
+            this._engineStatus().then(st => engine.set_subtitle(st.text));
         };
         refresh.connect('clicked', check);
         check();
+    }
+
+    // -- about ------------------------------------------------------------
+
+    _buildAboutGroup(page) {
+        const group = new Adw.PreferencesGroup();
+        page.add(group);
+        const box = new Gtk.Box({orientation: Gtk.Orientation.VERTICAL, spacing: 6, margin_top: 4, margin_bottom: 12});
+        box.append(new Gtk.Label({
+            label: _('Free forever. For GNOME. Made with love.'),
+            css_classes: ['heading'],
+        }));
+        const links = new Gtk.Box({spacing: 18, halign: Gtk.Align.CENTER});
+        links.append(new Gtk.LinkButton({label: _('Source code'), uri: this.metadata.url}));
+        links.append(new Gtk.LinkButton({label: _('Report a problem'), uri: `${this.metadata.url}/issues`}));
+        box.append(links);
+        box.append(new Gtk.Label({
+            label: _('Voice Hold %s').format(this.metadata['version-name'] ?? ''),
+            css_classes: ['caption', 'dim-label'],
+        }));
+        group.add(box);
     }
 
     // Resolves to {text, installed}; `installed` is false only when no engine
@@ -146,12 +258,11 @@ export default class VoiceHoldPreferences extends ExtensionPreferences {
 
     _buildGestureGroup(page, settings) {
         const group = new Adw.PreferencesGroup({
-            title: _('Gesture'),
-            description: _('Hold the shortcut and speak; release to stop. A quick tap keeps listening hands-free.'),
+            title: _('Shortcut'),
         });
         page.add(group);
 
-        const enabledRow = new Adw.SwitchRow({title: _('Enabled')});
+        const enabledRow = new Adw.SwitchRow({title: _('Dictate with the shortcut')});
         group.add(enabledRow);
         settings.bind('enabled', enabledRow, 'active', Gio.SettingsBindFlags.DEFAULT);
 
@@ -159,25 +270,25 @@ export default class VoiceHoldPreferences extends ExtensionPreferences {
 
         const modes = ['auto', 'hold', 'toggle'];
         const modeRow = new Adw.ComboRow({
-            title: _('Mode'),
-            subtitle: _('Auto: hold or tap. Hold: release always stops. Toggle: the shortcut starts and stops.'),
-            model: Gtk.StringList.new([_('Hold or tap'), _('Hold only'), _('Toggle only')]),
+            title: _('How you use it'),
+            subtitle: _('Hold to talk, tap to keep your hands free, or both.'),
+            model: Gtk.StringList.new([_('Hold or tap'), _('Hold only'), _('Tap only')]),
         });
         modeRow.set_selected(Math.max(0, modes.indexOf(settings.get_string('mode'))));
         modeRow.connect('notify::selected', () => settings.set_string('mode', modes[modeRow.get_selected()]));
         group.add(modeRow);
 
         const tapRow = new Adw.SpinRow({
-            title: _('Tap threshold (ms)'),
-            subtitle: _('Releasing the modifier sooner than this counts as a tap.'),
+            title: _('Length of a tap'),
+            subtitle: _('In milliseconds. A press shorter than this keeps listening, hands-free.'),
             adjustment: new Gtk.Adjustment({lower: 150, upper: 1000, step_increment: 50}),
         });
         group.add(tapRow);
         settings.bind('tap-ms', tapRow, 'value', Gio.SettingsBindFlags.DEFAULT);
 
         const silenceRow = new Adw.SpinRow({
-            title: _('Stop after silence (s)'),
-            subtitle: _('Hands-free mode only. 0 = never.'),
+            title: _('Stop by itself after a silence'),
+            subtitle: _('In seconds, when your hands are free. 0: never.'),
             digits: 1,
             adjustment: new Gtk.Adjustment({lower: 0, upper: 60, step_increment: 0.5}),
         });
@@ -185,8 +296,8 @@ export default class VoiceHoldPreferences extends ExtensionPreferences {
         settings.bind('silence-stop-s', silenceRow, 'value', Gio.SettingsBindFlags.DEFAULT);
 
         const keepRow = new Adw.SpinRow({
-            title: _('Keep the model loaded (min)'),
-            subtitle: _('About 1 GB of memory. After that, the next dictation waits a few seconds for it to load.'),
+            title: _('Stay ready for'),
+            subtitle: _('Minutes after a dictation. Being ready takes about 1 GB of memory; later, the first words of the next dictation come a few seconds late.'),
             adjustment: new Gtk.Adjustment({lower: 1, upper: 480, step_increment: 5}),
         });
         group.add(keepRow);
@@ -302,12 +413,15 @@ export default class VoiceHoldPreferences extends ExtensionPreferences {
         group.add(sounds);
         settings.bind('sounds', sounds, 'active', Gio.SettingsBindFlags.DEFAULT);
 
-        const media = new Adw.SwitchRow({
-            title: _('Pause music and videos'),
-            subtitle: _('Players that are playing pause while you speak and resume afterwards.'),
+        const mediaModes = ['pause', 'lower', 'nothing'];
+        const media = new Adw.ComboRow({
+            title: _('Music and videos'),
+            subtitle: _('Paused, or turned down to a quarter, while you speak; back as they were afterwards.'),
+            model: Gtk.StringList.new([_('Pause'), _('Turn down'), _('Leave as they are')]),
         });
+        media.set_selected(Math.max(0, mediaModes.indexOf(settings.get_string('media-during'))));
+        media.connect('notify::selected', () => settings.set_string('media-during', mediaModes[media.get_selected()]));
         group.add(media);
-        settings.bind('pause-media', media, 'active', Gio.SettingsBindFlags.DEFAULT);
 
         const last = this._shortcutRow(settings, 'paste-last-shortcut');
         last.title = _('Paste the last dictation');
@@ -435,12 +549,37 @@ export default class VoiceHoldPreferences extends ExtensionPreferences {
         group.add(corrections);
         settings.bind('corrections', corrections, 'active', Gio.SettingsBindFlags.DEFAULT);
 
-        const sw = new Adw.SwitchRow({
-            title: _('More self-corrections with the local LLM'),
-            subtitle: _('“Monday, no, Tuesday” becomes “Tuesday”. Needs the language model of the voice commands. Slow on a laptop (2 to 6 s per sentence) and approximate: the text is kept as it is when the answer looks wrong.'),
+        // What cleans a block after the rules. Measured on 32 dictated
+        // sentences (see polish.py): the rules leave 17 % of the words to
+        // fix, the local model 7 %, the cloud model 5 %.
+        const levels = ['rules', 'local', 'cloud'];
+        const model = new Adw.ComboRow({
+            title: _('Then, a language model'),
+            model: Gtk.StringList.new([_('None'), _('On this computer'), _('In the cloud')]),
         });
-        group.add(sw);
-        settings.bind('polish', sw, 'active', Gio.SettingsBindFlags.DEFAULT);
+        const describe = () => {
+            const level = levels[model.get_selected()];
+            if (level === 'local')
+                model.subtitle = _('Fillers such as “you know” and the corrections the rules miss. 2 to 3 seconds a sentence on a laptop; needs the language model of the voice commands.');
+            else if (level === 'cloud' && !settings.get_boolean('cloud-enabled'))
+                model.subtitle = _('Switch the cloud model on first, on the Cloud page. Until then only the rules apply.');
+            else if (level === 'cloud')
+                model.subtitle = _('The most accurate, in under a second. The text of each sentence is sent with your own key; your voice never is.');
+            else
+                model.subtitle = _('The rules above only: instant, and nothing leaves this computer.');
+        };
+        const current = settings.get_string('cleanup-model');
+        model.set_selected(Math.max(0, levels.indexOf(
+            current === 'rules' && settings.get_boolean('polish') ? 'local' : current)));
+        model.connect('notify::selected', () => {
+            settings.set_string('cleanup-model', levels[model.get_selected()]);
+            settings.reset('polish');
+            describe();
+        });
+        const cloudId = settings.connect('changed::cloud-enabled', describe);
+        group.connect('destroy', () => settings.disconnect(cloudId));
+        describe();
+        group.add(model);
     }
 
     // -- appearance -------------------------------------------------------

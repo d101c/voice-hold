@@ -11,6 +11,7 @@ when they come back, and a `stop()` that was waiting for decodes does not
 finish a newer session.
 """
 import asyncio
+import functools
 import gc
 import os
 import time
@@ -325,6 +326,10 @@ class Engine:
         gen = self._gen
         self._opts = {
             'polish': bool(_opt(options, 'polish', False)),
+            # The clean-up by the cloud model instead of the local one
+            # (polish.py); only with 'polish'.
+            'polish_cloud': ({'provider': str(_opt(options, 'cloud-provider', 'anthropic'))}
+                             if bool(_opt(options, 'polish-cloud', False)) else None),
             'tidy': bool(_opt(options, 'tidy', True)),
             'silence_stop_s': float(_opt(options, 'silence-stop-s', 0.0)),
             'audio_file': str(_opt(options, 'audio-file', '')),
@@ -350,7 +355,7 @@ class Engine:
         keep = float(_opt(options, 'keep-loaded-s', -1.0))
         if keep >= 0:
             self._idle_unload_s = keep
-        if self._opts['polish']:
+        if self._opts['polish'] and not self._opts['polish_cloud']:
             # Start the LLM server while the user talks (a few seconds).
             from . import polish
             self._loop.run_in_executor(self._polish_executor, polish.prepare)
@@ -627,7 +632,9 @@ class Engine:
         if final and raw and self._opts['polish']:
             from .polish import polish
             self._inflight += 1
-            pf = self._loop.run_in_executor(self._polish_executor, polish, raw)
+            cloud = self._opts.get('polish_cloud')
+            job = functools.partial(polish, raw, cloud=cloud) if cloud else functools.partial(polish, raw)
+            pf = self._loop.run_in_executor(self._polish_executor, job)
             self._pending.add(pf)
             pf.add_done_callback(lambda f: self._on_polished(gen, raw, f))
             return

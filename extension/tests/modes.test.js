@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 // Run: gjs -m extension/tests/modes.test.js
-import {categoryOf, instructionFor, MODES} from '../modes.js';
+import {categoryOf, cleanupMode, instructionFor, MODES} from '../modes.js';
 
 let failures = 0;
 function test(name, fn) {
@@ -42,6 +42,19 @@ test('instructions', () => {
     for (const m of ['message', 'email', 'notes'])
         eq(instructionFor(m).length > 40, true, m);
     eq(MODES[0], 'as-said', 'first mode');
+});
+
+test('the clean-up level falls back to the rules when the cloud is not usable', () => {
+    const settings = values => ({
+        get_string: k => values[k] ?? '',
+        get_boolean: k => !!values[k],
+    });
+    eq(cleanupMode(settings({'cleanup-model': 'rules'})), 'rules', 'default');
+    eq(cleanupMode(settings({'cleanup-model': 'rules', polish: true})), 'local', 'the old switch');
+    eq(cleanupMode(settings({'cleanup-model': 'local'})), 'local', 'local');
+    eq(cleanupMode(settings({'cleanup-model': 'cloud'})), 'rules', 'cloud switched off');
+    eq(cleanupMode(settings({'cleanup-model': 'cloud', 'cloud-enabled': true, 'cloud-provider': 'openai'})), 'rules', 'another provider');
+    eq(cleanupMode(settings({'cleanup-model': 'cloud', 'cloud-enabled': true, 'cloud-provider': 'anthropic'})), 'cloud', 'cloud');
 });
 
 if (failures)

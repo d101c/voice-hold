@@ -13,7 +13,11 @@ import {Hud} from './hud.js';
 import {speechLowMemory} from './memoryText.js';
 import {installKeyHook} from './keyHook.js';
 import {HistoryWriter} from './history.js';
+import {UsageWriter} from './usage.js';
+import {VocabLearner, learned} from './vocabLearn.js';
 import {MediaPause} from './media.js';
+import {cleanupMode} from './modes.js';
+import {getMixerControl} from 'resource:///org/gnome/shell/ui/status/volume.js';
 import {categoryOf, instructionFor} from './modes.js';
 import {Paster} from './paste.js';
 import {isTerminal} from './pasteKeys.js';
@@ -42,8 +46,6 @@ import {WakeControl} from './wakeControl.js';
 const WATCH_MS = 50;
 const END_GUARD_MS = 3000;
 const START_WAIT_MS = 3000;
-// Until a load has been timed in this session of the Shell.
-const DEFAULT_LOAD_MS = 5000;
 // How long the hands-free hint stays before the pill goes back to words only.
 const HINT_MS = 2500;
 // In hands-free mode, the last seconds before the silence stop are counted.
@@ -77,9 +79,18 @@ export class Dictation {
     constructor(settings, gettext, openSetup = null, dir = '.') {
         this._settings = settings;
         this._cues = new Cues(dir, settings);
-        this._media = new MediaPause(settings);
+        this._media = new MediaPause(settings, getMixerControl);
         this._paster = new Paster();
         this._history = new HistoryWriter();
+        this._usage = new UsageWriter();
+        // A word of the last dictation retyped another way joins the
+        // vocabulary (vocabLearn.js).
+        this._learnFocus = null;
+        this._learner = new VocabLearner({
+            read: () => Main.inputMethod.getSurroundingText()?.[0] ?? null,
+            stillThere: () => !!this._learnFocus && Main.inputMethod.currentFocus === this._learnFocus,
+            learn: (from, to) => this._learnWord(to),
+        });
         this._pasteLastId = 0;
         this._last = '';             // the text of the last dictation, see pasteLast()
         this._lastPaste = null;      // {window, at, char}: the last text pasted at the end of a dictation
@@ -114,8 +125,6 @@ export class Dictation {
         this._hint = false;          // a status hint is up, no words yet
         this._handsFreeShown = false;
         this._engineState = '';      // '' | 'loading' | 'listening' for this session
-        this._loadStartedAt = 0;
-        this._loadMs = DEFAULT_LOAD_MS;
         this._guardId = 0;
         this._startWaitId = 0;
         this._mask = modifierMask(settings.get_strv('dictation-shortcut')[0] ?? '');
@@ -137,6 +146,8 @@ export class Dictation {
         this._run(this._machine.external('cancel'));
         this._dropQueuedStart();
         this._endSession();
+        this._learner.stop();
+        this._learner = null;
         this._wake.destroy();
         this._wake = null;
         this._keyHook.uninstall();
@@ -258,15 +269,12 @@ export class Dictation {
         this._afterTransition();
     }
 
-    // Entering hands-free mode: the lock, how to finish (once the model
-    // is there: a loading pill keeps its hint and bar), and the silence
-    // timer.
+    // Entering hands-free mode: how to finish, and the silence timer.
     _afterTransition() {
         if (this._machine.state !== TOGGLE || !this._live || this._handsFreeShown)
             return;
         this._handsFreeShown = true;
-        if (this._engineState !== 'loading')
-            this._showHint(this._handsFreeHint(), 'listening');
+        this._showHint(this._handsFreeHint(), 'listening');
         this._armSilence();
     }
 
@@ -304,7 +312,7 @@ export class Dictation {
             // is seen to have worked.
             this._startQueued = true;
             if (this._settings.get_boolean('show-hud'))
-                this._hud.show(this._('Starting…'), 'loading');
+                this._hud.show('', 'listening');
             this._armStartWait();
             return;
         }
@@ -336,6 +344,8 @@ export class Dictation {
         this._dropQueuedStart();
         const session = {
             ending: false,
+            startedAt: Date.now(),
+            endedAt: 0,
             window: global.display.focus_window,
             focus: Main.inputMethod.currentFocus,
             clipboard: !this._sink.available,   // no field: pasted at the end
@@ -349,6 +359,7 @@ export class Dictation {
             this._settings.get_boolean('write-at-end');
         session.buffered = session.clipboard || !!session.instruction || session.writeAtEnd;
         session.whole = '';
+        this._learner.stop();
         this._session = session;
         this._engineState = '';
         this._handsFreeShown = false;
@@ -357,11 +368,15 @@ export class Dictation {
         this._cues.play('start');
         this._media.pause();
         if (this._settings.get_boolean('show-hud')) {
-            this._hud.show(this._('Starting…'), 'loading');
+            this._hud.show('', 'listening');
         }
+        // What cleans a block after the rules (cleanupMode()).
+        const cleanup = cleanupMode(this._settings);
         const options = {
             'silence-stop-s': 0,
-            'polish': this._settings.get_boolean('polish'),
+            'polish': cleanup !== 'rules',
+            'polish-cloud': cleanup === 'cloud',
+            'cloud-provider': this._settings.get_string('cloud-provider'),
             'tidy': this._settings.get_boolean('tidy'),
             'corrections': this._settings.get_boolean('corrections'),
             'vocabulary': JSON.stringify(this._settings.get_strv('vocabulary')),
@@ -588,28 +603,19 @@ export class Dictation {
         this._onStopped('error');
     }
 
-    // The model loads after a few minutes idle (keep-loaded-min): a bar
-    // that fills over the last load's time, then a clear "ready". What is
-    // said meanwhile is recorded and transcribed once the model is there.
+    // The model may still be loading after a few minutes idle
+    // (keep-loaded-min). Nothing says so: the pill listens from the first
+    // instant, what is said meanwhile is recorded and written once the
+    // model is there.
     _onState(state) {
         if (!this._live)
             return;
-        const now = GLib.get_monotonic_time() / 1000;
         if (state === 'loading') {
             this._engineState = 'loading';
-            this._loadStartedAt = now;
-            this._hud.loading(this._('Loading the model… speak, nothing is lost'), this._loadMs);
         } else if (state === 'listening') {
-            const wasLoading = this._engineState === 'loading';
             this._engineState = 'listening';
-            if (wasLoading) {
-                this._loadMs = Math.round(now - this._loadStartedAt);
-                this._hud.ready('');
-                this._showHint(this._machine.state === TOGGLE ? this._handsFreeHint() : this._('Ready'),
-                    'listening');
-            } else if (!this._hint) {
+            if (!this._hint)
                 this._hud.status('', 'listening');
-            }
             this._armSilence();
         } else if (state === 'decoding') {
             this._hud.pending();
@@ -674,6 +680,7 @@ export class Dictation {
         if (!session)
             return;
         const wasEnding = session.ending;
+        session.endedAt = Date.now();
         this._endSession();
         // The engine stopped on its own (silence, end of audio, error): the
         // gesture machine still thinks we are listening. After our own
@@ -684,7 +691,8 @@ export class Dictation {
         const written = reason !== 'cancel' && reason !== 'error' && said.trim() ? said : '';
         if (written && (!session.instruction || session.yielding)) {
             this._last = written;
-            this._remember(written, session.window);
+            this._remember(written, session);
+            this._watchCorrections(written, session);
             this._cues.play('stop');
         }
         if (written && session.buffered && session.yielding) {
@@ -717,8 +725,34 @@ export class Dictation {
             this._settings.get_string('text-mode-custom'));
     }
 
-    _remember(text, window) {
-        this._history.add(text, window?.get_wm_class?.() ?? '', this._settings.get_int('history-days'));
+    // The text goes to the history when it is kept; the usage only counts
+    // its words and the time the dictation took.
+    _remember(text, session) {
+        this._history.add(text, session.window?.get_wm_class?.() ?? '', this._settings.get_int('history-days'));
+        if (this._settings.get_boolean('usage-stats'))
+            this._usage.add(text, (session.endedAt - session.startedAt) / 1000);
+    }
+
+    // Watch the field the words went to, for a correction of one of them.
+    // Not after a mode: what was written is no longer what was recognised.
+    _watchCorrections(text, session) {
+        this._learner.stop();
+        if (!this._settings.get_boolean('vocabulary-learn') || session.instruction || !session.focus)
+            return;
+        this._learnFocus = session.focus;
+        this._learner.watch(text);
+    }
+
+    _learnWord(word) {
+        this._learnFocus = null;
+        if (!this._settings)
+            return;
+        this._settings.set_strv('vocabulary', learned(this._settings.get_strv('vocabulary'), word));
+        // Said in the pill, briefly: the Vocabulary page lists and removes.
+        if (this._settings.get_boolean('show-hud') && !this._session) {
+            this._hud.show(this._('“%s” added to your vocabulary').format(word), 'listening');
+            this._hud.hide(2600);
+        }
     }
 
     // The cloud model, when it is switched on and its provider is one the
@@ -754,7 +788,7 @@ export class Dictation {
             return;
         const text = out || said;
         this._last = text;
-        this._remember(text, session.window);
+        this._remember(text, session);
         this._cues.play('stop');
         if (this._busyAgain) {
             // Never into the new dictation's field: the clipboard.

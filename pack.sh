@@ -42,6 +42,9 @@ gnome-extensions pack "$SRC" \
   --extra-source=setup.js \
   --extra-source=setupPage.js \
   --extra-source=textSink.js \
+  --extra-source=usage.js \
+  --extra-source=usagePage.js \
+  --extra-source=vocabLearn.js \
   --extra-source=vocabPage.js \
   --extra-source=wakeControl.js \
   --extra-source=wakeRules.js \

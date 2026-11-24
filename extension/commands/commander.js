@@ -242,7 +242,7 @@ export class Commander {
         this._session = session;
         this._voice.stopSpeaking();
         if (this._settings.get_boolean('show-hud'))
-            this._hud.show(this._('Starting…'), 'loading');
+            this._hud.show(this._listeningHint(), 'listening');
         // The local model is warmed up only when it is the one that answers:
         // with the cloud on, it is a fallback for when the network is down.
         if (this._settings.get_boolean('command-llm') && !this._settings.get_boolean('cloud-enabled'))
@@ -397,9 +397,7 @@ export class Commander {
     _onState(state) {
         if (!this._live)
             return;
-        if (state === 'loading')
-            this._hud.status(this._('Loading the model… speak, nothing is lost'), 'loading');
-        else if (state === 'listening')
+        if (state === 'loading' || state === 'listening')
             this._hud.status(this._listeningHint(), 'listening');
         else if (state === 'decoding')
             this._hud.status('…', 'listening');

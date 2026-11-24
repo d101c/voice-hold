@@ -57,3 +57,18 @@ export function instructionFor(mode, customPrompt = '') {
         return (customPrompt ?? '').trim();
     return INSTRUCTIONS[mode] ?? '';
 }
+
+// What cleans a block after the rules: 'rules' (nothing more), 'local' (the
+// language model on this computer) or 'cloud' (the fast cloud model).
+// The old `polish` switch, still on, means local. The cloud only counts
+// when it is switched on with a provider the engine can talk to; else the
+// rules alone, without a wait.
+export function cleanupMode(settings) {
+    let mode = settings.get_string('cleanup-model');
+    if (mode === 'rules' && settings.get_boolean('polish'))
+        mode = 'local';
+    if (mode === 'cloud' &&
+        !(settings.get_boolean('cloud-enabled') && settings.get_string('cloud-provider') === 'anthropic'))
+        mode = 'rules';
+    return mode;
+}
